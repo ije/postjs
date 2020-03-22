@@ -3,20 +3,6 @@ import arg from 'arg'
 import fs from 'fs-extra'
 import path from 'path'
 
-const commands = {
-    build: () => import('./post-build').then(mod => mod.default),
-    dev: () => import('./post-dev').then(mod => mod.default),
-    export: () => import('./post-export').then(mod => mod.default),
-    start: () => import('./post-start').then(mod => mod.default)
-} as { [key: string]: () => Promise<{ (...args: string[]): void }> }
-const helpMessage = `Usage
-    $ post <command> [...option]
-Commands
-    ${Object.keys(commands).join(', ')}
-Options
-    --version, -v   Print version number
-    --help, -h      Print help message
-`
 const {
     '--version': v,
     '--help': h,
@@ -31,11 +17,20 @@ const {
     },
     { permissive: true }
 )
-const hasCommand = args.length > 0 && args[0] in commands
+const commands = ['build', 'dev', 'export', 'start']
+const hasCommand = args.length > 0 && commands.includes(args[0])
 const command = hasCommand ? args[0] : 'dev'
 const commandArgs = hasCommand ? args.slice(1) : args
+const helpMessage = `Usage
+    $ post <command> [...option]
+Commands
+    ${commands.join(', ')}
+Options
+    --version, -v   Print version number
+    --help, -h      Print help message
+`
 
-// print version
+// print the version number in package.json
 if (v) {
     const { version } = fs.readJSONSync(path.join(__dirname, '../../package.json'))
     console.log(`postUI v${version}`)
@@ -49,6 +44,9 @@ if (!hasCommand && h) {
 }
 
 // execute command
-commands[command]().then(cmd => {
+if (h) {
+    commandArgs.push('--help')
+}
+import(`./post-${command}`).then(({ default: cmd }) => {
     cmd(...commandArgs)
 })

@@ -1,24 +1,19 @@
 #!/usr/bin/env node
-const arg = require('arg')
 const { spawn } = require('child_process')
-const fs = require('fs-extra')
+const fs = require('fs')
 const path = require('path')
 
-const root = path.join(__dirname, '../')
-const { _: args } = arg({})
+function tsc() {
+    const sources = fs.readdirSync(path.join(__dirname, 'cli'))
+        .filter(file => /^[^\.].+\.tsx?$/.test(file))
+        .map(file => path.join('cli', file))
 
-function tsc(name) {
-    const sources = fs.readdirSync(path.join(root, name))
-        .filter(file => !file.startsWith('.') && file.endsWith('.ts'))
-        .map(file => path.join(name, file))
-
-    console.log(`🛠   Start build ${name}...`)
-    fs.remove(path.join(root, `dist/${name}`))
+    console.log('🛠   Start compiling types...')
     spawn(
-        path.join(root, 'node_modules', '.bin', 'tsc'),
+        path.join(__dirname, 'node_modules', '.bin', 'tsc'),
         [
-            '--outDir', `dist/${name}`,
-            '--baseUrl', root,
+            '--outDir', 'dist',
+            '--baseUrl', __dirname,
             '--target', 'es2015',
             '--lib', 'es2020',
             '--module', 'commonjs',
@@ -33,10 +28,11 @@ function tsc(name) {
             '--skipLibCheck',
             '--removeComments',
             '--newLine', 'LF',
+            '--jsx', 'react',
             ...sources
         ],
         { stdio: 'inherit' }
     )
 }
 
-args.forEach(tsc)
+tsc()

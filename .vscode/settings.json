@@ -8,7 +8,7 @@
         "**/.DS_Store": true,
         "**/*.log": true,
         "**/Thumbs.db": true,
-        "**/node_modules": true,
+        "**/node_modules/": true,
         "**/dist/": true
     },
     "typescript.tsdk": "node_modules/typescript/lib",
