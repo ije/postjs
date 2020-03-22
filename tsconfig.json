@@ -1,0 +1,37 @@
+{
+    "compilerOptions": {
+        "baseUrl": "src",
+        "target": "es2015",
+        "lib": [
+            "es2020",
+            "dom",
+            "dom.iterable",
+            "webworker.importscripts",
+            "scripthost"
+        ],
+        "module": "CommonJS",
+        "moduleResolution": "node",
+        "isolatedModules": true,
+        "allowSyntheticDefaultImports": true,
+        "esModuleInterop": true,
+        "alwaysStrict": true,
+        "strictNullChecks": true,
+        "noImplicitThis": true,
+        "noImplicitReturns": true,
+        "noUnusedLocals": true,
+        "jsx": "react"
+    },
+    "include": [
+        "src/**/*",
+        "framework/index.ts",
+        "framework/head.tsx",
+        "framework/link.tsx",
+        "framework/app.tsx",
+        "framework/document.tsx",
+        "framework/router.tsx"
+    ],
+    "exclude": [
+        "node_modules",
+        "dist"
+    ]
+}

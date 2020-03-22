@@ -1,0 +1,63 @@
+{
+    "defaultSeverity": "warning",
+    "rules": {
+        "class-name": true,
+        "comment-format": [
+            true,
+            "check-space"
+        ],
+        "curly": true,
+        "eofline": true,
+        "import-spacing": true,
+        "indent": [
+            true,
+            "spaces"
+        ],
+        "interface-name": false,
+        "max-line-length": false,
+        "no-consecutive-blank-lines": true,
+        "no-duplicate-imports": true,
+        "no-duplicate-variable": true,
+        "no-empty-interface": true,
+        "no-unused-expression": true,
+        "no-string-throw": true,
+        "no-trailing-whitespace": true,
+        "only-arrow-functions": [
+            true,
+            "allow-declarations",
+            "allow-named-functions"
+        ],
+        "origin-ordered-imports": [
+            true,
+            "no-blank-line",
+            [
+                "lib",
+                "user"
+            ]
+        ],
+        "quotemark": [
+            true,
+            "single",
+            "avoid-escape",
+            "avoid-template",
+            "jsx-double"
+        ],
+        "semicolon": [
+            true,
+            "never"
+        ],
+        "trailing-comma": [
+            true,
+            {
+                "multiline": "never",
+                "singleline": "never",
+                "esSpecCompliant": true
+            }
+        ],
+        "triple-equals": true,
+        "react-hooks-nesting": "error"
+    },
+    "rulesDirectory": [
+        "node_modules/tslint-origin-ordered-imports-rule/dist"
+    ]
+}
