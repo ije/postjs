@@ -23,7 +23,7 @@
     },
     "include": [
         "packages/**/*.ts",
-        "packages/postui/build/render.tsx",
+        "packages/**/*.tsx"
     ],
     "exclude": [
         "node_modules",
