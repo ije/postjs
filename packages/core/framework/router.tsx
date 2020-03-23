@@ -1,6 +1,6 @@
 import React, { createContext, PropsWithChildren, useState, useContext, useEffect, useMemo } from 'react'
 import { ParsedUrlQuery } from 'querystring'
-import utils from '../shared/utils'
+import utils from './utils'
 
 export interface URL {
     routePath: string
@@ -57,11 +57,11 @@ interface RouterComponentProps {
     routes: Route[]
 }
 
-export default ({
+export function RouterComponent({
     base: propBase,
     routes,
     children
-}: PropsWithChildren<RouterComponentProps>) => {
+}: PropsWithChildren<RouterComponentProps>) {
     const base = useMemo(() => utils.cleanPath(base), [propBase])
     const [router, setRouter] = useState(new Router())
 

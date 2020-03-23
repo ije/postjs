@@ -33,7 +33,7 @@ Options
 // print the version number in package.json
 if (v) {
     const { version } = fs.readJSONSync(path.join(__dirname, '../../package.json'))
-    console.log(`postUI v${version}`)
+    console.log(`postio v${version}`)
     process.exit(0)
 }
 

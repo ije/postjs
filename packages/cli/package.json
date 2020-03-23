@@ -1,13 +1,11 @@
 {
-    "name": "postui",
+    "name": "@postjs/cli",
     "version": "0.0.1",
     "description": "The Post-Front-End Framework",
-    "repository": "https://github.com/postui/postui",
-    "bugs": "https://github.com/postui/postui/issues",
-    "homepage": "https://postui.com",
+    "repository": "https://github.com/postui/postjs",
+    "bugs": "https://github.com/postui/postjs/issues",
+    "homepage": "https://postui.com/postjs",
     "license": "MIT",
-    "main": "./dist/index.js",
-    "types": "./typings/index.d.ts",
     "bin": {
         "post": "./dist/cli/post.js"
     },
@@ -15,6 +13,7 @@
         "build": "rm -rf ./dist && node tsc.js"
     },
     "dependencies": {
+        "@postjs/core": "^0.0.1",
         "@babel/core": "^7.9.0",
         "@babel/plugin-proposal-class-properties": "^7.8.3",
         "@babel/plugin-proposal-decorators": "^7.8.3",
@@ -32,8 +31,6 @@
         "less-loader": "^5.0.0",
         "memory-fs": "^0.5.0",
         "node-fetch": "^2.6.0",
-        "querystring": "^0.2.0",
-        "react-helmet": "^5.2.1",
         "style-loader": "^1.1.3",
         "typescript": "^3.8.3",
         "webpack": "^4.42.0",
@@ -49,7 +46,6 @@
         "@types/node": "^13.9.3",
         "@types/react": "^16.9.25",
         "@types/react-dom": "^16.9.5",
-        "@types/react-helmet": "^5.0.15",
         "@types/webpack": "^4.41.8"
     },
     "engines": {

@@ -1,6 +1,5 @@
 import React from 'react'
-import Link from 'postui/link'
-import Head, { SEO } from 'postui/head'
+import { Link, Head, SEO } from '@postjs/core'
 
 export default () => (
     <div>
@@ -10,7 +9,7 @@ export default () => (
         <SEO
             title="Hello World!"
             description="The Post-Front-End Framework"
-            keywords="react, postui"
+            keywords="react, postio"
         />
         <h1>Hello World!</h1>
         <Link to="/about">About</Link>

@@ -1,21 +1,16 @@
 import * as React from 'react'
 import * as ReactDom from 'react-dom'
+import * as Postjs from '@postjs/core'
 import fs from 'fs-extra'
 import path from 'path'
 import fetch from 'node-fetch'
 import { renderPage } from './renderer'
 import { Compiler } from './webpack'
-import * as Head from '../framework/head'
-import * as Router from '../framework/router'
-import * as Link from '../framework/link'
-import utils from '../shared/utils'
 
 const peerDeps = {
-    'postui/head': Head,
-    'postui/router': Router,
-    'postui/link': Link,
     'react': React,
-    'react-dom': ReactDom
+    'react-dom': ReactDom,
+    '@postjs/core': Postjs
 }
 
 Object.assign(globalThis, {
@@ -55,7 +50,7 @@ export default async function (dir: string) {
     // console.log(routes)
     Object.keys(pages).map(path => {
         const component = pages[path]()
-        renderPage(new Router.Router(), component)
+        renderPage(new Postjs.Router(), component)
     })
 }
 

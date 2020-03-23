@@ -1,12 +1,12 @@
 import arg from '../shared/arg'
 import build from '../build'
 
-const helpMessage = `Compiles the postUI app for production deployment
+const helpMessage = `Compiles the postio for production deployment
 
 Usage
     $ post build <dir>
 
-<dir> represents the directory of the postUI app.
+<dir> represents the directory of the postio.
 If the <dir> is empty, the current directory will be used.
 `
 

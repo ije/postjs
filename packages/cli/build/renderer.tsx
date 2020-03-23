@@ -1,7 +1,6 @@
 import * as React from 'react'
 import { renderToString } from 'react-dom/server'
-import { Router } from '../framework/router'
-import { renderHeadToString } from '../framework/head'
+import { Router, renderHeadToString } from '@postjs/core'
 
 export async function renderPage(router: Router, PageComponent: React.ComponentType) {
     let props: any = {}

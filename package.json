@@ -1,5 +1,5 @@
 {
-    "name": "postui-project",
+    "name": "postjs-project",
     "private": true,
     "workspaces": [
         "packages/*"
@@ -7,7 +7,7 @@
     "scripts": {
         "lerna": "lerna",
         "build": "lerna run build",
-        "post": "lerna run build && node ./packages/postui/dist/cli/post.js"
+        "post": "lerna run build && node ./packages/cli/dist/cli/post.js"
     },
     "devDependencies": {
         "lerna": "^3.20.2",

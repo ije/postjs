@@ -1,5 +1,5 @@
 {
-    "name": "hello-world",
+    "name": "@postjs/core",
     "version": "1.0.0",
     "scripts": {
         "dev": "post",
@@ -7,7 +7,8 @@
         "start": "post start"
     },
     "dependencies": {
-        "postui": "latest",
+        "@postjs/cli": "latest",
+        "@postjs/core": "latest",
         "react": "^16.13.1",
         "react-dom": "^16.13.1"
     },

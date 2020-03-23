@@ -8,7 +8,7 @@ interface LinkProps {
     replace?: boolean
 }
 
-function Link({
+export function Link({
     to,
     className,
     style,
@@ -48,5 +48,3 @@ export function NavLink({
         <Link {...rest} />
     )
 }
-
-export default Link
