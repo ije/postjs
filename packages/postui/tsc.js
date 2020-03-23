@@ -14,10 +14,11 @@ function tsc() {
         [
             '--outDir', 'dist',
             '--baseUrl', __dirname,
-            '--target', 'es2015',
+            '--target', 'es2018',
             '--lib', 'es2020',
             '--module', 'commonjs',
             '--moduleResolution', 'node',
+            '--jsx', 'react',
             '--allowSyntheticDefaultImports',
             '--esModuleInterop',
             '--alwaysStrict',
@@ -25,10 +26,7 @@ function tsc() {
             '--noImplicitThis',
             '--noImplicitReturns',
             '--noUnusedLocals',
-            '--skipLibCheck',
             '--removeComments',
-            '--newLine', 'LF',
-            '--jsx', 'react',
             ...sources
         ],
         { stdio: 'inherit' }
