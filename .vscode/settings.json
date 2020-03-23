@@ -1,6 +1,4 @@
 {
-    "editor.formatOnSave": true,
-    "editor.formatOnPaste": true,
     "files.eol": "\n",
     "files.trimTrailingWhitespace": true,
     "files.exclude": {
@@ -8,11 +6,13 @@
         "**/.DS_Store": true,
         "**/*.log": true,
         "**/Thumbs.db": true,
-        "**/node_modules/": true,
-        "**/dist/": true
+        "**/node_modules/": true
     },
+    "editor.formatOnSave": true,
+    "editor.formatOnPaste": true,
     "typescript.tsdk": "node_modules/typescript/lib",
     "typescript.updateImportsOnFileMove.enabled": "always",
+    "tslint.autoFixOnSave": true,
     "editor.codeActionsOnSave": {
         "source.fixAll.tslint": true
     }
