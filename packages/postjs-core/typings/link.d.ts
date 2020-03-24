@@ -6,7 +6,7 @@ interface LinkProps {
     style?: CSSProperties;
     replace?: boolean;
 }
-export declare function Link({ to, className, style, replace, children }: PropsWithChildren<LinkProps>): JSX.Element;
+export declare function Link({ to, as, className, style, replace, children }: PropsWithChildren<LinkProps>): JSX.Element;
 interface NavLinkProps extends LinkProps {
     activeClassName?: string;
     activeStyle?: CSSProperties;

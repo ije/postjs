@@ -3,13 +3,11 @@ import { Compiler, CompileResult } from '.'
 
 export class Watcher {
     private _compiler: Compiler
-    private _lastHash: string | null
-    private _lastVendorChunkHash: string | null
+    private _lastHashes: Record<string, string>
 
     constructor(appDir: string, entryJS: string, config?: Pick<webpack.Configuration, 'mode' | 'target' | 'externals'>) {
         this._compiler = new Compiler(appDir, entryJS, config)
-        this._lastHash = null
-        this._lastVendorChunkHash = null
+        this._lastHashes = {}
     }
 
     watch(onChange: (errors: Error | null, result?: CompileResult) => void) {
@@ -21,28 +19,19 @@ export class Watcher {
                     return
                 }
 
-                if (!stats.hasErrors() && stats.hash && (this._lastHash === null || this._lastHash !== stats.hash)) {
-                    this._lastHash = stats.hash
-                    const appHash = stats.compilation.namedChunks.get('app').hash
+                if (!stats.hasErrors() && stats.hash) {
+                    const { namedChunks } = stats.compilation
                     const ret: CompileResult = {
                         hash: stats.hash,
-                        chuncks: {
-                            app: {
-                                hash: appHash,
-                                content: this._compiler.getChunckContent('app')
-                            }
-                        }
+                        chuncks: new Map()
                     }
-                    if (stats.compilation.namedChunks.has('vendor')) {
-                        const vendorHash = stats.compilation.namedChunks.get('vendor')!.hash
-                        if (this._lastVendorChunkHash === null || this._lastVendorChunkHash !== vendorHash) {
-                            this._lastVendorChunkHash = vendorHash
-                            ret.chuncks['vendor'] = {
-                                hash: vendorHash,
-                                content: this._compiler.getChunckContent('vendor')
-                            }
+                    namedChunks.forEach(({ hash }, name) => {
+                        if (this._lastHashes[name] !== hash) {
+                            this._lastHashes[name] = hash
+                            const content = this._compiler.getChunckContent(name)
+                            ret.chuncks.set(name, { name, hash, content })
                         }
-                    }
+                    })
                     onChange(null, ret)
                 } else {
                     onChange(new Error(stats.toString('minimal')))

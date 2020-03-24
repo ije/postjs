@@ -4,31 +4,11 @@ import utils from './utils'
 const isServer = globalThis.process !== undefined
 const stateOnServer = new Map<string, { type: string, props: any }>()
 
-export function renderHeadToString(spaces?: number): string {
-    const html: string[] = []
-    stateOnServer.forEach(({ type, props }) => {
-        const attrs = Object.keys(props)
-            .filter(key => key !== 'children' && utils.isString(props[key]))
-            .map(key => `${key}="${props[key].replace(/"/g, '\\"')}"`)
-            .join(' ')
-        if (attrs !== '') {
-            if (utils.isNEString(props.children)) {
-                html.push(`<${type} ${attrs}>${props.children}</${type}>`)
-            } else {
-                html.push(`<${type} ${attrs} />`)
-            }
-        } else if (type === 'title' && utils.isNEString(props.children)) {
-            html.push(`<title>${props.children}</title>`)
-        }
-    })
-    stateOnServer.clear()
-    if (spaces) {
-        return html.map(s => ' '.repeat(spaces) + s).join('\n')
-    }
-    return html.join('')
+function attr(s?: string) {
+    return s?.replace(/"/g, '\\"') || ''
 }
 
-function parse(node: ReactNode) {
+function renderHead(node: ReactNode) {
     Children.forEach(node, child => {
         if (!isValidElement(child)) {
             return
@@ -38,10 +18,10 @@ function parse(node: ReactNode) {
 
         switch (type) {
             case SEO:
-                parse(child)
+                renderHead(child)
                 break
             case Fragment:
-                parse(props.children)
+                renderHead(props.children)
                 break
             case 'title':
             case 'meta':
@@ -52,26 +32,46 @@ function parse(node: ReactNode) {
                 if (isServer) {
                     let key = type
                     if (type === 'meta') {
-                        if (utils.isString(props['charSet']) || utils.isString(props['charset'])) {
-                            key += '_charSet'
-                        } else if (utils.isString(props['name']) || utils.isString(props['property'])) {
-                            key += '_name_' + (props['name'] || props['property'])
+                        if (utils.isString(props['charset']) || utils.isString(props['charSet'])) {
+                            key += '[charset]'
+                        } else if (utils.isString(props['name'])) {
+                            key += `[name=${props['name']}]`
+                        } else if (utils.isString(props['property'])) {
+                            key += `[property=${props['property']}]`
                         } else {
-                            key += '_' + Object.keys(props).filter(k => k !== 'content').map(k => k + '=' + props[k]).join('_')
+                            key += '[' + Object.keys(props).filter(k => k !== 'content' && k !== 'children').map(k => k + '=' + props[k]).join(',') + ']'
                         }
                     } else if (key !== 'title') {
-                        key += '_' + Object.keys(props).map(k => k + '=' + props[k]).join('_')
+                        key += '[' + Object.keys(props).filter(k => k !== 'children').map(k => k + '=' + props[k]).join(',') + '].' + Math.random()
                     }
                     stateOnServer.set(key, { type, props })
                 } else {
-                    const el = globalThis.document.createElement(type)
+                    let el: HTMLElement | null = null
+                    if (type === 'title') {
+                        el = globalThis.document.querySelector('title')
+                    } else if (type === 'meta') {
+                        let query: string
+                        if (utils.isString(props['charset']) || utils.isString(props['charSet'])) {
+                            query = 'meta[charset]'
+                        } else if (utils.isString(props['name'])) {
+                            query = `meta[name="${attr(props['name'])}"]`
+                        } else if (utils.isString(props['property'])) {
+                            query = `meta[property="${attr(props['property'])}"]`
+                        } else {
+                            query = Object.keys(props).filter(k => k !== 'content' && k !== 'children').map(k => `meta[${k}="${attr(props[k])}"]`).join(',')
+                        }
+                        el = globalThis.document.querySelector(query)
+                    }
+                    if (el === null) {
+                        el = globalThis.document.createElement(type)
+                    }
                     Object.keys(props).forEach(key => {
-                        const value = props['children']
+                        const value = props[key]
                         if (utils.isString(value)) {
                             if (key === 'children') {
-                                el.innerText = value
+                                el!.innerText = value
                             } else {
-                                el.setAttribute(key, value)
+                                el!.setAttribute(key, value)
                             }
                         }
                     })
@@ -83,8 +83,32 @@ function parse(node: ReactNode) {
 }
 
 export function Head({ children }: PropsWithChildren<{}>) {
-    parse(children)
+    renderHead(children)
     return null
+}
+
+export function renderHeadToString(spaces?: number): string {
+    const html: string[] = []
+    stateOnServer.forEach(({ type, props }) => {
+        const attrs = Object.keys(props)
+            .filter(key => key !== 'children' && utils.isString(props[key]))
+            .map(key => `${key}="${attr(props[key])}"`)
+            .join(' ')
+        if (attrs !== '') {
+            if (utils.isNEString(props.children)) {
+                html.push(`<${type} ${attrs}>${props.children}</${type}>`)
+            } else {
+                html.push(`<${type} ${attrs} />`)
+            }
+        } else if (type === 'title') {
+            html.push(`<title>${props.children || ''}</title>`)
+        }
+    })
+    stateOnServer.clear()
+    if (spaces) {
+        return html.map(s => ' '.repeat(spaces) + s).join('\n')
+    }
+    return html.join('')
 }
 
 interface SEOProps {

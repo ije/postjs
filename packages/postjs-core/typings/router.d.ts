@@ -7,26 +7,23 @@ export interface URL {
     params: Record<string, string>;
     query: ParsedUrlQuery;
 }
-export interface Route {
-    path: string;
-    component: React.ComponentType;
-    isExact?: boolean;
-}
-export declare class Router {
-    routePath: string;
-    pathname: string;
-    params: Record<string, string>;
-    query: ParsedUrlQuery;
+export declare class RouterStore {
+    private _url;
     constructor(url?: URL);
     get url(): URL;
     push(url: string, as?: string): void;
     replace(url: string, as?: string): void;
 }
-export declare const RouterContext: React.Context<Router>;
-export declare function useRouter(): Router;
-interface RouterComponentProps {
+export declare const RouterContext: React.Context<RouterStore>;
+export declare function useRouter(): RouterStore;
+export interface Route {
+    path: string;
+    component: React.ComponentType;
+}
+interface RouterProps {
     base: string;
     routes: Route[];
 }
-export declare function RouterComponent({ base: propBase, routes, children }: PropsWithChildren<RouterComponentProps>): JSX.Element;
+export declare function Router({ base, routes, children }: PropsWithChildren<RouterProps>): JSX.Element;
+export declare function matchPath(routePath: string, locPath: string): Record<string, string> | null;
 export {};

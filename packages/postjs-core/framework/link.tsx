@@ -10,6 +10,7 @@ interface LinkProps {
 
 export function Link({
     to,
+    as,
     className,
     style,
     replace,
@@ -28,7 +29,7 @@ export function Link({
         <a
             className={className}
             style={style}
-            href={to}
+            href={as || to}
             onClick={onClick}
         >{children}</a>
     )

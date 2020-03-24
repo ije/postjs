@@ -1,13 +1,11 @@
 import webpack from 'webpack'
 import path from 'path'
 
-export default (appDir: string, custom?: Pick<webpack.Configuration, 'mode' | 'target' | 'externals'>) => ({
+export default (appDir: string, custom?: Pick<webpack.Configuration, 'mode' | 'target' | 'externals' | 'entry'>) => ({
     mode: custom?.mode || 'production',
     target: custom?.target || 'web',
     context: appDir,
-    entry: {
-        app: './app.jsx'
-    },
+    entry: custom?.entry,
     output: {
         path: '/dist/',
         filename: '[name].js',
@@ -24,19 +22,20 @@ export default (appDir: string, custom?: Pick<webpack.Configuration, 'mode' | 't
                         babelrc: false,
                         cacheDirectory: true,
                         presets: [
-                            [
-                                '@babel/preset-env',
-                                custom?.target === 'node' ? { targets: { node: 'current' } } : {
-                                    useBuiltIns: 'usage',
-                                    corejs: 3,
-                                    targets: '> 0.5%, last 2 versions, Firefox ESR, not dead'
-                                }
-                            ],
+                            // [
+                            //     '@babel/preset-env',
+                            //     custom?.target === 'node' ? { targets: { node: 'current' } } : {
+                            //         useBuiltIns: 'usage',
+                            //         corejs: 3,
+                            //         modules: false,
+                            //         targets: '> 0.5%, last 2 versions, Firefox ESR, not dead'
+                            //     }
+                            // ],
                             '@babel/preset-typescript',
                             '@babel/preset-react'
                         ],
                         plugins: [
-                            ['@babel/plugin-proposal-decorators', { legacy: true }],
+                            ['@babel/plugin-transform-runtime', { 'regenerator': true }],
                             ['@babel/plugin-proposal-class-properties', { loose: true }],
                             '@babel/plugin-proposal-optional-chaining',
                             '@babel/plugin-proposal-nullish-coalescing-operator'

@@ -2,34 +2,49 @@ import webpack from 'webpack'
 import MemoryFS from 'memory-fs'
 import VirtualModulesPlugin from 'webpack-virtual-modules'
 import path from 'path'
+import utils from '../../shared/utils'
 import createConfig from './config'
 
 export interface CompileResult {
     hash: string,
-    chuncks: { [key: string]: Chunck }
+    chuncks: Map<string, CompileChunck>
 }
 
-export interface Chunck {
+export interface CompileChunck {
+    name: string
     hash: string
     content: string
 }
 
 export class Compiler {
     private _mfs: MemoryFS
-    private _vmp: VirtualModulesPlugin
     private _config: webpack.Configuration
     private _compiler: webpack.Compiler
 
-    constructor(appDir: string, entryJS: string, config?: Pick<webpack.Configuration, 'mode' | 'target' | 'externals'>) {
+    constructor(appDir: string, entry: string | Record<string, string>, config?: Pick<webpack.Configuration, 'mode' | 'target' | 'externals'>) {
+        const vmp = new VirtualModulesPlugin()
+        const webpackEntry: webpack.Entry = {}
+        if (utils.isNEString(entry)) {
+            webpackEntry['app'] = './app.jsx'
+        } else if (utils.isObject(entry)) {
+            Object.keys(entry).forEach(name => {
+                webpackEntry[name] = `./${name}.jsx`
+            })
+        }
         this._mfs = new MemoryFS()
-        this._vmp = new VirtualModulesPlugin()
         this._config = {
-            ...createConfig(appDir, config),
-            plugins: [this._vmp]
+            ...createConfig(appDir, { ...config, entry: webpackEntry }),
+            plugins: [vmp]
         }
         this._compiler = webpack(this._config)
         this._compiler.outputFileSystem = this._mfs
-        this._vmp.writeModule(this._config.entry!['app'], entryJS)
+        if (utils.isNEString(entry)) {
+            vmp.writeModule('./app.jsx', entry)
+        } else if (utils.isObject(entry)) {
+            Object.keys(entry).forEach(name => {
+                vmp.writeModule(String(webpackEntry[name]), entry[name])
+            })
+        }
     }
 
     get hooks() {
@@ -49,24 +64,16 @@ export class Compiler {
                 }
 
                 if (stats.hash && !stats.hasErrors()) {
-                    const appHash = stats.compilation.namedChunks.get('app').hash
+                    const { namedChunks } = stats.compilation
                     const ret: CompileResult = {
                         hash: stats.hash,
-                        chuncks: {
-                            app: {
-                                hash: appHash,
-                                content: this.getChunckContent('app')
-                            }
-                        }
+                        chuncks: new Map()
                     }
-                    if (stats.compilation.namedChunks.has('vendor')) {
-                        ret.chuncks['vendor'] = {
-                            hash: stats.compilation.namedChunks.get('vendor').hash,
-                            content: this.getChunckContent('vendor')
-                        }
-                    } else {
-                        resolve(ret)
-                    }
+                    namedChunks.forEach(({ hash }, name) => {
+                        const content = this.getChunckContent(name)
+                        ret.chuncks.set(name, { name, hash, content })
+                    })
+                    resolve(ret)
                 } else {
                     reject(new Error(stats.toString('minimal')))
                 }

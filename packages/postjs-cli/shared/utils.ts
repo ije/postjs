@@ -143,9 +143,9 @@ export default {
     },
 
     cleanPath(path: string): string {
-        return '/' + path.split('/')
+        return this.isNEString(path) ? '/' + path.split('/')
             .map(p => p.trim().replace(/^[\.\s]+$/, ''))
             .filter(p => p.length > 0)
-            .join('/')
+            .join('/') : '/'
     }
 }

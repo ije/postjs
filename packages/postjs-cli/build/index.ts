@@ -6,6 +6,7 @@ import path from 'path'
 import fetch from 'node-fetch'
 import { renderPage } from './renderer'
 import { Compiler } from './webpack'
+import utils from '../shared/utils'
 
 const peerDeps = {
     'react': React,
@@ -18,19 +19,60 @@ Object.assign(globalThis, {
 })
 
 export default async function (dir: string) {
-    dir = path.resolve(dir)
-    if (!fs.existsSync(dir)) {
+    const appDir = path.resolve(dir)
+    if (!fs.existsSync(appDir)) {
         console.error(`no such directory: ${dir}`)
         process.exit(0)
     }
 
-    const ret = await new Compiler(dir, `
+    const appConfig: Record<string, any> = {}
+    const configJson = path.join(appDir, 'post.config.json')
+    if (fs.existsSync(configJson)) {
+        const config = await fs.readJSON(configJson)
+        Object.assign(appConfig, config)
+    }
+
+    let appLang = 'en'
+    if (/^[a-z]{2}(\-[a-z0-9]+)?$/i.test(appConfig.lang)) {
+        appLang = appConfig.lang
+    }
+
+    const { hash, chuncks } = await new Compiler(appDir, `
+        import React from 'react'
+        import ReactDom from 'react-dom'
+        import { Router } from '@postjs/core'
+
+        const req = require.context('./pages', true, /\\.(js|ts)x?$/i)
+        const routes = []
+
+        if (!window.globalThis) {
+            window.globalThis = window
+        }
+
+        req.keys().forEach(path => {
+            const pathname = path.replace(/^\\.+/, '').replace(/(\\/index)?\\.(js|ts)x?$/i, '') || '/'
+            routes.push({
+                path:pathname,
+                component: req(path).default
+            })
+        })
+
+        ReactDom.hydrate((
+            <Router
+                base="${utils.cleanPath(encodeURI(appConfig.baseUrl))}"
+                routes={routes}
+            />
+        ), document.querySelector('main'))
+    `, {
+        mode: 'production'
+    }).compile()
+    const serv = await new Compiler(appDir, `
         const req = require.context('./pages', true, /\\.(js|ts)x?$/i)
         const pages = {}
 
         req.keys().forEach(path => {
-            const name = path.replace(/^\\.+/, '').replace(/(\\/index)?\\.(js|ts)x?$/i, '') || '/'
-            pages[name] = () => req(path).default
+            const pathname = path.replace(/^\\.+/, '').replace(/(\\/index)?\\\.(js|ts)x?$/i, '') || '/'
+            pages[pathname] = () => req(path).default
         })
 
         exports.pages = pages
@@ -39,20 +81,28 @@ export default async function (dir: string) {
         target: 'node',
         externals: Object.keys(peerDeps)
     }).compile()
-    const { pages } = run(ret.chuncks.app.content, peerDeps)
-    // const routes = Object.keys(pages).map(path => ({
-    //     path: '/' + path.split('/')
-    //         .map(p => p.trim().replace(/^\$/, ':'))
-    //         .filter(p => p.length > 0)
-    //         .join('/'),
-    //     component: pages[path]()
-    // } as Router.Route))
-    // console.log(routes)
-    Object.keys(pages).map(async path => {
-        const renderRet = await renderPage(new Postjs.Router(), pages[path]())
-        console.log(renderRet.body)
-        console.log(renderRet.helmet)
+    const { pages } = run(serv.chuncks.get('app')!.content, peerDeps)
+
+    chuncks.forEach(async ({ name, content }) => {
+        const jsFile = path.join(appDir, '.post/builds', hash, '_dist', `${name}.js`)
+        await fs.ensureDir(path.dirname(jsFile))
+        await fs.writeFile(jsFile, content)
     })
+    Object.keys(pages).map(async p => {
+        const renderRet = await renderPage({ routePath: p, pathname: p, params: {}, query: {} }, pages[p]())
+        const htmlFile = path.join(appDir, '.post/builds', hash, `${p === '/' ? 'index' : p}.html`)
+        await fs.ensureDir(path.dirname(htmlFile))
+        await fs.writeFile(htmlFile, `<!DOCTYPE html>
+<html lang="${appLang}">
+<head>${renderRet.helmet}</head>
+<body>
+    <main>${renderRet.body}</main>
+    <script src="./_dist/vendor.js?v=${chuncks.get('vendor')?.hash}"></script>
+    <script src="./_dist/app.js?v=${chuncks.get('app')?.hash}"></script>
+</body>
+</html>`)
+    })
+    console.log('done', hash)
 }
 
 function run(source: string, deps: Record<string, any>) {
