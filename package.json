@@ -1,5 +1,5 @@
 {
-    "name": "postjs-project",
+    "name": "postjs",
     "private": true,
     "workspaces": [
         "packages/*"
@@ -7,7 +7,7 @@
     "scripts": {
         "lerna": "lerna",
         "build": "lerna run build",
-        "post": "lerna run build && node ./packages/cli/dist/cli/post.js"
+        "post": "lerna run build && node ./packages/postjs-cli/dist/cli/post.js"
     },
     "devDependencies": {
         "lerna": "^3.20.2",
@@ -17,6 +17,6 @@
         "tslint-origin-ordered-imports-rule": "^1.2.2"
     },
     "engines": {
-        "node": ">=10.19.0"
+        "node": ">=10.0.0"
     }
 }

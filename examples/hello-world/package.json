@@ -1,5 +1,5 @@
 {
-    "name": "@postjs/core",
+    "name": "postjs-hello-world",
     "version": "1.0.0",
     "scripts": {
         "dev": "post",

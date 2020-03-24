@@ -5,7 +5,7 @@ const About = ({ name }: { name: string }) => (
 )
 
 About.getStaticProps = async ctx => {
-    const res = await fetch('https://api.github.com/orgs/postui')
+    const res = await fetch('https://api.github.com/repos/postui/postjs')
     const json = await res.json()
     return json
 }
