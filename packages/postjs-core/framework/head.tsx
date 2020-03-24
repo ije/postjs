@@ -1,8 +1,8 @@
-import React, { PropsWithChildren, Children, isValidElement, Fragment } from 'react'
+import React, { PropsWithChildren, Children, isValidElement, Fragment, ReactNode } from 'react'
 import utils from './utils'
 
 const isServer = globalThis.process !== undefined
-const stateOnServer: Array<{ type: string, props: any }> = []
+const stateOnServer = new Map<string, { type: string, props: any }>()
 
 export function renderHeadToString(spaces?: number): string {
     const html: string[] = []
@@ -21,32 +21,28 @@ export function renderHeadToString(spaces?: number): string {
             html.push(`<title>${props.children}</title>`)
         }
     })
-    stateOnServer.splice(0, stateOnServer.length) // clear
+    stateOnServer.clear()
     if (spaces) {
         return html.map(s => ' '.repeat(spaces) + s).join('\n')
     }
     return html.join('')
 }
 
-export function Head({ children }: PropsWithChildren<{}>) {
-    const nest: any[] = []
-    Children.forEach(children, child => {
-        if (Array.isArray(child)) {
-            Head({ children: child })
-            return
-        }
+function parse(node: ReactNode) {
+    Children.forEach(node, child => {
         if (!isValidElement(child)) {
             return
         }
 
         const { type, props } = child
 
-        if (type === SEO) {
-            nest.push(child)
-            return
-        }
-
         switch (type) {
+            case SEO:
+                parse(child)
+                break
+            case Fragment:
+                parse(props.children)
+                break
             case 'title':
             case 'meta':
             case 'link':
@@ -54,7 +50,19 @@ export function Head({ children }: PropsWithChildren<{}>) {
             case 'script':
             case 'no-script':
                 if (isServer) {
-                    stateOnServer.push({ type, props })
+                    let key = type
+                    if (type === 'meta') {
+                        if (utils.isString(props['charSet']) || utils.isString(props['charset'])) {
+                            key += '_charSet'
+                        } else if (utils.isString(props['name']) || utils.isString(props['property'])) {
+                            key += '_name_' + (props['name'] || props['property'])
+                        } else {
+                            key += '_' + Object.keys(props).filter(k => k !== 'content').map(k => k + '=' + props[k]).join('_')
+                        }
+                    } else if (key !== 'title') {
+                        key += '_' + Object.keys(props).map(k => k + '=' + props[k]).join('_')
+                    }
+                    stateOnServer.set(key, { type, props })
                 } else {
                     const el = globalThis.document.createElement(type)
                     Object.keys(props).forEach(key => {
@@ -72,8 +80,11 @@ export function Head({ children }: PropsWithChildren<{}>) {
                 break
         }
     })
+}
 
-    return <Fragment>{nest}</Fragment>
+export function Head({ children }: PropsWithChildren<{}>) {
+    parse(children)
+    return null
 }
 
 interface SEOProps {
@@ -84,23 +95,25 @@ interface SEOProps {
     url?: string
 }
 
-export function SEO({ title, description, keywords, url, image }: SEOProps) {
-    return (
-        <Head>
-            <title>{title}</title>
-            <meta name="description" content={description} />
-            <meta name="keywords" content={keywords} />
-            <meta name="og:title" content={title} />
-            <meta name="og:description" content={description} />
-            {image && [
-                <meta name="og:image" content={image} />,
-                <meta name="twitter:image" content={image} />,
+export const SEO = ({ title, description, keywords, url, image }: SEOProps) => (
+    <Head>
+        <title>{title}</title>
+        <meta name="description" content={description} />
+        <meta name="keywords" content={keywords} />
+        <meta name="og:title" content={title} />
+        <meta name="og:description" content={description} />
+        {image && (
+            <Fragment>
+                <meta name="og:image" content={image} />
+                <meta name="twitter:image" content={image} />
                 <meta name="twitter:card" content="summary_large_image" />
-            ]}
-            {url && [
-                <meta name="og:url" content={url} />,
+            </Fragment>
+        )}
+        {url && (
+            <Fragment>
+                <meta name="og:url" content={url} />
                 <meta name="twitter:site" content={url} />
-            ]}
-        </Head>
-    )
-}
+            </Fragment>
+        )}
+    </Head>
+)

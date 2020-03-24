@@ -11,8 +11,11 @@ export async function renderPage(router: Router, PageComponent: React.ComponentT
         }
     }
 
-    const html = renderToString(<PageComponent {...props} url={router.url} />)
-    const helmet = renderHeadToString(4)
-    console.log(html)
-    console.log(helmet)
+    const body = renderToString(<PageComponent {...props} url={router.url} />)
+    const helmet = renderHeadToString()
+
+    return {
+        body,
+        helmet
+    }
 }

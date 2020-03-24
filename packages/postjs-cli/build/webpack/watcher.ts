@@ -2,14 +2,14 @@ import webpack from 'webpack'
 import { Compiler, CompileResult } from '.'
 
 export class Watcher {
+    private _compiler: Compiler
     private _lastHash: string | null
     private _lastVendorChunkHash: string | null
-    private _compiler: Compiler
 
     constructor(appDir: string, entryJS: string, config?: Pick<webpack.Configuration, 'mode' | 'target' | 'externals'>) {
+        this._compiler = new Compiler(appDir, entryJS, config)
         this._lastHash = null
         this._lastVendorChunkHash = null
-        this._compiler = new Compiler(appDir, entryJS, config)
     }
 
     watch(onChange: (errors: Error | null, result?: CompileResult) => void) {
@@ -21,19 +21,31 @@ export class Watcher {
                     return
                 }
 
-                if (stats.hasErrors()) {
-                    onChange(new Error(stats.toString('minimal')))
-                } else if (stats.hash && (this._lastHash === null || this._lastHash !== stats.hash)) {
+                if (!stats.hasErrors() && stats.hash && (this._lastHash === null || this._lastHash !== stats.hash)) {
                     this._lastHash = stats.hash
+                    const appHash = stats.compilation.namedChunks.get('app').hash
+                    const ret: CompileResult = {
+                        hash: stats.hash,
+                        chuncks: {
+                            app: {
+                                hash: appHash,
+                                content: this._compiler.getChunckContent('app')
+                            }
+                        }
+                    }
                     if (stats.compilation.namedChunks.has('vendor')) {
                         const vendorHash = stats.compilation.namedChunks.get('vendor')!.hash
                         if (this._lastVendorChunkHash === null || this._lastVendorChunkHash !== vendorHash) {
                             this._lastVendorChunkHash = vendorHash
-                            onChange(null, { hash: stats.hash, chuncks: { app: this._compiler.getChunckContent('app'), vendor: this._compiler.getChunckContent('vendor') } })
-                            return
+                            ret.chuncks['vendor'] = {
+                                hash: vendorHash,
+                                content: this._compiler.getChunckContent('vendor')
+                            }
                         }
                     }
-                    onChange(null, { hash: stats.hash, chuncks: { app: this._compiler.getChunckContent('app') } })
+                    onChange(null, ret)
+                } else {
+                    onChange(new Error(stats.toString('minimal')))
                 }
             }
         ))

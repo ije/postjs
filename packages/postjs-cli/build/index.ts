@@ -39,7 +39,7 @@ export default async function (dir: string) {
         target: 'node',
         externals: Object.keys(peerDeps)
     }).compile()
-    const { pages } = run(ret.chuncks.app, peerDeps)
+    const { pages } = run(ret.chuncks.app.content, peerDeps)
     // const routes = Object.keys(pages).map(path => ({
     //     path: '/' + path.split('/')
     //         .map(p => p.trim().replace(/^\$/, ':'))
@@ -48,9 +48,10 @@ export default async function (dir: string) {
     //     component: pages[path]()
     // } as Router.Route))
     // console.log(routes)
-    Object.keys(pages).map(path => {
-        const component = pages[path]()
-        renderPage(new Postjs.Router(), component)
+    Object.keys(pages).map(async path => {
+        const renderRet = await renderPage(new Postjs.Router(), pages[path]())
+        console.log(renderRet.body)
+        console.log(renderRet.helmet)
     })
 }
 

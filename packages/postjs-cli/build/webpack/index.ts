@@ -6,7 +6,12 @@ import createConfig from './config'
 
 export interface CompileResult {
     hash: string,
-    chuncks: { [key: string]: string }
+    chuncks: { [key: string]: Chunck }
+}
+
+export interface Chunck {
+    hash: string
+    content: string
 }
 
 export class Compiler {
@@ -44,10 +49,23 @@ export class Compiler {
                 }
 
                 if (stats.hash && !stats.hasErrors()) {
+                    const appHash = stats.compilation.namedChunks.get('app').hash
+                    const ret: CompileResult = {
+                        hash: stats.hash,
+                        chuncks: {
+                            app: {
+                                hash: appHash,
+                                content: this.getChunckContent('app')
+                            }
+                        }
+                    }
                     if (stats.compilation.namedChunks.has('vendor')) {
-                        resolve({ hash: stats.hash, chuncks: { app: this.getChunckContent('app'), vendor: this.getChunckContent('vendor') } })
+                        ret.chuncks['vendor'] = {
+                            hash: stats.compilation.namedChunks.get('vendor').hash,
+                            content: this.getChunckContent('vendor')
+                        }
                     } else {
-                        resolve({ hash: stats.hash, chuncks: { app: this.getChunckContent('app') } })
+                        resolve(ret)
                     }
                 } else {
                     reject(new Error(stats.toString('minimal')))
