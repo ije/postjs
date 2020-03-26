@@ -81,9 +81,9 @@ export class Compiler {
         })
     }
 
-    getChunckContent(chunckName: string): string {
+    getChunckContent(name: string): string {
         const { filename, path: outPath } = this._config.output!
-        const filepath = path.join(outPath!, String(filename!).replace('[name]', chunckName))
+        const filepath = path.join(outPath!, String(filename!).replace('[name]', name))
         if (this._mfs.existsSync(filepath)) {
             return this._mfs.readFileSync(filepath).toString()
         }
@@ -91,9 +91,10 @@ export class Compiler {
     }
 
     clear() {
-        ['app', 'vendor'].forEach(name => {
-            const { filename, path: outPath } = this._config.output!
-            this._mfs.unlinkSync(path.join(outPath!, String(filename!).replace('[name]', name)))
+        const { path: outPath } = this._config.output!
+        this._mfs.readdirSync(outPath!).forEach(name => {
+            this._mfs.unlinkSync(path.join(outPath!, name))
         })
+        this._mfs.rmdirSync(outPath!)
     }
 }

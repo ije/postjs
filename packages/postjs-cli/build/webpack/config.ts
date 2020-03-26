@@ -9,8 +9,7 @@ export default (appDir: string, custom?: Pick<webpack.Configuration, 'mode' | 't
     output: {
         path: '/dist/',
         filename: '[name].js',
-        libraryTarget: 'umd',
-        globalObject: 'globalThis'
+        libraryTarget: 'umd'
     },
     module: {
         rules: [
@@ -86,13 +85,13 @@ export default (appDir: string, custom?: Pick<webpack.Configuration, 'mode' | 't
         modules: [path.join(appDir, 'node_modules'), 'node_modules']
     },
     externals: custom?.externals,
-    optimization: custom?.target === 'node' ? undefined : {
-        splitChunks: {
+    optimization: {
+        splitChunks: custom?.target === 'node' ? undefined : {
             cacheGroups: {
-                commons: {
-                    test: /[\\/]node_modules[\\/]/,
+                vendor: {
+                    test: /[\\/](node_modules|packages[\\/]postjs-core)[\\/]/,
                     name: 'vendor',
-                    chunks: 'initial'
+                    chunks: 'all'
                 }
             }
         }

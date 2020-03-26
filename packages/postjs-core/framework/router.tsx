@@ -1,34 +1,29 @@
-import React, { createContext, useState, useContext, useEffect, ComponentType, PropsWithChildren } from 'react'
 import { ParsedUrlQuery, parse } from 'querystring'
+import { createContext, useContext, ComponentType } from 'react'
 import utils from './utils'
 
 export interface URL {
-    routePath: string
+    pagePath: string
     pathname: string
     params: Record<string, string>
     query: ParsedUrlQuery
+}
+
+export interface Route {
+    path: string
+    component: ComponentType<any>
 }
 
 export class RouterStore {
     private _url: URL
 
     constructor(url?: URL) {
-        this._url = url || {
-            routePath: '/',
-            pathname: '/',
-            params: {},
-            query: {}
-        }
+        this._url = url || { pagePath: '/', pathname: '/', params: {}, query: {} }
     }
 
     // url returns a copy url
     get url(): URL {
-        return {
-            routePath: this._url.routePath,
-            pathname: this._url.pathname,
-            params: this._url.params,
-            query: this._url.query
-        }
+        return { ...this._url }
     }
 
     push(url: string, as?: string) {
@@ -40,61 +35,30 @@ export class RouterStore {
     }
 }
 
-export const RouterContext = createContext<RouterStore>(new RouterStore())
+export const RouterContext = createContext(new RouterStore())
 
-export function useRouter(): RouterStore {
+export function useRouter() {
     return useContext(RouterContext)
 }
 
-export interface Route {
-    path: string
-    component: React.ComponentType
-}
-
-interface RouterProps {
-    base: string
-    routes: Route[]
-}
-
-export function Router({
-    base,
-    routes,
-    children
-}: PropsWithChildren<RouterProps>) {
-    const [loc, setLoc] = useState(getCurrentLoc())
-    const [url, Component] = computeRoute(base, routes, loc)
-
-    globalThis.document.head.innerHTML = ''
-    console.log(url, Component)
-
-    useEffect(() => {
-        const updateLoc = () => setLoc(getCurrentLoc())
-        globalThis.addEventListener('popstate', updateLoc, false)
-        return () => globalThis.removeEventListener('popstate', updateLoc, false)
-    }, [])
-
-    return (
-        <RouterContext.Provider value={new RouterStore(url)}>
-            {Component !== null ? (
-                <Component url={url} />
-            ) : children}
-        </RouterContext.Provider>
-    )
-}
-
-function computeRoute(base: string, routes: Route[], { pathname, search }: { pathname: string, search: string }): [URL, ComponentType<any> | null] {
-    let routePath = ''
+export function route(base: string, routes: Route[]): [URL, ComponentType<any> | null] {
+    let pagePath = ''
+    let pathname = location.pathname
     let params: Record<string, string> = {}
-    let query: ParsedUrlQuery = parse(search.replace(/^\?/, ''))
+    let query: ParsedUrlQuery = parse(location.search.replace(/^\?/, ''))
     let component: ComponentType<any> | null = null
-    if (base !== '/') {
+
+    if (base.length > 1 && base.startsWith('/')) {
         pathname = utils.trimPrefix(pathname, base)
+        if (!pathname.startsWith('/')) {
+            pathname = '/' + pathname
+        }
     }
 
     utils.each(routes, route => {
         const match = matchPath(route.path, pathname)
         if (match !== null) {
-            routePath = route.path
+            pagePath = route.path
             params = match
             component = route.component
             return false
@@ -102,63 +66,49 @@ function computeRoute(base: string, routes: Route[], { pathname, search }: { pat
         return undefined
     })
 
-    return [
-        {
-            routePath,
-            pathname,
-            params,
-            query
-        },
-        component
-    ]
+    return [{ pagePath, pathname, params, query }, component]
 }
 
-const regParam = /^:(.+)/
-const segmentize = (path: string) => path.replace(/^[\/\s]+|[\/\s]+$/g, '').split('/').map(p => p.trim())
-const getCurrentLoc = () => ({
-    pathname: globalThis.location.pathname,
-    search: globalThis.location.search
-})
+const regParam = /^\$(.+)/
+const segmentize = (s: string) => utils.cleanPath(s).replace(/^\/+|\/+$/g, '').split('/')
 
-export function matchPath(routePath: string, locPath: string): Record<string, string> | null {
+// raw code copy from https://github.com/reach/router/blob/master/src/lib/utils.js#L30 (MIT License Copyright (c) 2018-present, Ryan Florence)
+function matchPath(routePath: string, locPath: string): Record<string, string> | null {
     const locSegments = segmentize(locPath)
     const routeSegments = segmentize(routePath)
     const max = Math.max(routeSegments.length, locSegments.length)
     const isRoot = locSegments[0] === ''
     const params: Record<string, string> = {}
-
     let missed = false
 
-    for (let index = 0; index < max; index++) {
-        const routeSegment = routeSegments[index]
-        const locationSegment = locSegments[index]
+    for (let i = 0; i < max; i++) {
+        const routeSegment = routeSegments[i]
+        const locationSegment = locSegments[i]
+        const isSplat = routeSegment === '*'
 
-        let isSplat = routeSegment === '*'
         if (isSplat) {
             // Hit a splat, just grab the rest, and return a match
             // uri:   /files/documents/work
             // route: /files/*
-            params['*'] = locSegments.slice(index).map(decodeURIComponent).join('/')
+            params['*'] = locSegments.slice(i).map(decodeURIComponent).join('/')
             break
         }
 
         if (locationSegment === undefined) {
             // URI is shorter than the route, no match
             // uri:   /users
-            // route: /users/:userId
+            // route: /users/$userId
             missed = true
             break
         }
 
         const paramMatch = regParam.exec(routeSegment)
-
         if (paramMatch && !isRoot) {
-            let value = decodeURIComponent(locationSegment)
-            params[paramMatch[1]] = value
+            params[paramMatch[1]] = decodeURIComponent(locationSegment)
         } else if (routeSegment !== locationSegment) {
             // Current segments don't match, not dynamic, not splat, so no match
             // uri:   /users/123/settings
-            // route: /users/:id/profile
+            // route: /users/$id/profile
             missed = true
             break
         }

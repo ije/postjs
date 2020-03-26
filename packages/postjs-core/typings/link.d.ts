@@ -1,4 +1,4 @@
-import { PropsWithChildren, CSSProperties } from 'react';
+import { CSSProperties, PropsWithChildren } from 'react';
 interface LinkProps {
     to: string;
     as?: string;

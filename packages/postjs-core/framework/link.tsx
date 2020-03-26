@@ -1,4 +1,4 @@
-import React, { PropsWithChildren, CSSProperties, useCallback } from 'react'
+import React, { CSSProperties, PropsWithChildren, useCallback } from 'react'
 
 interface LinkProps {
     to: string
@@ -19,9 +19,9 @@ export function Link({
     const onClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
         e.preventDefault()
         if (replace) {
-            globalThis.history.replaceState(null, '', to)
+            history.replaceState(null, '', to)
         } else {
-            globalThis.history.pushState(null, '', to)
+            history.pushState(null, '', to)
         }
     }, [to, replace])
 

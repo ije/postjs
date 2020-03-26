@@ -13,11 +13,11 @@ export default ({ name, description }: any) => {
                 <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
             </Head>
             <SEO
-                title={`Hello ${name}!`}
+                title={`About ${name}!`}
                 description={description}
                 keywords={`react, ${name}`}
             />
-            <h1>Hello {name}!</h1>
+            <h1>About {name}!</h1>
         </div>
     )
 }

@@ -1,7 +1,7 @@
-import React, { PropsWithChildren, Children, isValidElement, Fragment, ReactNode } from 'react'
+import React, { Children, Fragment, isValidElement, PropsWithChildren, ReactNode } from 'react'
 import utils from './utils'
 
-const isServer = globalThis.process !== undefined
+const isServer = typeof process !== undefined
 const stateOnServer = new Map<string, { type: string, props: any }>()
 
 function attr(s?: string) {
@@ -33,7 +33,7 @@ function renderHead(node: ReactNode) {
                     let key = type
                     if (type === 'meta') {
                         if (utils.isString(props['charset']) || utils.isString(props['charSet'])) {
-                            key += '[charset]'
+                            return // ignore charset
                         } else if (utils.isString(props['name'])) {
                             key += `[name=${props['name']}]`
                         } else if (utils.isString(props['property'])) {
@@ -48,7 +48,7 @@ function renderHead(node: ReactNode) {
                 } else {
                     let el: HTMLElement | null = null
                     if (type === 'title') {
-                        el = globalThis.document.querySelector('title')
+                        el = document.querySelector('title')
                     } else if (type === 'meta') {
                         let query: string
                         if (utils.isString(props['charset']) || utils.isString(props['charSet'])) {
@@ -60,10 +60,12 @@ function renderHead(node: ReactNode) {
                         } else {
                             query = Object.keys(props).filter(k => k !== 'content' && k !== 'children').map(k => `meta[${k}="${attr(props[k])}"]`).join(',')
                         }
-                        el = globalThis.document.querySelector(query)
+                        el = document.querySelector(query)
                     }
                     if (el === null) {
-                        el = globalThis.document.createElement(type)
+                        el = document.createElement(type)
+                        el.setAttribute('data-post-' + type, 'true')
+                        document.head.appendChild(el)
                     }
                     Object.keys(props).forEach(key => {
                         const value = props[key]
@@ -75,7 +77,6 @@ function renderHead(node: ReactNode) {
                             }
                         }
                     })
-                    globalThis.document.head.appendChild(el)
                 }
                 break
         }
@@ -96,12 +97,12 @@ export function renderHeadToString(spaces?: number): string {
             .join(' ')
         if (attrs !== '') {
             if (utils.isNEString(props.children)) {
-                html.push(`<${type} ${attrs}>${props.children}</${type}>`)
+                html.push(`<${type} ${attrs} data-post-${type}="true">${props.children}</${type}>`)
             } else {
-                html.push(`<${type} ${attrs} />`)
+                html.push(`<${type} ${attrs} data-post-${type}="true">`)
             }
         } else if (type === 'title') {
-            html.push(`<title>${props.children || ''}</title>`)
+            html.push(`<title data-post-title="true">${props.children || ''}</title>`)
         }
     })
     stateOnServer.clear()
