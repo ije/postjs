@@ -11,7 +11,6 @@ const {
     {
         '--version': Boolean,
         '--help': Boolean,
-        // aliases
         '-v': '--version',
         '-h': '--help'
     },
@@ -26,8 +25,8 @@ const helpMessage = `Usage
 Commands
     ${commands.join(', ')}
 Options
-    --version, -v   Print version number
-    --help, -h      Print help message
+    --version, -v   Print the version
+    --help, -h      Print the help message
 `
 
 // print the version number in package.json

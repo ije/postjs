@@ -20,4 +20,10 @@ export declare class RouterStore {
 }
 export declare const RouterContext: import("react").Context<RouterStore>;
 export declare function useRouter(): RouterStore;
-export declare function route(base: string, routes: Route[]): [URL, ComponentType<any> | null];
+export declare function route(base: string, routes: Route[], options?: {
+    location?: {
+        pathname: string;
+        search?: string;
+    };
+    fallback?: Route;
+}): [URL, ComponentType<any> | null];

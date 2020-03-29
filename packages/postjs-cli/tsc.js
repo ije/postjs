@@ -23,7 +23,6 @@ spawn(
         '--noImplicitThis',
         '--noImplicitReturns',
         '--noUnusedLocals',
-        '--removeComments',
         ...getSources('cli')
     ],
     { stdio: 'inherit' }

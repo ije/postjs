@@ -1,5 +1,6 @@
 import React from 'react'
 import { Head, SEO } from '@postjs/core'
+import Nav from '../components/nav'
 
 export async function getStaticProps() {
     const res = await fetch('https://api.github.com/repos/postui/postjs')
@@ -17,7 +18,8 @@ export default ({ name, description }: any) => {
                 description={description}
                 keywords={`react, ${name}`}
             />
-            <h1>Hello {name}!</h1>
+            <Nav />
+            <h1>Welcome to use {name}!</h1>
         </div>
     )
 }

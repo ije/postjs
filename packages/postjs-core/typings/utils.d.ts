@@ -9,6 +9,10 @@ declare const _default: {
     isNEArray<T_1 = any>(a: any): a is T_1[];
     isObject(a: any): a is Object;
     isFunction(a: any): a is Function;
+    /**
+     * Perform the specified action for each element in an array or object,
+     * break loop when the stepCallback return false.
+     */
     each(a: any, stepCallback: (value: any, key: any) => boolean | void): void;
     trimPrefix(s: string, prefix: string): string;
     trimSuffix(s: string, suffix: string): string;

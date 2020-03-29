@@ -41,11 +41,14 @@ export function useRouter() {
     return useContext(RouterContext)
 }
 
-export function route(base: string, routes: Route[]): [URL, ComponentType<any> | null] {
+export function route(base: string, routes: Route[], options?: { location?: { pathname: string, search?: string }, fallback?: Route }): [URL, ComponentType<any> | null] {
+    const loc = (options?.location || location)
+    const fallback = options?.fallback
+
     let pagePath = ''
-    let pathname = location.pathname
+    let pathname = loc.pathname
     let params: Record<string, string> = {}
-    let query: ParsedUrlQuery = parse(location.search.replace(/^\?/, ''))
+    let query: ParsedUrlQuery = parse((loc.search || '').replace(/^\?/, ''))
     let component: ComponentType<any> | null = null
 
     if (base.length > 1 && base.startsWith('/')) {
@@ -55,35 +58,40 @@ export function route(base: string, routes: Route[]): [URL, ComponentType<any> |
         }
     }
 
+    routes.sort()
     utils.each(routes, route => {
-        const match = matchPath(route.path, pathname)
-        if (match !== null) {
+        const [_params, ok] = matchPath(route.path, pathname)
+        if (ok) {
             pagePath = route.path
-            params = match
+            params = _params
             component = route.component
             return false
         }
         return undefined
     })
 
+    if (component === null && fallback !== undefined) {
+        pagePath = fallback.path
+        component = fallback.component
+    }
+
     return [{ pagePath, pathname, params, query }, component]
 }
 
-const regParam = /^\$(.+)/
 const segmentize = (s: string) => utils.cleanPath(s).replace(/^\/+|\/+$/g, '').split('/')
 
-// raw code copy from https://github.com/reach/router/blob/master/src/lib/utils.js#L30 (MIT License Copyright (c) 2018-present, Ryan Florence)
-function matchPath(routePath: string, locPath: string): Record<string, string> | null {
-    const locSegments = segmentize(locPath)
+function matchPath(routePath: string, locPath: string): [Record<string, string>, boolean] {
     const routeSegments = segmentize(routePath)
-    const max = Math.max(routeSegments.length, locSegments.length)
+    const locSegments = segmentize(locPath)
     const isRoot = locSegments[0] === ''
+    const max = Math.max(routeSegments.length, locSegments.length)
     const params: Record<string, string> = {}
-    let missed = false
+
+    let ok = true
 
     for (let i = 0; i < max; i++) {
         const routeSegment = routeSegments[i]
-        const locationSegment = locSegments[i]
+        const locSegment = locSegments[i]
         const isSplat = routeSegment === '*'
 
         if (isSplat) {
@@ -94,29 +102,24 @@ function matchPath(routePath: string, locPath: string): Record<string, string> |
             break
         }
 
-        if (locationSegment === undefined) {
+        if (locSegment === undefined) {
             // URI is shorter than the route, no match
             // uri:   /users
             // route: /users/$userId
-            missed = true
+            ok = false
             break
         }
 
-        const paramMatch = regParam.exec(routeSegment)
-        if (paramMatch && !isRoot) {
-            params[paramMatch[1]] = decodeURIComponent(locationSegment)
-        } else if (routeSegment !== locationSegment) {
+        if (!isRoot && routeSegment.startsWith('$')) {
+            params[routeSegment.slice(1)] = decodeURIComponent(locSegment)
+        } else if (routeSegment !== locSegment) {
             // Current segments don't match, not dynamic, not splat, so no match
             // uri:   /users/123/settings
             // route: /users/$id/profile
-            missed = true
+            ok = false
             break
         }
     }
 
-    if (missed) {
-        return null
-    }
-
-    return params
+    return [params, ok]
 }

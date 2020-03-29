@@ -1,11 +1,11 @@
 import webpack from 'webpack'
 import path from 'path'
 
-export default (appDir: string, custom?: Pick<webpack.Configuration, 'mode' | 'target' | 'externals' | 'entry'>) => ({
-    mode: custom?.mode || 'production',
-    target: custom?.target || 'web',
-    context: appDir,
-    entry: custom?.entry,
+export default (context: string, config?: Pick<webpack.Configuration, 'mode' | 'target' | 'entry' | 'plugins' | 'externals' | 'optimization' | 'devtool'>) => ({
+    context: context,
+    target: config?.target || 'web',
+    mode: config?.mode || 'production',
+    entry: config?.entry,
     output: {
         path: '/dist/',
         filename: '[name].js',
@@ -23,7 +23,7 @@ export default (appDir: string, custom?: Pick<webpack.Configuration, 'mode' | 't
                         presets: [
                             // [
                             //     '@babel/preset-env',
-                            //     custom?.target === 'node' ? { targets: { node: 'current' } } : {
+                            //     config?.target === 'node' ? { targets: { node: 'current' } } : {
                             //         useBuiltIns: 'usage',
                             //         corejs: 3,
                             //         modules: false,
@@ -34,7 +34,7 @@ export default (appDir: string, custom?: Pick<webpack.Configuration, 'mode' | 't
                             '@babel/preset-react'
                         ],
                         plugins: [
-                            ['@babel/plugin-transform-runtime', { 'regenerator': true }],
+                            ['@babel/plugin-transform-runtime', { regenerator: true }],
                             ['@babel/plugin-proposal-class-properties', { loose: true }],
                             '@babel/plugin-proposal-optional-chaining',
                             '@babel/plugin-proposal-nullish-coalescing-operator'
@@ -48,9 +48,7 @@ export default (appDir: string, custom?: Pick<webpack.Configuration, 'mode' | 't
                     {
                         loader: 'style-loader',
                         options: {
-                            attrs: {
-                                class: 'post-style'
-                            }
+                            singleton: true
                         }
                     },
                     'css-loader',
@@ -78,23 +76,14 @@ export default (appDir: string, custom?: Pick<webpack.Configuration, 'mode' | 't
             }
         ]
     },
+    plugins: config?.plugins,
     resolve: {
         extensions: ['.js', '.jsx', '.ts', '.tsx', '.json', '.wasm']
     },
     resolveLoader: {
-        modules: [path.join(appDir, 'node_modules'), 'node_modules']
+        modules: [path.join(context, 'node_modules'), 'node_modules']
     },
-    externals: custom?.externals,
-    optimization: {
-        splitChunks: custom?.target === 'node' ? undefined : {
-            cacheGroups: {
-                vendor: {
-                    test: /[\\/](node_modules|packages[\\/]postjs-core)[\\/]/,
-                    name: 'vendor',
-                    chunks: 'all'
-                }
-            }
-        }
-    },
-    devtool: false
+    externals: config?.externals,
+    optimization: config?.optimization,
+    devtool: config?.devtool
 } as webpack.Configuration)

@@ -23,7 +23,6 @@ spawn(
         '--noImplicitThis',
         '--noImplicitReturns',
         '--noUnusedLocals',
-        '--removeComments',
         '--declaration',
         '--declarationDir', path.join(__dirname, 'typings'),
         ...getSources('framework')

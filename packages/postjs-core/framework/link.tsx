@@ -1,4 +1,5 @@
 import React, { CSSProperties, PropsWithChildren, useCallback } from 'react'
+import { useRouter } from './router'
 
 interface LinkProps {
     to: string
@@ -6,6 +7,7 @@ interface LinkProps {
     className?: string
     style?: CSSProperties
     replace?: boolean
+    prefetch?: boolean
 }
 
 export function Link({
@@ -16,14 +18,19 @@ export function Link({
     replace,
     children
 }: PropsWithChildren<LinkProps>) {
+    const router = useRouter()
     const onClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
         e.preventDefault()
+        // todo: load page component/static data
         if (replace) {
-            history.replaceState(null, '', to)
+            router.replace(to, as)
         } else {
-            history.pushState(null, '', to)
+            router.push(to, as)
         }
-    }, [to, replace])
+    }, [to, as, replace])
+    const onMouseEnter = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
+
+    }, [to])
 
     return (
         <a
@@ -31,6 +38,7 @@ export function Link({
             style={style}
             href={as || to}
             onClick={onClick}
+            onMouseEnter={onMouseEnter}
         >{children}</a>
     )
 }
