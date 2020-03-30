@@ -1,4 +1,3 @@
-import { CleanWebpackPlugin } from 'clean-webpack-plugin'
 import MemoryFS from 'memory-fs'
 import path from 'path'
 import TerserPlugin from 'terser-webpack-plugin'
@@ -10,6 +9,8 @@ import createConfig from './config'
 export interface MiniStats {
     readonly hash: string,
     readonly chunks: Map<string, ChunkWithContent>
+    readonly warnings: any[]
+    readonly errors: any[]
     readonly startTime?: number
     readonly endTime?: number
 }
@@ -35,36 +36,48 @@ export class Compiler {
         const vmp = new VirtualModulesPlugin()
         const webpackEntry: webpack.Entry = {}
         if (utils.isNEString(entry)) {
-            webpackEntry['app'] = './__app.jsx'
+            webpackEntry['app'] = './[vmp]app.js'
         } else if (utils.isObject(entry)) {
             Object.keys(entry).forEach(name => {
-                webpackEntry[name] = `./__${name}.jsx`
+                webpackEntry[name] = `./[vmp]${name}.js`
             })
         }
         if (config?.enableHMR) {
             Object.keys(webpackEntry).forEach(key => {
-                webpackEntry[key] = [require.resolve('webpack/hot/dev-server'), './__hmr_client.js', String(webpackEntry[key])]
+                webpackEntry[key] = [
+                    require.resolve('webpack/hot/only-dev-server'),
+                    './[vmp]hmr-client.js',
+                    String(webpackEntry[key])
+                ]
             })
         }
         this._memfs = new MemoryFS()
         this._config = createConfig(context, {
             ...config,
             entry: webpackEntry,
-            plugins: ([new CleanWebpackPlugin(), vmp] as any[]).concat(config?.enableHMR ? [new webpack.HotModuleReplacementPlugin()] : [], config?.plugins || []),
+            plugins: ([vmp] as any[]).concat(config?.enableHMR ? [new webpack.HotModuleReplacementPlugin()] : [], config?.plugins || []),
             optimization: {
+                runtimeChunk: config?.target === 'node' ? undefined : { name: 'webpack-runtime' },
                 splitChunks: config?.splitVendorChunk ? {
                     cacheGroups: {
                         vendor: {
                             test: /[\\/](node_modules|packages[\\/]postjs-core)[\\/]/,
                             name: 'vendor',
-                            chunks: 'all'
+                            chunks: 'initial'
                         }
                     }
                 } : undefined,
                 minimize: config?.enableTerser,
                 minimizer: config?.enableTerser ? [
                     new TerserPlugin({
-                        chunkFilter: ({ name }) => name !== 'vendor'
+                        cache: true,
+                        terserOptions: {
+                            ecma: 2015,
+                            compress: true,
+                            output: {
+                                comments: true
+                            }
+                        }
                     })
                 ] : undefined
             }
@@ -72,17 +85,16 @@ export class Compiler {
         this._compiler = webpack(this._config)
         this._compiler.outputFileSystem = this._memfs
         if (utils.isNEString(entry)) {
-            vmp.writeModule('./__app.jsx', entry)
+            vmp.writeModule('./[vmp]app.js', entry)
         } else if (utils.isObject(entry)) {
             Object.keys(entry).forEach(name => {
-                vmp.writeModule(`./__${name}.jsx`, entry[name])
+                vmp.writeModule(`./[vmp]${name}.js`, entry[name])
             })
         }
         if (config?.enableHMR) {
-            vmp.writeModule('./__hmr_client.js', `
-                const hotEmitter = require('webpack/hot/emitter')
-
+            vmp.writeModule('./[vmp]hmr-client.js', `
                 window.addEventListener('load', async () => {
+                    const hotEmitter = require('webpack/hot/emitter')
                     const url = 'ws://' + location.host + '/_hmr_socket'
                     const socket = new WebSocket(url, 'hot-update')
                     socket.onmessage = ({ data }) => {
@@ -100,8 +112,21 @@ export class Compiler {
         return this._memfs
     }
 
+    get context() {
+        return this._compiler.context
+    }
+
     get hooks() {
         return this._compiler.hooks
+    }
+
+    getChunkContent(name: string): string | null {
+        const { filename, path: outPath } = this._config.output!
+        const filepath = path.join(outPath!, String(filename!).replace('[name]', name))
+        if (this._memfs.existsSync(filepath)) {
+            return this._memfs.readFileSync(filepath).toString()
+        }
+        return null
     }
 
     compile(): Promise<MiniStats> {
@@ -118,10 +143,12 @@ export class Compiler {
                         hash: stats.hash,
                         chunks: new Map(),
                         startTime: stats.startTime,
-                        endTime: stats.endTime
+                        endTime: stats.endTime,
+                        warnings: stats.compilation.warnings,
+                        errors: []
                     }
                     namedChunks.forEach(({ hash }, name) => {
-                        const content = this._getChunkContent(name)
+                        const content = this.getChunkContent(name)
                         if (content !== null) {
                             ret.chunks.set(name, { name, hash, content })
                         }
@@ -136,14 +163,5 @@ export class Compiler {
 
     watch(watchOptions: webpack.Compiler.WatchOptions, handler: webpack.Compiler.Handler) {
         return this._compiler.watch(watchOptions, handler)
-    }
-
-    private _getChunkContent(name: string): string | null {
-        const { filename, path: outPath } = this._config.output!
-        const filepath = path.join(outPath!, String(filename!).replace('[name]', name))
-        if (this._memfs.existsSync(filepath)) {
-            return this._memfs.readFileSync(filepath).toString()
-        }
-        return null
     }
 }

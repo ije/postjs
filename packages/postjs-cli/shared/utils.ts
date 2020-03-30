@@ -70,8 +70,8 @@ export default {
     },
 
     cleanPath(path: string): string {
-        return '/' + path.split('/')
-            .map(p => p.trim().replace(/^[\.\s]+$/, ''))
+        return '/' + path.replace(/^[\.\/]+/, '').split('/')
+            .map(p => p.trim())
             .filter(p => p.length > 0)
             .join('/')
     }

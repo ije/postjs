@@ -14,12 +14,10 @@
         "react": "^16.13.1",
         "react-dom": "^16.13.1",
         "tslint": "^6.1.0",
-        "tslint-origin-ordered-imports-rule": "^1.2.2"
+        "tslint-origin-ordered-imports-rule": "^1.2.2",
+        "typescript": "^3.8.3"
     },
     "engines": {
         "node": ">=10.0.0"
-    },
-    "dependencies": {
-        "typescript": "^3.8.3"
     }
 }

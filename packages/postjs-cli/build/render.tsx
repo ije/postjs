@@ -6,12 +6,17 @@ import { JSDOM } from 'jsdom'
 import fetch from 'node-fetch'
 import utils from '../shared/utils'
 
-export const html = ({ lang, helmet, body, scripts }: { lang: string, helmet: string, body: string, scripts?: any[] }) => (
+export const ssrStaticMethods = [
+    'getStaticProps',
+    'getStaticPaths'
+]
+
+export const html = ({ lang, helmet, body, scripts }: { lang: string, body: string, helmet?: string[], scripts?: (string | { src: string, async?: boolean })[] }) => (
     `<!DOCTYPE html>
 <html lang="${lang}">
 <head>
     <meta charset="utf-8">
-    ${helmet.trimLeft()}
+${(helmet || []).map(v => v.trim()).filter(v => !!v).map(v => ' '.repeat(4) + v).join('\n')}
 </head>
 <body>
     <main>${body}</main>
@@ -20,14 +25,15 @@ ${(scripts || []).map(v => {
             return `<script integrity="sha256-${createHash('sha256').update(v).digest('base64')}">${v}</script>`
         } else if (utils.isObject(v) && utils.isNEString(v.src)) {
             return `<script src="${v.src}"${v.async ? ' async' : ''}></script>`
+        } else {
+            return ''
         }
-        return ''
-    }).filter(v => v !== '').map(v => ' '.repeat(4) + v).join('\n')}
+    }).filter(v => !!v).map(v => ' '.repeat(4) + v).join('\n')}
 </body>
 </html>`
 )
 
-export async function renderPage(url: URL, PageComponent: ComponentType) {
+export async function renderPage(url: URL, PageComponent: ComponentType<any>) {
     let staticProps: any = null
     if ('getStaticProps' in PageComponent) {
         const getStaticProps = (PageComponent as any)['getStaticProps']
@@ -44,7 +50,7 @@ export async function renderPage(url: URL, PageComponent: ComponentType) {
             <PageComponent {...staticProps} />
         </RouterContext.Provider>
     ))
-    const helmet = renderHeadToString(4)
+    const helmet = renderHeadToString()
 
     return {
         body,
@@ -55,10 +61,10 @@ export async function renderPage(url: URL, PageComponent: ComponentType) {
 
 export function runJS(source: string, deps: Record<string, any>, injects?: Record<string, any>) {
     const exports: { [key: string]: any } = {}
-    const fn = new Function('require', 'exports', ...Object.keys(injects || {}).concat(['module', source]))
+    const func = new Function('require', 'exports', ...Object.keys(injects || {}).concat(['module', source]))
     const { window } = new JSDOM('', { pretendToBeVisual: true })
     Object.assign(window, { fetch })
     Object.assign(globalThis, { window, fetch, document: window.document })
-    fn((name: string) => deps[name], exports, ...Object.values(injects || {}))
+    func((name: string) => deps[name], exports, ...Object.values(injects || {}))
     return exports
 }

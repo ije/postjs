@@ -3,8 +3,8 @@ import * as ReactDom from 'react-dom'
 import * as Postjs from '@postjs/core'
 import fs from 'fs-extra'
 import path from 'path'
-import { appEntry, getAppConfig, pageComponentStaticMethods } from './app'
-import { html, renderPage, runJS } from './render'
+import { appEntry, getAppConfig } from './app'
+import { html, renderPage, runJS, ssrStaticMethods } from './render'
 import { Compiler } from './webpack'
 
 export const peerDeps = {
@@ -15,22 +15,25 @@ export const peerDeps = {
 
 export default async (appDir: string) => {
     const appConfig = await getAppConfig(appDir)
-    const { chunks: chunksForNode } = await new Compiler(appDir, `
+    const { chunks: ssrChunks } = await new Compiler(appDir, `
         const r = require.context('./pages', true, /\\.(js|ts)x?$/i)
         const pages = {}
 
-        r.keys().forEach(key => {
-            const pagePath = key.replace(/^\\.+/, '').replace(/(\\/index)?\\.(js|ts)x?$/i, '') || '/'
-            pages[pagePath] = () => {
-                const mod = r(key)
-                const component = mod.default
-                const staticMethods = ${JSON.stringify(pageComponentStaticMethods)}
-                staticMethods.forEach(name => {
-                    if (typeof mod[name] === 'function' && typeof component[name] !== 'function') {
-                        component[name] = mod[name]
-                    }
-                })
-                return component
+        r.keys().filter(key => /^[a-z0-9\\.\\/\\$\\-\\*_~ ]+$/i.test(key)).forEach(key => {
+            const pagePath = key.replace(/^[\\.]+/, '').replace(/(\\/index)?\\.(js|ts)x?$/i, '').replace(/ /g, '-') || '/'
+            pages[pagePath] = {
+                reqPath: './pages/' + key.replace(/^[\\.\\/]+/, ''),
+                component: () => {
+                    const mod = r(key)
+                    const component = mod.default || mod
+                    const staticMethods = ${JSON.stringify(ssrStaticMethods)}
+                    staticMethods.forEach(name => {
+                        if (typeof mod[name] === 'function' && typeof component[name] !== 'function') {
+                            component[name] = mod[name]
+                        }
+                    })
+                    return component
+                }
             }
         })
 
@@ -40,22 +43,27 @@ export default async (appDir: string) => {
         mode: 'production',
         externals: Object.keys(peerDeps)
     }).compile()
-    const { pages } = runJS(chunksForNode.get('app')!.content, peerDeps)
-    const { hash, chunks, startTime, endTime } = await new Compiler(appDir, {
-        app: appEntry(appConfig.baseUrl),
-        pages_loader: Object.keys(pages)
-            .map(pagePath => pagePath.replace(/^\/+/, '') || 'index')
-            .map(pageName => `import(/* webpackChunkName: "pages/${pageName}" */ './pages/${pageName}')`)
-            .join('\n')
-    }, {
-        mode: 'production',
-        enableTerser: true,
+    const { pages } = runJS(ssrChunks.get('app')!.content, peerDeps)
+    const { hash, chunks, warnings, errors, startTime, endTime } = await new Compiler(appDir, Object.keys(pages).reduce((entries, pagePath) => {
+        const pageName = pagePath.replace(/^\/+/, '') || 'index'
+        entries[`pages/${pageName}`] = `
+            import component from '${path.join(appDir, pages[pagePath].reqPath)}'
+
+            const exportAs = { path: '${pagePath}', component }
+            if (!window.__POST_INITIAL_PAGE) {
+                window.__POST_INITIAL_PAGE = exportAs
+            }
+            (window.__POST_PAGES = window.__POST_PAGES || {})['${pagePath}'] = exportAs
+        `
+        return entries
+    }, { app: appEntry(appConfig.baseUrl) } as Record<string, string>), {
+        mode: 'development',
         splitVendorChunk: true
+        // enableTerser: true,
     }).compile()
-    const chunksArray = Array.from(chunks.values()).filter(({ name }) => name !== 'pages_loader')
-    const buildManifest: Record<string, any> = { hash, pages: {}, startTime, endTime }
+    const buildManifest: Record<string, any> = { hash, warnings, errors, startTime, endTime, pages: {} }
     const buildDir = path.join(appDir, '.post/builds', hash)
-    for (const chuck of chunksArray) {
+    for (const chuck of chunks.values()) {
         const jsFile = path.join(buildDir, '_post', `${chuck.name}.js`)
         await fs.ensureDir(path.dirname(jsFile))
         await fs.writeFile(jsFile, chuck.content)
@@ -63,18 +71,18 @@ export default async (appDir: string) => {
     for (const pagePath of Object.keys(pages)) {
         const pageName = pagePath.replace(/^\/+/, '') || 'index'
         const url = { pagePath, pathname: pagePath, params: {}, query: {} }
-        const { staticProps, helmet, body } = await renderPage(url, pages[pagePath]())
+        const { staticProps, helmet, body } = await renderPage(url, pages[pagePath].component())
         const htmlFile = path.join(buildDir, pageName + '.html')
         const dataJS = 'window.__POST_SSR_DATA = ' + JSON.stringify({ url, staticProps })
         await fs.ensureDir(path.dirname(htmlFile))
         await fs.writeFile(htmlFile, html({
             lang: appConfig.lang,
-            helmet,
             body,
+            helmet,
             scripts: [
                 dataJS,
                 { src: `_post/build-manifest.js?v=${hash}`, async: true },
-                ...chunksArray.filter(({ name }) => !name.startsWith('pages/') || name === 'pages/' + pageName)
+                ...Array.from(chunks.values()).filter(({ name }) => !name.startsWith('pages/') || name === 'pages/' + pageName)
                     .map(({ name, hash }) => ({ src: `_post/${name}.js?v=${hash}`, async: true }))
             ]
         }))

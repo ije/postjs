@@ -1,6 +1,6 @@
 import { PropsWithChildren } from 'react';
 export declare function Head({ children }: PropsWithChildren<{}>): null;
-export declare function renderHeadToString(spaces?: number): string;
+export declare function renderHeadToString(): string[];
 interface SEOProps {
     title: string;
     description: string;
@@ -8,5 +8,5 @@ interface SEOProps {
     image?: string;
     url?: string;
 }
-export declare const SEO: ({ title, description, keywords, url, image }: SEOProps) => JSX.Element;
+export declare function SEO({ title, description, keywords, url, image }: SEOProps): JSX.Element;
 export {};

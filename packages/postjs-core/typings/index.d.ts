@@ -1,3 +1,5 @@
+export * from './404';
+export * from './app';
 export * from './component';
 export * from './head';
 export * from './link';

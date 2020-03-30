@@ -21,7 +21,7 @@ export class RouterStore {
         this._url = url || { pagePath: '/', pathname: '/', params: {}, query: {} }
     }
 
-    // url returns a copy url
+    // url returns the url as copy
     get url(): URL {
         return { ...this._url }
     }
@@ -78,11 +78,9 @@ export function route(base: string, routes: Route[], options?: { location?: { pa
     return [{ pagePath, pathname, params, query }, component]
 }
 
-const segmentize = (s: string) => utils.cleanPath(s).replace(/^\/+|\/+$/g, '').split('/')
-
 function matchPath(routePath: string, locPath: string): [Record<string, string>, boolean] {
-    const routeSegments = segmentize(routePath)
-    const locSegments = segmentize(locPath)
+    const routeSegments = utils.cleanPath(routePath).replace(/^\//, '').split('/')
+    const locSegments = utils.cleanPath(locPath).replace(/^\//, '').split('/')
     const isRoot = locSegments[0] === ''
     const max = Math.max(routeSegments.length, locSegments.length)
     const params: Record<string, string> = {}
@@ -90,32 +88,23 @@ function matchPath(routePath: string, locPath: string): [Record<string, string>,
     let ok = true
 
     for (let i = 0; i < max; i++) {
-        const routeSegment = routeSegments[i]
-        const locSegment = locSegments[i]
-        const isSplat = routeSegment === '*'
+        const routeSeg = routeSegments[i]
+        const locSeg = locSegments[i]
+        const isWild = routeSeg === '*'
 
-        if (isSplat) {
-            // Hit a splat, just grab the rest, and return a match
-            // uri:   /files/documents/work
-            // route: /files/*
+        if (isWild) {
             params['*'] = locSegments.slice(i).map(decodeURIComponent).join('/')
             break
         }
 
-        if (locSegment === undefined) {
-            // URI is shorter than the route, no match
-            // uri:   /users
-            // route: /users/$userId
+        if (locSeg === undefined) {
             ok = false
             break
         }
 
-        if (!isRoot && routeSegment.startsWith('$')) {
-            params[routeSegment.slice(1)] = decodeURIComponent(locSegment)
-        } else if (routeSegment !== locSegment) {
-            // Current segments don't match, not dynamic, not splat, so no match
-            // uri:   /users/123/settings
-            // route: /users/$id/profile
+        if (!isRoot && routeSeg.startsWith('$')) {
+            params[routeSeg.slice(1)] = decodeURIComponent(locSeg)
+        } else if (routeSeg !== locSeg) {
             ok = false
             break
         }

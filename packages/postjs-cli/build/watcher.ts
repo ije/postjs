@@ -1,41 +1,49 @@
 import { route } from '@postjs/core'
-import path from 'path'
-import { createHash } from 'crypto'
 import { EventEmitter } from 'events'
+import glob from 'glob'
+import path from 'path'
+import webpack from 'webpack'
+import DynamicEntryPlugin from 'webpack/lib/DynamicEntryPlugin'
 import { peerDeps } from '.'
-import { appEntry, getAppConfig, pageComponentStaticMethods } from './app'
-import { html, renderPage, runJS } from './render'
-import { ChunkWithContent, Compiler } from './webpack'
 import utils from '../shared/utils'
+import { appEntry, getAppConfig } from './app'
+import { html, renderPage, runJS, ssrStaticMethods } from './render'
+import { ChunkWithContent, Compiler } from './webpack'
 
-// a component returns nothing
+// A component returns nothing
 const NullComponent = () => null
 
 export class AppWatcher {
     private _appDir: string
     private _appLang: string
+    private _pageFiles: string[]
     private _pageChunks: Map<string, ChunkWithContent & { html?: string, staticProps?: any }>
     private _commonChunks: Map<string, ChunkWithContent>
-    private _buildManifest: Record<string, any>
-    private _lashHash?: string
-    private _mainCompiler?: Compiler
+    private _buildManifest: Record<string, any> | null
+    private _clientCompiler: Compiler
 
     constructor(appDir: string) {
         this._appDir = appDir
         this._appLang = 'en'
+        this._pageFiles = glob.sync('pages/**/*.{js,jsx,ts,tsx}', { cwd: appDir }).map(p => utils.trimPrefix(p, 'pages/')).filter(p => /^[a-z0-9\.\/\$\-\*_~ ]+$/i.test(p))
         this._pageChunks = new Map()
         this._commonChunks = new Map()
-        this._buildManifest = {}
+        this._buildManifest = null
+        this._clientCompiler = new Compiler(this._appDir, appEntry('/'), {
+            mode: 'development',
+            enableHMR: true,
+            splitVendorChunk: true
+        })
         getAppConfig(this._appDir).then(({ lang }) => this._appLang = lang)
     }
 
-    get isWatching() {
-        return !!this._lashHash
+    get isInitiated() {
+        return this._buildManifest !== null
     }
 
     // buildManifest returns the buildManifest as copy
     get buildManifest() {
-        if (!this.isWatching) {
+        if (!this.isInitiated) {
             return null
         }
         return { ...this._buildManifest }
@@ -44,12 +52,12 @@ export class AppWatcher {
     private async _renderPage(pagePath: string) {
         if (pagePath !== '' && this._pageChunks.has(pagePath)) {
             const pageChunk = this._pageChunks.get(pagePath)!
-            const { chunks: chunksForNode } = await new Compiler(this._appDir, `
+            const { chunks } = await new Compiler(this._appDir, `
                 import * as mod from './pages${pagePath}'
 
                 export default () => {
                     const component = mod.default
-                    const staticMethods = ${JSON.stringify(pageComponentStaticMethods)}
+                    const staticMethods = ${JSON.stringify(ssrStaticMethods)}
                     staticMethods.forEach(name => {
                         if (typeof mod[name] === 'function' && typeof component[name] !== 'function') {
                             component[name] = mod[name]
@@ -62,7 +70,7 @@ export class AppWatcher {
                 mode: 'production',
                 externals: Object.keys(peerDeps)
             }).compile()
-            const { default: component } = runJS(chunksForNode.get('app')!.content, peerDeps)
+            const { default: component } = runJS(chunks.get('app')!.content, peerDeps)
             const url = { pagePath, pathname: pagePath, params: {}, query: {} }
             const { staticProps, helmet, body } = await renderPage(url, component())
             const dataJS = 'window.__POST_SSR_DATA = ' + JSON.stringify({ url, staticProps })
@@ -72,7 +80,7 @@ export class AppWatcher {
                 body,
                 scripts: [
                     dataJS,
-                    { src: `_post/build-manifest.js?v=${this._lashHash}`, async: true },
+                    { src: `_post/build-manifest.js?v=${this._buildManifest!.hash}`, async: true },
                     { src: `_post/pages/${pagePath.replace(/^\/+/, '') || 'index'}.js?v=${pageChunk.hash}`, async: true },
                     ...Array.from(this._commonChunks.values()).map(({ name, hash }) => ({ src: `_post/${name}.js?v=${hash}`, async: true }))
                 ]
@@ -84,12 +92,11 @@ export class AppWatcher {
     }
 
     async getPageHtml(pathname: string): Promise<[number, string]> {
-        if (!this.isWatching) {
+        if (!this.isInitiated) {
             return [403, html({
                 lang: this._appLang,
-                helmet: '<title>403 - First compilation not ready</title>',
                 body: '<p><strong><code>403</code></strong><small>&nbsp;-&nbsp;</small><span>First compilation not ready</span></p>',
-                scripts: []
+                helmet: ['<title>403 - First compilation not ready</title>']
             })]
         }
 
@@ -98,22 +105,23 @@ export class AppWatcher {
         const { pagePath } = url
         if (pagePath !== '' && this._pageChunks.has(pagePath)) {
             const pageChunk = this._pageChunks.get(pagePath)!
-            if (!pageChunk.html) {
+            if (pageChunk.html === undefined) {
                 await this._renderPage(pagePath)
             }
             if (pageChunk.html) {
                 return [200, pageChunk.html]
             }
         }
+
         return [404, html({
             lang: this._appLang,
-            helmet: '<title>404 - Page not found</title>',
-            body: '<p><strong><code>404</code></strong><small>&nbsp;-&nbsp;</small><span>Page not found</span></p>'
+            body: '<p><strong><code>404</code></strong><small>&nbsp;-&nbsp;</small><span>Page not found</span></p>',
+            helmet: ['<title>404 - Page not found</title>']
         })]
     }
 
     async getPageStaticProps(pathname: string) {
-        if (!this.isWatching) {
+        if (!this.isInitiated) {
             return null
         }
 
@@ -122,7 +130,7 @@ export class AppWatcher {
         const { pagePath } = url
         if (pagePath !== '' && this._pageChunks.has(pagePath)) {
             const pageChunk = this._pageChunks.get(pagePath)!
-            if (!pageChunk.staticProps) {
+            if (pageChunk.staticProps === undefined) {
                 await this._renderPage(pagePath)
             }
             return pageChunk.staticProps
@@ -143,12 +151,12 @@ export class AppWatcher {
         return null
     }
 
-    getHotUpdate(filename: string) {
-        if (!this.isWatching) {
+    getHotUpdateContent(filename: string) {
+        if (!this.isInitiated) {
             return null
         }
-        const memfs = this._mainCompiler!.memfs
-        const filepath = path.join('/dist/', filename)
+        const memfs = this._clientCompiler!.memfs
+        const filepath = path.join('/', filename)
         if (memfs.existsSync(filepath)) {
             return memfs.readFileSync(filepath).toString()
         }
@@ -156,26 +164,21 @@ export class AppWatcher {
     }
 
     async watch(emitter: EventEmitter) {
-        this._mainCompiler = new Compiler(this._appDir, {
-            app: appEntry('/'),
-            pages_loader: `
-                const r = require.context('./pages', true, /\\.(js|ts)x?$/i, 'lazy')
+        this._clientCompiler.hooks.make.tapPromise(
+            'addPageEntries',
+            async compilation => Promise.all(this._pageFiles.map(pageFile => {
+                const pagePath = ('/' + pageFile).replace(/(\/index)?\.(js|ts)x?$/i, '').replace(/ /g, '-') || '/'
+                const pageName = pageFile.replace(/\.(js|ts)x?$/i, '')
+                return addEntry(
+                    compilation,
+                    this._clientCompiler!.context,
+                    `pages/${pageName}`,
+                    [`post-page-loader?${JSON.stringify({ pagePath, filePath: './pages/' + pageFile })}!`]
+                )
+            })).catch(err => console.error(err))
+        )
 
-                for (const key of r.keys()) {
-                    const pageName = key.replace(/^[\\.\\/]+/, '').replace(/\\.(js|ts)x?$/i, '')
-                    import(
-                        /* webpackChunkName: "page-[request]" */
-                        /* webpackMode: "lazy" */
-                        './pages/' + pageName
-                    )
-                }
-            `
-        }, {
-            mode: 'development',
-            enableHMR: true,
-            splitVendorChunk: true
-        })
-        this._mainCompiler.watch({
+        this._clientCompiler.watch({
             aggregateTimeout: 150,
             ignored: /[\\/]node_modules[\\/]/
         }, (err, stats) => {
@@ -184,53 +187,71 @@ export class AppWatcher {
                 return
             }
 
+            const memfs = this._clientCompiler!.memfs
+            const { hash, startTime, endTime, compilation } = stats
+            const { isInitiated } = this
+
             // reset build manifest
             this._buildManifest = {
-                hash: stats.hash,
-                pages: {},
-                startTime: stats.startTime,
-                endTime: stats.endTime,
-                errors: stats.compilation.errors,
-                warnings: stats.compilation.warnings
+                hash,
+                errors: compilation.errors,
+                warnings: compilation.warnings,
+                startTime,
+                endTime,
+                pages: {}
             }
 
-            const memfs = this._mainCompiler!.memfs
             if (!stats.hasErrors()) {
                 const removedPages = Array.from(this._pageChunks.keys()).reduce((set, key) => {
                     set.add(key)
                     return set
                 }, new Set<string>())
 
-                stats.compilation.namedChunks.forEach(({ name, hash }) => {
-                    if (memfs.existsSync('/dist/' + name + '.js')) {
-                        if (name.startsWith('page-')) {
-                            const pageName = name.replace('page-', '') || 'index'
-                            const pagePath = '/' + name.replace('page-', '')
-                            const content = memfs.readFileSync('/dist/' + name + '.js').toString()
-                            const hash = createHash('md5').update(content).digest('hex')
+                compilation.namedChunks.forEach(({ name, hash }) => {
+                    const chunkFileName = '/' + name + '.js'
+                    if (memfs.existsSync(chunkFileName)) {
+                        if (name.startsWith('pages/')) {
+                            const pageName = name.replace('pages/', '') || 'index'
+                            const pagePath = '/' + name.replace(/^pages\/(index)?/, '')
+                            const content = memfs.readFileSync(chunkFileName).toString()
                             removedPages.delete(pagePath)
                             if (!this._pageChunks.has(pagePath) || this._pageChunks.get(pagePath)!.hash !== hash) {
                                 this._pageChunks.set(pagePath, { name: pageName, hash, content })
                             }
-                            this._buildManifest.pages[pagePath] = {
+                            this._buildManifest!.pages[pagePath] = {
                                 name: pageName,
                                 hash
                             }
-                        } else if (name !== 'pages_loader') {
-                            if (!this._commonChunks.has(name) || this._commonChunks.get(name)!.hash !== hash) {
-                                const content = memfs.readFileSync('/dist/' + name + '.js').toString()
-                                this._commonChunks.set(name, { name, hash, content })
-                            }
+                        } else if (!this._commonChunks.has(name) || this._commonChunks.get(name)!.hash !== hash) {
+                            const content = memfs.readFileSync(chunkFileName).toString()
+                            this._commonChunks.set(name, { name, hash, content })
                         }
                     }
                 })
+
                 // clear pages
                 removedPages.forEach(pagePath => this._pageChunks.delete(pagePath))
-
-                this._lashHash = stats.hash
             }
 
-            emitter.emit('webpackUpdate', this._buildManifest)
+            if (isInitiated) {
+                emitter.emit('webpackUpdate', this._buildManifest)
+            }
         })
     }
+}
+
+// Based on https://github.com/webpack/webpack/blob/master/lib/DynamicEntryPlugin.js
+function addEntry(
+    compilation: webpack.compilation.Compilation,
+    context: string,
+    name: string,
+    entry: string[]
+) {
+    return new Promise((resolve, reject) => {
+        const dep = DynamicEntryPlugin.createDependency(entry, name)
+        compilation.addEntry(context, dep, name, (err: Error | null) => {
+            if (err) { return reject(err) }
+            resolve()
+        })
+    })
 }

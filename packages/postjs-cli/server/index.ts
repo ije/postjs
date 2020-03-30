@@ -32,9 +32,9 @@ export class Server {
                 const url = parse(req.url || '/')
                 const pathname = utils.cleanPath((url.pathname || '/'))
 
-                console.log(pathname)
+                console.log('new request:', pathname)
                 if (pathname.endsWith('.hot-update.json') || pathname.endsWith('.hot-update.js')) {
-                    const content = watcher.getHotUpdate(pathname)
+                    const content = watcher.getHotUpdateContent(pathname)
                     if (content === null) {
                         res.statusCode = 404
                         res.end('file not found')
@@ -52,7 +52,8 @@ export class Server {
                     }
 
                     if (pathname.startsWith('/_post/data/') && pathname.endsWith('.json')) {
-                        const staticProps = await watcher.getPageStaticProps(utils.trimPrefix(pathname, '/_post/data').replace(/(index)?\.json?$/i, ''))
+                        const pagePath = utils.trimPrefix(pathname, '/_post/data').replace(/(index)?\.json?$/i, '')
+                        const staticProps = await watcher.getPageStaticProps(pagePath)
                         if (!utils.isObject(staticProps)) {
                             res.statusCode = 404
                             res.end('file not found')
@@ -83,8 +84,8 @@ export class Server {
 
             wsServer.on('request', req => {
                 const conn = req.accept('hot-update', req.origin)
-                emitter.on('webpackUpdate', async (stats) => {
-                    conn.sendUTF(JSON.stringify(stats))
+                emitter.on('webpackUpdate', async ({ hash }) => {
+                    conn.sendUTF(JSON.stringify({ hash }))
                 })
             })
 

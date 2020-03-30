@@ -7,7 +7,7 @@ export async function getStaticProps() {
     return await res.json()
 }
 
-export default ({ name, description }: any) => {
+export default function Home({ name, description }: any) {
     return (
         <div>
             <Head>

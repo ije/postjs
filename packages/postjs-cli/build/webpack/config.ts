@@ -1,5 +1,6 @@
 import webpack from 'webpack'
 import path from 'path'
+import './loaders/post-page-loader'
 
 export default (context: string, config?: Pick<webpack.Configuration, 'mode' | 'target' | 'entry' | 'plugins' | 'externals' | 'optimization' | 'devtool'>) => ({
     context: context,
@@ -7,9 +8,9 @@ export default (context: string, config?: Pick<webpack.Configuration, 'mode' | '
     mode: config?.mode || 'production',
     entry: config?.entry,
     output: {
-        path: '/dist/',
+        libraryTarget: config?.target === 'node' ? 'umd' : 'var',
         filename: '[name].js',
-        libraryTarget: 'umd'
+        path: '/'
     },
     module: {
         rules: [
@@ -81,6 +82,9 @@ export default (context: string, config?: Pick<webpack.Configuration, 'mode' | '
         extensions: ['.js', '.jsx', '.ts', '.tsx', '.json', '.wasm']
     },
     resolveLoader: {
+        alias: {
+            'post-page-loader': path.join(__dirname, 'loaders/post-page-loader.js')
+        },
         modules: [path.join(context, 'node_modules'), 'node_modules']
     },
     externals: config?.externals,
