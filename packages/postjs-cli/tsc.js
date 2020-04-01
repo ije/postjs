@@ -2,6 +2,7 @@ const { spawn } = require('child_process')
 const fs = require('fs')
 const path = require('path')
 
+const watch = process.argv.includes('--watch')
 const getSources = dir => fs.readdirSync(path.join(__dirname, dir))
     .filter(file => /^[^\.].+\.tsx?$/.test(file))
     .map(file => path.join(dir, file))
@@ -22,8 +23,7 @@ spawn(
         '--strictNullChecks',
         '--noImplicitThis',
         '--noImplicitReturns',
-        '--noUnusedLocals',
-        ...getSources('cli')
-    ],
+        '--noUnusedLocals'
+    ].concat(watch ? ['--watch'] : [], getSources('cli')),
     { stdio: 'inherit' }
 )
