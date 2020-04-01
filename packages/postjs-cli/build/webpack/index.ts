@@ -45,7 +45,7 @@ export class Compiler {
         if (config?.enableHMR) {
             Object.keys(webpackEntry).forEach(key => {
                 webpackEntry[key] = [
-                    require.resolve('webpack/hot/only-dev-server'),
+                    require.resolve('webpack/hot/dev-server'),
                     './[vmp]hmr-client.js',
                     String(webpackEntry[key])
                 ]
@@ -61,7 +61,7 @@ export class Compiler {
                 splitChunks: config?.splitVendorChunk ? {
                     cacheGroups: {
                         vendor: {
-                            test: /[\\/](node_modules|packages[\\/]postjs-core)[\\/]/,
+                            test: /[\\/]node_modules[\\/]/,
                             name: 'vendor',
                             chunks: 'initial'
                         }
@@ -95,12 +95,15 @@ export class Compiler {
             vmp.writeModule('./[vmp]hmr-client.js', `
                 window.addEventListener('load', async () => {
                     const hotEmitter = require('webpack/hot/emitter')
-                    const url = 'ws://' + location.host + '/_hmr_socket'
+                    const url = 'ws://' + location.host + '/_post/hmr-socket?page=' + location.pathname
                     const socket = new WebSocket(url, 'hot-update')
                     socket.onmessage = ({ data }) => {
-                        const message = JSON.parse(data)
-                        if (message.hash) {
-                            hotEmitter.emit('webpackHotUpdate', message.hash)
+                        const buildManifest = JSON.parse(data)
+                        if (buildManifest.hash) {
+                            window.__POST_BUILD_MANIFEST = buildManifest
+                            if (!buildManifest.errors || (Array.isArray(buildManifest.errors) && buildManifest.errors.length === 0)) {
+                                hotEmitter.emit('webpackHotUpdate', buildManifest.hash)
+                            }
                         }
                     }
                 }, false)
@@ -139,12 +142,13 @@ export class Compiler {
 
                 if (stats.hash && !stats.hasErrors()) {
                     const { namedChunks } = stats.compilation
+                    const errorsWarnings = stats.toJson('errors-warnings')
                     const ret: MiniStats = {
                         hash: stats.hash,
                         chunks: new Map(),
                         startTime: stats.startTime,
                         endTime: stats.endTime,
-                        warnings: stats.compilation.warnings,
+                        warnings: errorsWarnings.warnings,
                         errors: []
                     }
                     namedChunks.forEach(({ hash }, name) => {

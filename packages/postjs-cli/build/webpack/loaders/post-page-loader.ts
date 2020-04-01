@@ -1,12 +1,14 @@
 import loaderUtils from 'loader-utils'
 import webpack from 'webpack'
 
-const template = (pagePath: string, filePath: string) => `
+const template = (pagePath: string, rawRequest: string) => `
+    const React = require('react')
+    const { isValidElementType } = require('react-is')
     const hotEmitter = require('webpack/hot/emitter')
 
     if (module.hot) {
-        module.hot.accept(${filePath}, () => {
-            const { default: component } = require(${filePath})
+        module.hot.accept(${rawRequest}, () => {
+            const { default: component } = require(${rawRequest})
             hotEmitter.emit('postPageHotUpdate', ${pagePath}, component)
         })
     }
@@ -14,7 +16,14 @@ const template = (pagePath: string, filePath: string) => `
     const exportAs = {
         path: ${pagePath},
         reqComponent:() => {
-            const { default: component } = require(${filePath})
+            const mod = require(${rawRequest})
+            const component = mod.default
+            if (component === undefined) {
+                return () => React.createElement('p', {style: {color: 'red'}}, 'bad page: miss default export')
+            } else if (!isValidElementType(component)) {
+                return () => React.createElement('p', {style: {color: 'red'}}, 'bad page: invalid element type')
+            }
+            component.hasGetStaticPropsMethod = typeof mod['getStaticProps'] === 'function' || typeof component['getStaticProps'] === 'function'
             return component
         }
     }
@@ -26,8 +35,8 @@ const template = (pagePath: string, filePath: string) => `
 `
 
 const loader: webpack.loader.Loader = function () {
-    const { filePath, pagePath } = loaderUtils.getOptions(this)
-    return template(JSON.stringify(pagePath), JSON.stringify(filePath))
+    const { pagePath, rawRequest } = loaderUtils.getOptions(this)
+    return template(JSON.stringify(pagePath), JSON.stringify(rawRequest))
 }
 
 export default loader

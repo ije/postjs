@@ -2,7 +2,7 @@ import fs from 'fs-extra'
 import path from 'path'
 import utils from '../shared/utils'
 
-// App.jsx
+// app.js
 export const appEntry = (baseUrl: string) => `
     import React from 'react'
     import ReactDom from 'react-dom'
@@ -13,7 +13,7 @@ export const appEntry = (baseUrl: string) => `
         if (__POST_INITIAL_PAGE && __POST_SSR_DATA) {
             const { reqComponent } = __POST_INITIAL_PAGE
             const { url, staticProps } = __POST_SSR_DATA
-            __POST_SSR_DATA[url.pagePath] = staticProps
+            __POST_SSR_DATA[url.pagePath] = { staticProps }
             ReactDom.hydrate((
                 <App baseUrl="${baseUrl}" initialPage={{ url, staticProps, Component: reqComponent() }} />
             ), document.querySelector('main'))

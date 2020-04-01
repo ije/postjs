@@ -1,7 +1,7 @@
 import React, { Children, Fragment, isValidElement, PropsWithChildren, ReactNode } from 'react'
 import utils from './utils'
 
-const isServer = typeof process !== undefined
+const isServer = () => !process['browser']
 const stateOnServer = new Map<string, { type: string, props: any }>()
 const stringify = (s: string) => JSON.stringify(s)
 
@@ -26,7 +26,7 @@ function renderHead(node: ReactNode) {
             case 'style':
             case 'script':
             case 'no-script':
-                if (isServer) {
+                if (isServer()) {
                     let key = type
                     if (type === 'meta') {
                         if (utils.isString(props['charset']) || utils.isString(props['charSet'])) {

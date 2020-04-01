@@ -53,10 +53,17 @@ export class AppWatcher {
         if (pagePath !== '' && this._pageChunks.has(pagePath)) {
             const pageChunk = this._pageChunks.get(pagePath)!
             const { chunks } = await new Compiler(this._appDir, `
-                import * as mod from './pages${pagePath}'
+                const React = require('react')
+                const { isValidElementType } = require('react-is')
+                const mod = require('./pages${pagePath}')
 
                 export default () => {
                     const component = mod.default
+                    if (component === undefined) {
+                        return () => <p style={{color: 'red'}}>bad page: miss default export</p>
+                    } else if (!isValidElementType(component)) {
+                        return () => <p style={{color: 'red'}}>bad page: invalid element type</p>
+                    }
                     const staticMethods = ${JSON.stringify(ssrStaticMethods)}
                     staticMethods.forEach(name => {
                         if (typeof mod[name] === 'function' && typeof component[name] !== 'function') {
@@ -122,7 +129,7 @@ export class AppWatcher {
 
     async getPageStaticProps(pathname: string) {
         if (!this.isInitiated) {
-            return null
+            return undefined
         }
 
         const pageRoutes = Array.from(this._pageChunks.keys()).map(pagePath => ({ path: pagePath, component: NullComponent }))
@@ -135,7 +142,7 @@ export class AppWatcher {
             }
             return pageChunk.staticProps
         }
-        return null
+        return undefined
     }
 
     getChunk(name: string): ChunkWithContent | null {
@@ -173,7 +180,7 @@ export class AppWatcher {
                     compilation,
                     this._clientCompiler!.context,
                     `pages/${pageName}`,
-                    [`post-page-loader?${JSON.stringify({ pagePath, filePath: './pages/' + pageFile })}!`]
+                    [`post-page-loader?${JSON.stringify({ pagePath, rawRequest: './pages/' + pageFile })}!`]
                 )
             })).catch(err => console.error(err))
         )
@@ -190,12 +197,13 @@ export class AppWatcher {
             const memfs = this._clientCompiler!.memfs
             const { hash, startTime, endTime, compilation } = stats
             const { isInitiated } = this
+            const errorsWarnings = stats.toJson('errors-warnings')
 
             // reset build manifest
             this._buildManifest = {
                 hash,
-                errors: compilation.errors,
-                warnings: compilation.warnings,
+                errors: errorsWarnings.errors,
+                warnings: errorsWarnings.warnings,
                 startTime,
                 endTime,
                 pages: {}
@@ -218,10 +226,7 @@ export class AppWatcher {
                             if (!this._pageChunks.has(pagePath) || this._pageChunks.get(pagePath)!.hash !== hash) {
                                 this._pageChunks.set(pagePath, { name: pageName, hash, content })
                             }
-                            this._buildManifest!.pages[pagePath] = {
-                                name: pageName,
-                                hash
-                            }
+                            this._buildManifest!.pages[pagePath] = { name: pageName, hash }
                         } else if (!this._commonChunks.has(name) || this._commonChunks.get(name)!.hash !== hash) {
                             const content = memfs.readFileSync(chunkFileName).toString()
                             this._commonChunks.set(name, { name, hash, content })
@@ -231,10 +236,12 @@ export class AppWatcher {
 
                 // clear pages
                 removedPages.forEach(pagePath => this._pageChunks.delete(pagePath))
+            } else {
+                console.error(errorsWarnings.errors)
             }
 
             if (isInitiated) {
-                emitter.emit('webpackUpdate', this._buildManifest)
+                emitter.emit('webpackHotUpdate', this._buildManifest)
             }
         })
     }

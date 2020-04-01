@@ -17,14 +17,14 @@ export function App({ baseUrl, initialPage }: AppProps) {
 
     useEffect(() => {
         const routeUpdate = () => {
-            const { __POST_PAGES = {}, __POST_SSR_DATA = {} } = window as any
+            const { __POST_PAGES: pages = {}, __POST_SSR_DATA: ssrData = {} } = window as any
             const [url, component] = route(
                 baseUrl,
-                Object.values(__POST_PAGES).map(({ path, reqComponent }) => ({ path, component: reqComponent() }))
+                Object.values(pages).map(({ path, reqComponent }) => ({ path, component: reqComponent() }))
             )
             let staticProps = null
-            if (url.pagePath && url.pagePath in __POST_SSR_DATA) {
-                staticProps = (__POST_SSR_DATA[url.pagePath] || {}).staticProps || null
+            if (url.pagePath && url.pagePath in ssrData) {
+                staticProps = (ssrData[url.pagePath] || {}).staticProps || null
             }
             setPage({ url, staticProps, Component: component || Default404Page })
         }
@@ -36,13 +36,24 @@ export function App({ baseUrl, initialPage }: AppProps) {
                 return page
             })
         }
-        window.addEventListener('popstate', routeUpdate, false)
+        window.addEventListener('popstate', routeUpdate)
+        hotEmitter.on('popstate', routeUpdate)
         hotEmitter.on('postPageHotUpdate', hotUpdate)
         return () => {
-            window.removeEventListener('popstate', routeUpdate, false)
+            window.removeEventListener('popstate', routeUpdate)
+            hotEmitter.off('popstate', routeUpdate)
             hotEmitter.off('postPageHotUpdate', hotUpdate)
         }
     }, [])
+
+    document.head.childNodes.forEach(node => {
+        if (typeof node['tagName'] === 'string') {
+            const el = node as HTMLElement
+            if (el.hasAttribute(`data-post-${el.tagName.toLowerCase()}`)) {
+                document.head.removeChild(node)
+            }
+        }
+    })
 
     return (
         <RouterContext.Provider value={new RouterStore(page.url)}>

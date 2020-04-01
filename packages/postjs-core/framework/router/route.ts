@@ -1,44 +1,11 @@
-import { ParsedUrlQuery, parse } from 'querystring'
-import { createContext, useContext, ComponentType } from 'react'
-import utils from './utils'
-
-export interface URL {
-    pagePath: string
-    pathname: string
-    params: Record<string, string>
-    query: ParsedUrlQuery
-}
+import { parse, ParsedUrlQuery } from 'querystring'
+import { ComponentType } from 'react'
+import utils from '../utils'
+import { URL } from '.'
 
 export interface Route {
     path: string
     component: ComponentType<any>
-}
-
-export class RouterStore {
-    private _url: URL
-
-    constructor(url?: URL) {
-        this._url = url || { pagePath: '/', pathname: '/', params: {}, query: {} }
-    }
-
-    // url returns the url as copy
-    get url(): URL {
-        return { ...this._url }
-    }
-
-    push(url: string, as?: string) {
-
-    }
-
-    replace(url: string, as?: string) {
-
-    }
-}
-
-export const RouterContext = createContext(new RouterStore())
-
-export function useRouter() {
-    return useContext(RouterContext)
 }
 
 export function route(base: string, routes: Route[], options?: { location?: { pathname: string, search?: string }, fallback?: Route }): [URL, ComponentType<any> | null] {

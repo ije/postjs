@@ -1,10 +1,10 @@
 import { EventEmitter } from 'events'
 import fs from 'fs'
-import { server as WebsocketServer } from 'websocket'
 import http, { IncomingMessage, ServerResponse } from 'http'
 import mime from 'mime/lite'
 import path from 'path'
 import { parse } from 'url'
+import { server as WebsocketServer } from 'websocket'
 import zlib from 'zlib'
 import { AppWatcher } from '../build/watcher'
 import utils from '../shared/utils'
@@ -76,6 +76,7 @@ export class Server {
                 }
 
                 const [statusCode, html] = await watcher.getPageHtml(pathname.replace(/(index)?\.html?$/i, ''))
+                // todo: serve the public static files when statusCode equals 404
                 sendText(req, res, statusCode, 'text/html', html)
             }).listen(port)
             const wsServer = new WebsocketServer({
@@ -84,8 +85,8 @@ export class Server {
 
             wsServer.on('request', req => {
                 const conn = req.accept('hot-update', req.origin)
-                emitter.on('webpackUpdate', async ({ hash }) => {
-                    conn.sendUTF(JSON.stringify({ hash }))
+                emitter.on('webpackHotUpdate', async manifest => {
+                    conn.sendUTF(JSON.stringify(manifest))
                 })
             })
 

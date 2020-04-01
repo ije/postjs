@@ -1,5 +1,6 @@
-import React, { CSSProperties, PropsWithChildren, useCallback } from 'react'
-import { useRouter } from './router'
+import React, { CSSProperties, PropsWithChildren, useCallback, useEffect, useMemo } from 'react'
+import { prefetchPage, redirect } from './router'
+import utils from './utils'
 
 interface LinkProps {
     to: string
@@ -11,32 +12,35 @@ interface LinkProps {
 }
 
 export function Link({
-    to,
-    as,
+    to: toProp,
+    as: asProp,
     className,
     style,
     replace,
+    prefetch,
     children
 }: PropsWithChildren<LinkProps>) {
-    const router = useRouter()
+    const pagePath = useMemo(() => utils.cleanPath(toProp), [toProp])
+    const asPath = useMemo(() => utils.isNEString(asProp) ? utils.cleanPath(asProp) : undefined, [asProp])
     const onClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
         e.preventDefault()
-        // todo: load page component/static data
-        if (replace) {
-            router.replace(to, as)
-        } else {
-            router.push(to, as)
-        }
-    }, [to, as, replace])
+        redirect(pagePath, asPath, replace)
+    }, [pagePath, asPath, replace])
     const onMouseEnter = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
+        prefetchPage(pagePath)
+    }, [pagePath])
 
-    }, [to])
+    useEffect(() => {
+        if (prefetch) {
+            prefetchPage(pagePath)
+        }
+    }, [prefetch, pagePath])
 
     return (
         <a
             className={className}
             style={style}
-            href={as || to}
+            href={asPath || pagePath}
             onClick={onClick}
             onMouseEnter={onMouseEnter}
         >{children}</a>

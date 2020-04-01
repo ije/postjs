@@ -1,8 +1,8 @@
-import * as React from 'react'
-import * as ReactDom from 'react-dom'
 import * as Postjs from '@postjs/core'
 import fs from 'fs-extra'
 import path from 'path'
+import * as React from 'react'
+import * as ReactDom from 'react-dom'
 import { appEntry, getAppConfig } from './app'
 import { html, renderPage, runJS, ssrStaticMethods } from './render'
 import { Compiler } from './webpack'
@@ -16,16 +16,23 @@ export const peerDeps = {
 export default async (appDir: string) => {
     const appConfig = await getAppConfig(appDir)
     const { chunks: ssrChunks } = await new Compiler(appDir, `
+        const React = require('react')
+        const { isValidElementType } = require('react-is')
         const r = require.context('./pages', true, /\\.(js|ts)x?$/i)
         const pages = {}
 
         r.keys().filter(key => /^[a-z0-9\\.\\/\\$\\-\\*_~ ]+$/i.test(key)).forEach(key => {
             const pagePath = key.replace(/^[\\.]+/, '').replace(/(\\/index)?\\.(js|ts)x?$/i, '').replace(/ /g, '-') || '/'
             pages[pagePath] = {
-                reqPath: './pages/' + key.replace(/^[\\.\\/]+/, ''),
-                component: () => {
+                rawRequest: './pages/' + key.replace(/^[\\.\\/]+/, ''),
+                reqComponent: () => {
                     const mod = r(key)
-                    const component = mod.default || mod
+                    const component = mod.default
+                    if (component === undefined) {
+                        return () => <p style={{color: 'red'}}>bad page: miss default export</p>
+                    } else if (!isValidElementType(component)) {
+                        return () => <p style={{color: 'red'}}>bad page: invalid element type</p>
+                    }
                     const staticMethods = ${JSON.stringify(ssrStaticMethods)}
                     staticMethods.forEach(name => {
                         if (typeof mod[name] === 'function' && typeof component[name] !== 'function') {
@@ -47,9 +54,24 @@ export default async (appDir: string) => {
     const { hash, chunks, warnings, errors, startTime, endTime } = await new Compiler(appDir, Object.keys(pages).reduce((entries, pagePath) => {
         const pageName = pagePath.replace(/^\/+/, '') || 'index'
         entries[`pages/${pageName}`] = `
-            import component from '${path.join(appDir, pages[pagePath].reqPath)}'
+            const React = require('react')
+            const { isValidElementType } = require('react-is')
 
-            const exportAs = { path: '${pagePath}', component }
+            const exportAs = {
+                path: '${pagePath}',
+                reqComponent:() => {
+                    const mod = require(${pages[pagePath].rawRequest})
+                    const component = mod.default
+                    if (component === undefined) {
+                        return () => <p style={{color: 'red'}}>bad page: miss default export</p>
+                    } else if (!isValidElementType(component)) {
+                        return () => <p style={{color: 'red'}}>bad page: invalid element type</p>
+                    }
+                    component.hasGetStaticPropsMethod = typeof mod['getStaticProps'] === 'function' || typeof component['getStaticProps'] === 'function'
+                    return component
+                }
+            }
+
             if (!window.__POST_INITIAL_PAGE) {
                 window.__POST_INITIAL_PAGE = exportAs
             }
@@ -71,7 +93,7 @@ export default async (appDir: string) => {
     for (const pagePath of Object.keys(pages)) {
         const pageName = pagePath.replace(/^\/+/, '') || 'index'
         const url = { pagePath, pathname: pagePath, params: {}, query: {} }
-        const { staticProps, helmet, body } = await renderPage(url, pages[pagePath].component())
+        const { staticProps, helmet, body } = await renderPage(url, pages[pagePath].reqComponent())
         const htmlFile = path.join(buildDir, pageName + '.html')
         const dataJS = 'window.__POST_SSR_DATA = ' + JSON.stringify({ url, staticProps })
         await fs.ensureDir(path.dirname(htmlFile))
