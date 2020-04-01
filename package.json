@@ -7,7 +7,8 @@
     "scripts": {
         "lerna": "lerna",
         "build": "lerna run build",
-        "post": "lerna run build && node ./packages/postjs-cli/dist/cli/post.js"
+        "watch": "lerna run --parallel watch",
+        "post": "node ./packages/postjs-cli/dist/cli/post.js"
     },
     "devDependencies": {
         "lerna": "^3.20.2",
