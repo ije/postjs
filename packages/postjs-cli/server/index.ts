@@ -6,7 +6,7 @@ import path from 'path'
 import { parse } from 'url'
 import { server as WebsocketServer } from 'websocket'
 import zlib from 'zlib'
-import { AppWatcher } from '../build/watcher'
+import { DevWatcher } from '../build/dev'
 import utils from '../shared/utils'
 
 export class Server {
@@ -27,7 +27,7 @@ export class Server {
     start(port: number) {
         if (this._mode === 'development') {
             const emitter = new EventEmitter()
-            const watcher = new AppWatcher(this._appDir)
+            const watcher = new DevWatcher(this._appDir)
             const httpServer = http.createServer(async (req, res) => {
                 const url = parse(req.url || '/')
                 const pathname = utils.cleanPath((url.pathname || '/'))

@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
-import arg from '../shared/arg'
 import { Server } from '../server'
+import arg from '../shared/arg'
 
 const helpMessage = `Starts the postjs app in development mode
 
@@ -12,8 +12,8 @@ Usage
 If the <dir> is empty, the current directory will be used.
 
 Options
-    --port, -p   A port number to start the postjs app, default is 8080
-    --help, -h   Print the help message
+    --port, -p    A port number to start the postjs app, default is 8080
+    --help, -h    Print help message
 `
 
 export default function (...argv: string[]) {
@@ -35,7 +35,7 @@ export default function (...argv: string[]) {
     }
 
     if (!(/^\d+$/.test(port))) {
-        console.log(`invalid port ${port}`)
+        console.log(`invalid port number ${port}`)
         process.exit(0)
         return
     }

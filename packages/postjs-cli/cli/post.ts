@@ -25,8 +25,8 @@ const helpMessage = `Usage
 Commands
     ${commands.join(', ')}
 Options
-    --version, -v   Print the version
-    --help, -h      Print the help message
+    --version, -v    Print version number
+    --help, -h       Print help message
 `
 
 // print the version number in package.json

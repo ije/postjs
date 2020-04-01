@@ -1,11 +1,13 @@
-import webpack from 'webpack'
 import path from 'path'
+import webpack from 'webpack'
 import './loaders/post-page-loader'
+
+const useBuiltIns = 'usage'
 
 export default (context: string, config?: Pick<webpack.Configuration, 'mode' | 'target' | 'entry' | 'plugins' | 'externals' | 'optimization' | 'devtool'>) => ({
     context: context,
-    target: config?.target || 'web',
-    mode: config?.mode || 'production',
+    target: config?.target,
+    mode: config?.mode,
     entry: config?.entry,
     output: {
         libraryTarget: config?.target === 'node' ? 'umd' : 'var',
@@ -15,45 +17,54 @@ export default (context: string, config?: Pick<webpack.Configuration, 'mode' | '
     module: {
         rules: [
             {
-                test: /\.(js|ts)x?$/,
+                test: /\.(js|mjs|ts)x?$/,
+                exclude: /node_modules/,
                 use: {
                     loader: 'babel-loader',
                     options: {
                         babelrc: false,
                         cacheDirectory: true,
                         presets: [
-                            // [
-                            //     '@babel/preset-env',
-                            //     config?.target === 'node' ? { targets: { node: 'current' } } : {
-                            //         useBuiltIns: 'usage',
-                            //         corejs: 3,
-                            //         modules: false,
-                            //         targets: '> 0.5%, last 2 versions, Firefox ESR, not dead'
-                            //     }
-                            // ],
-                            '@babel/preset-typescript',
-                            '@babel/preset-react'
+                            ['@babel/preset-env', config?.target === 'node' ? { targets: { node: 'current' } } : {
+                                useBuiltIns,
+                                corejs: 3,
+                                modules: 'commonjs', // fix Cannot assign to read only property 'exports' of object '#<Object>'
+                                targets: '> 1%, last 2 versions, Firefox ESR, not ie <= 9'
+                            }],
+                            '@babel/preset-react',
+                            ['@babel/preset-typescript', { allowNamespaces: true }]
                         ],
                         plugins: [
-                            ['@babel/plugin-transform-runtime', { regenerator: true }],
+                            ['@babel/plugin-transform-runtime', {
+                                corejs: false, // polyfills are injected by preset-env
+                                regenerator: useBuiltIns !== 'usage',
+                                helpers: useBuiltIns === 'usage'
+                            }],
                             ['@babel/plugin-proposal-class-properties', { loose: true }],
+                            '@babel/plugin-proposal-nullish-coalescing-operator',
+                            '@babel/plugin-proposal-numeric-separator',
+                            ['@babel/plugin-proposal-object-rest-spread', { useBuiltIns: true }],
                             '@babel/plugin-proposal-optional-chaining',
-                            '@babel/plugin-proposal-nullish-coalescing-operator'
-                        ]
+                            config?.mode !== 'development' && ['babel-plugin-transform-react-remove-prop-types', { removeImport: true }],
+                            config?.target === 'node' && '@babel/plugin-syntax-bigint'
+                        ].filter(Boolean)
                     }
                 }
             },
             {
                 test: /\.(less|css)$/i,
                 use: [
-                    {
-                        loader: 'style-loader',
-                        options: {
-                            singleton: true
-                        }
-                    },
+                    'style-loader',
                     'css-loader',
                     'less-loader'
+                ]
+            },
+            {
+                test: /\.(sass|scss)$/i,
+                use: [
+                    'style-loader',
+                    'css-loader',
+                    'sass-loader'
                 ]
             },
             {
@@ -79,7 +90,7 @@ export default (context: string, config?: Pick<webpack.Configuration, 'mode' | '
     },
     plugins: config?.plugins,
     resolve: {
-        extensions: ['.js', '.jsx', '.ts', '.tsx', '.json', '.wasm']
+        extensions: ['.js', '.jsx', '.mjs', '.ts', '.tsx', '.json', '.wasm']
     },
     resolveLoader: {
         alias: {

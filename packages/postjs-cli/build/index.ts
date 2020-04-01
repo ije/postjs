@@ -1,21 +1,21 @@
-import * as Postjs from '@postjs/core'
+import * as postjs from '@postjs/core'
 import fs from 'fs-extra'
 import path from 'path'
 import * as React from 'react'
 import * as ReactDom from 'react-dom'
 import { appEntry, getAppConfig } from './app'
-import { html, renderPage, runJS, ssrStaticMethods } from './render'
+import { html, renderPage, runSSRCode, ssrStaticMethods } from './ssr'
 import { Compiler } from './webpack'
 
 export const peerDeps = {
     'react': React,
     'react-dom': ReactDom,
-    '@postjs/core': Postjs
+    '@postjs/core': postjs
 }
 
 export default async (appDir: string) => {
     const appConfig = await getAppConfig(appDir)
-    const { chunks: ssrChunks } = await new Compiler(appDir, `
+    const { chunks: ssrChunks } = await new Compiler(path.join(appDir, appConfig.srcDir), `
         const React = require('react')
         const { isValidElementType } = require('react-is')
         const r = require.context('./pages', true, /\\.(js|ts)x?$/i)
@@ -50,17 +50,17 @@ export default async (appDir: string) => {
         mode: 'production',
         externals: Object.keys(peerDeps)
     }).compile()
-    const { pages } = runJS(ssrChunks.get('app')!.content, peerDeps)
-    const { hash, chunks, warnings, errors, startTime, endTime } = await new Compiler(appDir, Object.keys(pages).reduce((entries, pagePath) => {
+    const { pages } = runSSRCode(ssrChunks.get('app')!.content, peerDeps)
+    const { hash, chunks, warnings, errors, startTime, endTime } = await new Compiler(path.join(appDir, appConfig.srcDir), Object.keys(pages).reduce((entries, pagePath) => {
         const pageName = pagePath.replace(/^\/+/, '') || 'index'
         entries[`pages/${pageName}`] = `
             const React = require('react')
             const { isValidElementType } = require('react-is')
 
             const exportAs = {
-                path: '${pagePath}',
+                path: ${JSON.stringify(pagePath)},
                 reqComponent:() => {
-                    const mod = require(${pages[pagePath].rawRequest})
+                    const mod = require(${JSON.stringify(path.join(appDir, appConfig.srcDir, pages[pagePath].rawRequest))})
                     const component = mod.default
                     if (component === undefined) {
                         return () => <p style={{color: 'red'}}>bad page: miss default export</p>
@@ -75,13 +75,13 @@ export default async (appDir: string) => {
             if (!window.__POST_INITIAL_PAGE) {
                 window.__POST_INITIAL_PAGE = exportAs
             }
-            (window.__POST_PAGES = window.__POST_PAGES || {})['${pagePath}'] = exportAs
+            (window.__POST_PAGES = window.__POST_PAGES || {})[${JSON.stringify(pagePath)}] = exportAs
         `
         return entries
     }, { app: appEntry(appConfig.baseUrl) } as Record<string, string>), {
-        mode: 'development',
-        splitVendorChunk: true
-        // enableTerser: true,
+        mode: 'production',
+        splitVendorChunk: true,
+        enableTerser: true
     }).compile()
     const buildManifest: Record<string, any> = { hash, warnings, errors, startTime, endTime, pages: {} }
     const buildDir = path.join(appDir, '.post/builds', hash)
@@ -104,7 +104,8 @@ export default async (appDir: string) => {
             scripts: [
                 dataJS,
                 { src: `_post/build-manifest.js?v=${hash}`, async: true },
-                ...Array.from(chunks.values()).filter(({ name }) => !name.startsWith('pages/') || name === 'pages/' + pageName)
+                ...Array.from(chunks.values())
+                    .filter(({ name }) => !name.startsWith('pages/') || name === 'pages/' + pageName)
                     .map(({ name, hash }) => ({ src: `_post/${name}.js?v=${hash}`, async: true }))
             ]
         }))

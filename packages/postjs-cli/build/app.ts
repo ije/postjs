@@ -9,40 +9,56 @@ export const appEntry = (baseUrl: string) => `
     import { App } from '@postjs/core'
 
     window.addEventListener('load', () => {
-        const { __POST_INITIAL_PAGE, __POST_SSR_DATA } = window
-        if (__POST_INITIAL_PAGE && __POST_SSR_DATA) {
-            const { reqComponent } = __POST_INITIAL_PAGE
-            const { url, staticProps } = __POST_SSR_DATA
-            __POST_SSR_DATA[url.pagePath] = { staticProps }
+        const { __POST_INITIAL_PAGE: initialPage, __POST_SSR_DATA: ssrData } = window
+        if (initialPage && ssrData) {
+            const { reqComponent } = initialPage
+            const { url, staticProps } = ssrData
+            ssrData[url.pagePath] = { staticProps }
             ReactDom.hydrate((
                 <App baseUrl="${baseUrl}" initialPage={{ url, staticProps, Component: reqComponent() }} />
             ), document.querySelector('main'))
-            console.log(\`page '\${url.pagePath}' hydrated.\`)
+            if (process.env.NODE_ENV === 'development') {
+                console.log("[postjs] page '" + url.pagePath + "' hydrated.")
+            }
         }
     }, false)
 `
 
 export interface AppConfig {
-    lang: string
-    baseUrl: string
+    readonly root: string
+    readonly lang: string
+    readonly baseUrl: string
+    readonly srcDir: string
+    readonly browserslist?: any
 }
 
-export async function getAppConfig(appDir: string) {
+export function getAppConfig(appDir: string) {
     const appConfig: AppConfig = {
+        root: path.resolve(appDir),
         lang: 'en',
-        baseUrl: '/'
+        baseUrl: '/',
+        srcDir: '/'
     }
-    const configJson = path.join(appDir, 'post.config.json')
-    if (!fs.existsSync(configJson)) {
-        return appConfig
+    let settings: any = {}
+
+    try {
+        const configJson = path.join(appDir, 'post.config.json')
+        if (!fs.existsSync(configJson)) {
+            return appConfig
+        }
+        settings = fs.readJSONSync(configJson)
+    } catch (err) {
+        console.log('bad app config: ', err)
     }
-    const settings = await fs.readJSON(configJson)
 
     if (/^[a-z]{2}(\-[a-z0-9]+)?$/i.test(settings.lang)) {
-        appConfig.lang = settings.lang
+        Object.assign(appConfig, { lang: settings.lang })
     }
     if (utils.isNEString(settings['baseUrl'])) {
-        appConfig.baseUrl = utils.cleanPath(encodeURI(settings['baseUrl']))
+        Object.assign(appConfig, { baseUrl: utils.cleanPath(encodeURI(settings['baseUrl'])) })
+    }
+    if (utils.isNEString(settings['srcDir'])) {
+        Object.assign(appConfig, { srcDir: utils.cleanPath(settings['srcDir']) })
     }
     return appConfig
 }

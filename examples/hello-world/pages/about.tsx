@@ -1,5 +1,5 @@
-import React from 'react'
 import { Head, SEO } from '@postjs/core'
+import React from 'react'
 import Nav from '../components/nav'
 
 export async function getStaticProps() {
@@ -16,7 +16,7 @@ export default ({ name, description }: any) => {
                 <meta http-equiv="X-UA-Compatible" content="IE=edge, chrome=1" />
             </Head>
             <SEO
-                title={`About ${name}!`}
+                title={`About ${name}`}
                 description={description}
                 keywords={`react, ${name}`}
             />

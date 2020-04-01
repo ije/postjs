@@ -36,17 +36,17 @@ export class Compiler {
         const vmp = new VirtualModulesPlugin()
         const webpackEntry: webpack.Entry = {}
         if (utils.isNEString(entry)) {
-            webpackEntry['app'] = './[vmp]app.js'
+            webpackEntry['app'] = './[vmp]_app.js'
         } else if (utils.isObject(entry)) {
             Object.keys(entry).forEach(name => {
-                webpackEntry[name] = `./[vmp]${name}.js`
+                webpackEntry[name] = `./[vmp]_${name}.js`
             })
         }
         if (config?.enableHMR) {
             Object.keys(webpackEntry).forEach(key => {
                 webpackEntry[key] = [
                     require.resolve('webpack/hot/dev-server'),
-                    './[vmp]hmr-client.js',
+                    './[vmp]_hmr_client.js',
                     String(webpackEntry[key])
                 ]
             })
@@ -71,12 +71,11 @@ export class Compiler {
                 minimizer: config?.enableTerser ? [
                     new TerserPlugin({
                         cache: true,
+                        extractComments: false,
                         terserOptions: {
                             ecma: 2015,
                             compress: true,
-                            output: {
-                                comments: true
-                            }
+                            safari10: true
                         }
                     })
                 ] : undefined
@@ -85,14 +84,14 @@ export class Compiler {
         this._compiler = webpack(this._config)
         this._compiler.outputFileSystem = this._memfs
         if (utils.isNEString(entry)) {
-            vmp.writeModule('./[vmp]app.js', entry)
+            vmp.writeModule('./[vmp]_app.js', entry)
         } else if (utils.isObject(entry)) {
             Object.keys(entry).forEach(name => {
-                vmp.writeModule(`./[vmp]${name}.js`, entry[name])
+                vmp.writeModule(`./[vmp]_${name}.js`, entry[name])
             })
         }
         if (config?.enableHMR) {
-            vmp.writeModule('./[vmp]hmr-client.js', `
+            vmp.writeModule('./[vmp]_hmr_client.js', `
                 window.addEventListener('load', async () => {
                     const hotEmitter = require('webpack/hot/emitter')
                     const url = 'ws://' + location.host + '/_post/hmr-socket?page=' + location.pathname

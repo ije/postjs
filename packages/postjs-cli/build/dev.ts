@@ -7,15 +7,15 @@ import DynamicEntryPlugin from 'webpack/lib/DynamicEntryPlugin'
 import { peerDeps } from '.'
 import utils from '../shared/utils'
 import { appEntry, getAppConfig } from './app'
-import { html, renderPage, runJS, ssrStaticMethods } from './render'
+import { html, renderPage, runSSRCode, ssrStaticMethods } from './ssr'
 import { ChunkWithContent, Compiler } from './webpack'
 
 // A component returns nothing
 const NullComponent = () => null
 
-export class AppWatcher {
-    private _appDir: string
+export class DevWatcher {
     private _appLang: string
+    private _srcDir: string
     private _pageFiles: string[]
     private _pageChunks: Map<string, ChunkWithContent & { html?: string, staticProps?: any }>
     private _commonChunks: Map<string, ChunkWithContent>
@@ -23,18 +23,18 @@ export class AppWatcher {
     private _clientCompiler: Compiler
 
     constructor(appDir: string) {
-        this._appDir = appDir
-        this._appLang = 'en'
-        this._pageFiles = glob.sync('pages/**/*.{js,jsx,ts,tsx}', { cwd: appDir }).map(p => utils.trimPrefix(p, 'pages/')).filter(p => /^[a-z0-9\.\/\$\-\*_~ ]+$/i.test(p))
+        const appConfig = getAppConfig(appDir)
+        this._appLang = appConfig.lang
+        this._srcDir = path.join(appDir, appConfig.srcDir)
+        this._pageFiles = glob.sync('pages/**/*.{js,jsx,ts,tsx}', { cwd: this._srcDir }).map(p => utils.trimPrefix(p, 'pages/')).filter(p => /^[a-z0-9\.\/\$\-\*_~ ]+$/i.test(p))
         this._pageChunks = new Map()
         this._commonChunks = new Map()
         this._buildManifest = null
-        this._clientCompiler = new Compiler(this._appDir, appEntry('/'), {
+        this._clientCompiler = new Compiler(this._srcDir, appEntry('/'), {
             mode: 'development',
             enableHMR: true,
             splitVendorChunk: true
         })
-        getAppConfig(this._appDir).then(({ lang }) => this._appLang = lang)
     }
 
     get isInitiated() {
@@ -52,7 +52,7 @@ export class AppWatcher {
     private async _renderPage(pagePath: string) {
         if (pagePath !== '' && this._pageChunks.has(pagePath)) {
             const pageChunk = this._pageChunks.get(pagePath)!
-            const { chunks } = await new Compiler(this._appDir, `
+            const { chunks } = await new Compiler(this._srcDir, `
                 const React = require('react')
                 const { isValidElementType } = require('react-is')
                 const mod = require('./pages${pagePath}')
@@ -77,7 +77,7 @@ export class AppWatcher {
                 mode: 'production',
                 externals: Object.keys(peerDeps)
             }).compile()
-            const { default: component } = runJS(chunks.get('app')!.content, peerDeps)
+            const { default: component } = runSSRCode(chunks.get('app')!.content, peerDeps)
             const url = { pagePath, pathname: pagePath, params: {}, query: {} }
             const { staticProps, helmet, body } = await renderPage(url, component())
             const dataJS = 'window.__POST_SSR_DATA = ' + JSON.stringify({ url, staticProps })

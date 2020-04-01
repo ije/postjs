@@ -8,4 +8,6 @@ export * from './router'
 export interface AppConfig {
     lang?: string // default is 'en'
     baseUrl?: string
+    srcDir?: string
+    browserslist?: any
 }

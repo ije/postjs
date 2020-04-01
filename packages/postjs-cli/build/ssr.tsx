@@ -11,6 +11,44 @@ export const ssrStaticMethods = [
     'getStaticPaths'
 ]
 
+export async function renderPage(url: URL, PageComponent: ComponentType<any>) {
+    let staticProps: any = null
+    if ('getStaticProps' in PageComponent) {
+        const getStaticProps = (PageComponent as any)['getStaticProps']
+        if (typeof getStaticProps === 'function') {
+            const props = await getStaticProps(url)
+            if (utils.isObject(props)) {
+                staticProps = props
+            } else {
+                staticProps = {}
+            }
+        }
+    }
+
+    const body = renderToString((
+        <RouterContext.Provider value={new RouterStore(url)}>
+            <PageComponent {...staticProps} />
+        </RouterContext.Provider>
+    ))
+    const helmet = renderHeadToString()
+
+    return {
+        body,
+        helmet,
+        staticProps
+    }
+}
+
+export function runSSRCode(source: string, deps: Record<string, any>, injects?: Record<string, any>) {
+    const exports: { [key: string]: any } = {}
+    const func = new Function('require', 'exports', ...Object.keys(injects || {}).concat(['module', source]))
+    const { window } = new JSDOM('', { pretendToBeVisual: true })
+    Object.assign(window, { fetch })
+    Object.assign(globalThis, { window, fetch, document: window.document })
+    func((name: string) => deps[name], exports, ...Object.values(injects || {}))
+    return exports
+}
+
 export const html = ({ lang, helmet, body, scripts }: { lang: string, body: string, helmet?: string[], scripts?: (string | { src: string, async?: boolean })[] }) => (
     `<!DOCTYPE html>
 <html lang="${lang}">
@@ -42,41 +80,3 @@ ${(scripts || [])
 </body>
 </html>`
 )
-
-export async function renderPage(url: URL, PageComponent: ComponentType<any>) {
-    let staticProps: any = null
-    if ('getStaticProps' in PageComponent) {
-        const getStaticProps = (PageComponent as any)['getStaticProps']
-        if (typeof getStaticProps === 'function') {
-            const props = await getStaticProps(url)
-            if (utils.isObject(props)) {
-                staticProps = props
-            } else {
-                staticProps = {}
-            }
-        }
-    }
-
-    const body = renderToString((
-        <RouterContext.Provider value={new RouterStore(url)}>
-            <PageComponent {...staticProps} />
-        </RouterContext.Provider>
-    ))
-    const helmet = renderHeadToString()
-
-    return {
-        body,
-        helmet,
-        staticProps
-    }
-}
-
-export function runJS(source: string, deps: Record<string, any>, injects?: Record<string, any>) {
-    const exports: { [key: string]: any } = {}
-    const func = new Function('require', 'exports', ...Object.keys(injects || {}).concat(['module', source]))
-    const { window } = new JSDOM('', { pretendToBeVisual: true })
-    Object.assign(window, { fetch })
-    Object.assign(globalThis, { window, fetch, document: window.document })
-    func((name: string) => deps[name], exports, ...Object.values(injects || {}))
-    return exports
-}

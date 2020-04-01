@@ -24,7 +24,7 @@ export function prefetchPage(pagePath: string) {
 }
 
 export async function fetchPage(pagePath: string) {
-    const { __POST_PAGES: postPages = {}, __POST_BUILD_MANIFEST: buildManifest = {}, __POST_SSR_DATA: ssrData = {} } = window as any
+    const { __POST_PAGES: postPages = {}, __POST_BUILD_MANIFEST: buildManifest = {} } = window as any
     const buildInfo = buildManifest.pages[pagePath]
     if (buildInfo === undefined) {
         return Promise.reject(new Error(`page '${pagePath}' no found`))
@@ -40,7 +40,7 @@ export async function fetchPage(pagePath: string) {
                 const pc = page.reqComponent()
                 if (pc.hasGetStaticPropsMethod === true) {
                     fetch(`_post/data/${buildInfo.name}.json?v=${buildInfo.hash}`).then(resp => resp.json()).then(data => {
-                        ssrData[pagePath] = data
+                        (window['__POST_SSR_DATA'] = window['__POST_SSR_DATA'] || {})[pagePath] = data
                         resolve()
                     }).catch(err => {
                         reject(new Error(`can't get page('${pagePath}') data: ${err}`))
