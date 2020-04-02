@@ -3,22 +3,21 @@ import path from 'path'
 import utils from '../shared/utils'
 
 export interface AppConfig {
-    readonly root: string
+    readonly rootDir: string
+    readonly srcDir: string
     readonly lang: string
     readonly baseUrl: string
-    readonly srcDir: string
-    readonly babelPresetEnv?: {
-        targets?: string | Record<string, any>
-        useBuiltIns?: 'usage' | 'entry'
-    }
+    readonly browserslist?: any
+    readonly polyfillsMode?: 'usage' | 'entry'
+    readonly polyfills?: string[]
 }
 
 export function loadAppConfig(appDir: string) {
     const appConfig: AppConfig = {
-        root: path.resolve(appDir),
+        rootDir: path.resolve(appDir),
+        srcDir: '/',
         lang: 'en',
-        baseUrl: '/',
-        srcDir: '/'
+        baseUrl: '/'
     }
     let settings: any = {}
 
@@ -32,34 +31,45 @@ export function loadAppConfig(appDir: string) {
         console.log('bad app config: ', err)
     }
 
-    if (/^[a-z]{2}(\-[a-z0-9]+)?$/i.test(settings.lang)) {
-        Object.assign(appConfig, { lang: settings.lang })
+    const {
+        lang,
+        baseUrl,
+        srcDir,
+        browserslist,
+        polyfillsMode,
+        polyfills
+    } = settings
+    if (/^[a-z]{2}(\-[a-z0-9]+)?$/i.test(lang)) {
+        Object.assign(appConfig, { lang })
     }
-    if (utils.isNEString(settings['baseUrl'])) {
-        Object.assign(appConfig, { baseUrl: utils.cleanPath(encodeURI(settings['baseUrl'])) })
+    if (utils.isNEString(baseUrl)) {
+        Object.assign(appConfig, { baseUrl: utils.cleanPath(encodeURI(baseUrl)) })
     }
-    if (utils.isNEString(settings['srcDir'])) {
-        Object.assign(appConfig, { srcDir: utils.cleanPath(settings['srcDir']) })
+    if (utils.isNEString(srcDir)) {
+        Object.assign(appConfig, { srcDir: utils.cleanPath(srcDir) })
+    }
+    if (utils.isNEString(browserslist) || utils.isObject(browserslist) || utils.isArray(browserslist)) {
+        Object.assign(appConfig, { browserslist })
+    }
+    if (/^usage|entry$/.test(polyfillsMode)) {
+        Object.assign(appConfig, { polyfillsMode })
+    }
+    if (utils.isNEArray(polyfills)) {
+        Object.assign(appConfig, { polyfills: polyfills.filter(utils.isNEString) })
     }
     return appConfig
 }
 
 // app.js
-export function craeteAppEntry({ baseUrl, babelPresetEnv }: AppConfig) {
-    const { useBuiltIns = 'usage' } = babelPresetEnv || {}
-
+export function craeteAppEntry({ baseUrl, polyfillsMode = 'usage', polyfills = ['core-js/stable', 'whatwg-fetch'] }: AppConfig) {
     return (`
         import React from 'react'
         import ReactDom from 'react-dom'
         import { App } from '@postjs/core'
 
         // ployfills
-        // useBuiltIns: ${useBuiltIns}
-        ${useBuiltIns !== 'entry' ? '// ' : ''}import 'core-js/stable'
-        ${useBuiltIns !== 'entry' ? '// ' : ''}import 'regenerator-runtime/runtime'
-        import 'whatwg-fetch'
-        import assign from 'object-assign'
-        Object.assign = Object.assign || assign
+        ${polyfillsMode === 'entry' ? polyfills.map(name => `import ${JSON.stringify(name)}`).join('\n') : ''}
+        ${polyfillsMode === 'entry' ? "import 'regenerator-runtime/runtime'" : "import 'whatwg-fetch'"}
 
         window.addEventListener('load', () => {
             const { __POST_INITIAL_PAGE: initialPage, __POST_SSR_DATA: ssrData } = window
@@ -71,7 +81,7 @@ export function craeteAppEntry({ baseUrl, babelPresetEnv }: AppConfig) {
                 const { url, staticProps } = ssrData
                 ssrData[url.pagePath] = { staticProps }
                 ReactDom.hydrate((
-                    <App baseUrl="${ baseUrl}" initialPage={{ url, staticProps, Component: reqComponent() }} />
+                    <App baseUrl="${baseUrl}" initialPage={{ url, staticProps, Component: reqComponent() }} />
                 ), document.querySelector('main'))
                 if (process.env.NODE_ENV === 'development') {
                     console.log("[postjs] page '" + url.pagePath + "' hydrated.")

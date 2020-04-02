@@ -81,7 +81,11 @@ export default async (appDir: string) => {
     }, { app: craeteAppEntry(appConfig) } as Record<string, string>), {
         isProduction: true,
         splitVendorChunk: true,
-        enableTerser: true
+        enableTerser: true,
+        babelPresetEnv: {
+            targets: appConfig.browserslist,
+            useBuiltIns: appConfig.polyfillsMode
+        }
     }).compile()
     const buildManifest: Record<string, any> = { hash, warnings, errors, startTime, endTime, pages: {} }
     const buildDir = path.join(appDir, '.post/builds', hash)

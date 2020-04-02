@@ -31,7 +31,11 @@ export class DevWatcher {
         this._buildManifest = null
         this._devCompiler = new Compiler(srcDir, craeteAppEntry(this._appConfig), {
             enableHMR: true,
-            splitVendorChunk: true
+            splitVendorChunk: true,
+            babelPresetEnv: {
+                targets: appConfig.browserslist,
+                useBuiltIns: appConfig.polyfillsMode
+            }
         })
     }
 

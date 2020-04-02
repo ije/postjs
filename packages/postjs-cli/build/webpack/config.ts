@@ -43,7 +43,7 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
         module: {
             rules: [
                 {
-                    test: /\.(js|mjs|ts)x?$/,
+                    test: /\.(jsx?|mjs|tsx?)$/,
                     use: {
                         loader: 'babel-loader',
                         options: {
@@ -58,7 +58,7 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
                                     corejs: 3,
                                     modules: false
                                 }],
-                                '@babel/preset-react',
+                                ['@babel/preset-react', { development: !isProduction }],
                                 ['@babel/preset-typescript', { allowNamespaces: true }]
                             ],
                             plugins: [
@@ -139,7 +139,7 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
                     },
                     ployfills: {
                         priority: 2,
-                        test: /[\\/]node_modules[\\/](@babel[\\/]runtime|core-js|regenerator-runtime|object-assign|whatwg-fetch)[\\/]/,
+                        test: /[\\/]node_modules[\\/](@babel[\\/]runtime|core-js|regenerator-runtime|whatwg-fetch)[\\/]/,
                         name: 'ployfills',
                         chunks: 'initial'
                     }
