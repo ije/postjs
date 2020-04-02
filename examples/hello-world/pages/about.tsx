@@ -9,9 +9,9 @@ export async function getStaticProps() {
     }
 }
 
-export default ({ name, description }: any) => {
+export default ({ name, description, style }: any) => {
     return (
-        <div>
+        <div style={style}>
             <Head>
                 <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
             </Head>
