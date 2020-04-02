@@ -43,6 +43,7 @@
         "mime": "^2.4.4",
         "node-fetch": "^2.6.0",
         "node-sass": "^4.13.1",
+        "object-assign": "^4.1.1",
         "react-is": "^16.13.1",
         "regenerator-runtime": "^0.13.5",
         "sass-loader": "^8.0.2",

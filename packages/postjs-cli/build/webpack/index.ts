@@ -1,10 +1,9 @@
 import MemoryFS from 'memory-fs'
 import path from 'path'
-import TerserPlugin from 'terser-webpack-plugin'
 import webpack from 'webpack'
 import VirtualModulesPlugin from 'webpack-virtual-modules'
 import utils from '../../shared/utils'
-import createConfig from './config'
+import createConfig, { Config } from './config'
 
 export interface MiniStats {
     readonly hash: string,
@@ -19,12 +18,6 @@ export interface ChunkWithContent {
     readonly name: string
     readonly hash: string
     readonly content: string
-}
-
-type Config = Pick<webpack.Configuration, 'mode' | 'target' | 'externals' | 'plugins' | 'devtool'> & {
-    enableHMR?: boolean
-    enableTerser?: boolean
-    splitVendorChunk?: boolean
 }
 
 export class Compiler {
@@ -52,34 +45,9 @@ export class Compiler {
             })
         }
         this._memfs = new MemoryFS()
-        this._config = createConfig(context, {
+        this._config = createConfig(context, webpackEntry, {
             ...config,
-            entry: webpackEntry,
-            plugins: ([vmp] as any[]).concat(config?.enableHMR ? [new webpack.HotModuleReplacementPlugin()] : [], config?.plugins || []),
-            optimization: {
-                runtimeChunk: config?.target === 'node' ? undefined : { name: 'webpack-runtime' },
-                splitChunks: config?.splitVendorChunk ? {
-                    cacheGroups: {
-                        vendor: {
-                            test: /[\\/]node_modules[\\/]/,
-                            name: 'vendor',
-                            chunks: 'initial'
-                        }
-                    }
-                } : undefined,
-                minimize: config?.enableTerser,
-                minimizer: config?.enableTerser ? [
-                    new TerserPlugin({
-                        cache: true,
-                        extractComments: false,
-                        terserOptions: {
-                            ecma: 2015,
-                            compress: true,
-                            safari10: true
-                        }
-                    })
-                ] : undefined
-            }
+            plugins: [vmp]
         })
         this._compiler = webpack(this._config)
         this._compiler.outputFileSystem = this._memfs

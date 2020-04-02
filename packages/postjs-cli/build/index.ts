@@ -3,7 +3,7 @@ import fs from 'fs-extra'
 import path from 'path'
 import * as React from 'react'
 import * as ReactDom from 'react-dom'
-import { appEntry, getAppConfig } from './app'
+import { craeteAppEntry, loadAppConfig } from './app'
 import { html, renderPage, runSSRCode, ssrStaticMethods } from './ssr'
 import { Compiler } from './webpack'
 
@@ -14,7 +14,7 @@ export const peerDeps = {
 }
 
 export default async (appDir: string) => {
-    const appConfig = await getAppConfig(appDir)
+    const appConfig = await loadAppConfig(appDir)
     const { chunks: ssrChunks } = await new Compiler(path.join(appDir, appConfig.srcDir), `
         const React = require('react')
         const { isValidElementType } = require('react-is')
@@ -46,8 +46,8 @@ export default async (appDir: string) => {
 
         exports.pages = pages
     `, {
-        target: 'node',
-        mode: 'production',
+        isServer: true,
+        isProduction: true,
         externals: Object.keys(peerDeps)
     }).compile()
     const { pages } = runSSRCode(ssrChunks.get('app')!.content, peerDeps)
@@ -78,8 +78,8 @@ export default async (appDir: string) => {
             (window.__POST_PAGES = window.__POST_PAGES || {})[${JSON.stringify(pagePath)}] = exportAs
         `
         return entries
-    }, { app: appEntry(appConfig.baseUrl) } as Record<string, string>), {
-        mode: 'production',
+    }, { app: craeteAppEntry(appConfig) } as Record<string, string>), {
+        isProduction: true,
         splitVendorChunk: true,
         enableTerser: true
     }).compile()
