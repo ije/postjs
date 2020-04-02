@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { Server } from '../server'
+import { start } from '../server/dev'
 import arg from '../shared/arg'
 
 const helpMessage = `Starts the postjs app in development mode
@@ -40,6 +40,6 @@ export default function (...argv: string[]) {
         return
     }
 
-    (new Server(appDir, 'development')).start(parseInt(port))
+    start(appDir, parseInt(port))
     console.log(`Server ready on http://localhost:${port}`)
 }
