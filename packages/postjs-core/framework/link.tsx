@@ -1,5 +1,5 @@
 import React, { CSSProperties, PropsWithChildren, useCallback, useEffect, useMemo } from 'react'
-import { prefetchPage, redirect } from './router'
+import { prefetchPage, redirect, useRouter } from './router'
 import utils from './utils'
 
 interface LinkProps {
@@ -20,12 +20,15 @@ export function Link({
     prefetch,
     children
 }: PropsWithChildren<LinkProps>) {
+    const router = useRouter()
     const pagePath = useMemo(() => utils.cleanPath(toProp), [toProp])
     const asPath = useMemo(() => utils.isNEString(asProp) ? utils.cleanPath(asProp) : undefined, [asProp])
     const onClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
         e.preventDefault()
-        redirect(pagePath, asPath, replace)
-    }, [pagePath, asPath, replace])
+        if (router.url.pagePath !== pagePath) {
+            redirect(pagePath, asPath, replace)
+        }
+    }, [pagePath, asPath, replace, router])
     const onMouseEnter = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
         prefetchPage(pagePath)
     }, [pagePath])

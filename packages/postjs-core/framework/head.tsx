@@ -1,87 +1,15 @@
-import React, { Children, Fragment, isValidElement, PropsWithChildren, ReactNode } from 'react'
+import React, { Children, Fragment, isValidElement, PropsWithChildren, ReactNode, useEffect } from 'react'
 import utils from './utils'
 
-const isServer = () => !process['browser']
+const isServer = !process['browser']
 const stateOnServer = new Map<string, { type: string, props: any }>()
 const stringify = (s: string) => JSON.stringify(s)
 
-function renderHead(node: ReactNode) {
-    Children.forEach(node, child => {
-        if (!isValidElement(child)) {
-            return
-        }
-
-        const { type, props } = child
-
-        switch (type) {
-            case SEO:
-                renderHead(child)
-                break
-            case Fragment:
-                renderHead(props.children)
-                break
-            case 'title':
-            case 'meta':
-            case 'link':
-            case 'style':
-            case 'script':
-            case 'no-script':
-                if (isServer()) {
-                    let key = type
-                    if (type === 'meta') {
-                        if (utils.isString(props['charset']) || utils.isString(props['charSet'])) {
-                            return // ignore charset, always use utf-8
-                        } else if (utils.isString(props['name'])) {
-                            key += `[name=${props['name']}]`
-                        } else if (utils.isString(props['property'])) {
-                            key += `[property=${props['property']}]`
-                        } else {
-                            key += '[' + Object.keys(props).filter(k => k !== 'content' && k !== 'children').map(k => k + '=' + props[k]).join(',') + ']'
-                        }
-                    } else if (key !== 'title') {
-                        key += '[' + Object.keys(props).filter(k => k !== 'children').map(k => k + '=' + props[k]).join(',') + '].' + Math.random()
-                    }
-                    stateOnServer.set(key, { type, props })
-                } else {
-                    let el: HTMLElement | null = null
-                    if (type === 'title') {
-                        el = document.querySelector('title')
-                    } else if (type === 'meta') {
-                        let query: string
-                        if (utils.isString(props['charset']) || utils.isString(props['charSet'])) {
-                            query = 'meta[charset]'
-                        } else if (utils.isString(props['name'])) {
-                            query = `meta[name=${stringify(props['name'])}]`
-                        } else if (utils.isString(props['property'])) {
-                            query = `meta[property=${stringify(props['property'])}]`
-                        } else {
-                            query = Object.keys(props).filter(k => k !== 'content' && k !== 'children').map(k => `meta[${k}=${stringify(props[k])}]`).join(',')
-                        }
-                        el = document.querySelector(query)
-                    }
-                    if (el === null) {
-                        el = document.createElement(type)
-                        el.setAttribute('data-post-' + type, 'true')
-                        document.head.appendChild(el)
-                    }
-                    Object.keys(props).forEach(key => {
-                        const value = props[key]
-                        if (utils.isString(value)) {
-                            if (key === 'children') {
-                                el!.innerText = value
-                            } else {
-                                el!.setAttribute(key, value)
-                            }
-                        }
-                    })
-                }
-                break
-        }
-    })
-}
-
 export function Head({ children }: PropsWithChildren<{}>) {
-    renderHead(children)
+    const els = renderHead(children)
+
+    useEffect(() => () => els.forEach(el => document.head.removeChild(el)), [])
+
     return null
 }
 
@@ -94,12 +22,12 @@ export function renderHeadToString(): string[] {
             .join(' ')
         if (attrs !== '') {
             if (utils.isNEString(props.children)) {
-                helmet.push(`<${type} ${attrs} data-post-${type}="true">${props.children}</${type}>`)
+                helmet.push(`<${type} ${attrs} data-jsx="true">${props.children}</${type}>`)
             } else {
-                helmet.push(`<${type} ${attrs} data-post-${type}="true">`)
+                helmet.push(`<${type} ${attrs} data-jsx="true">`)
             }
-        } else if (type === 'title') {
-            helmet.push(`<title data-post-title="true">${props.children || ''}</title>`)
+        } else if (type === 'title' && utils.isString(props.children)) {
+            helmet.push(`<title data-jsx="true">${props.children}</title>`)
         }
     })
     stateOnServer.clear()
@@ -137,4 +65,75 @@ export function SEO({ title, description, keywords, url, image }: SEOProps) {
             )}
         </Head>
     )
+}
+
+function renderHead(node: ReactNode) {
+    const els: Array<HTMLElement> = []
+    parse(node).forEach(({ type, props }, key) => {
+        if (isServer) {
+            stateOnServer.set(key, { type, props })
+        } else {
+            const el = document.createElement(type)
+            document.head.appendChild(el)
+            els.push(el)
+            Object.keys(props).forEach(key => {
+                const value = props[key]
+                if (utils.isString(value)) {
+                    if (key === 'children') {
+                        el!.innerText = value
+                    } else {
+                        el!.setAttribute(key, value)
+                    }
+                }
+            })
+        }
+    })
+    return els
+}
+
+function parse(node: ReactNode, set?: Map<string, { type: string, props: any }>) {
+    if (set === undefined) {
+        set = new Map()
+    }
+    Children.forEach(node, child => {
+        if (!isValidElement(child)) {
+            return
+        }
+
+        const { type, props } = child
+        switch (type) {
+            case SEO:
+                parse(child, set)
+                break
+            case Fragment:
+                parse(props.children, set)
+                break
+            case 'meta':
+                if (Object.keys(props).map(key => key.toLowerCase()).includes('charset')) {
+                    return // ignore charset, always use utf-8
+                }
+            case 'title':
+            case 'link':
+            case 'style':
+            case 'script':
+            case 'no-script':
+                let key = type
+                if (type === 'meta') {
+                    if (utils.isString(props['name'])) {
+                        key += `[name=${props['name']}]`
+                    } else if (utils.isString(props['property'])) {
+                        key += `[property=${props['property']}]`
+                    } else if (utils.isString(props['http-equiv'])) {
+                        key += `[http-equiv=${props['http-equiv']}]`
+                    } else {
+                        key += '[' + Object.keys(props).filter(k => k !== 'content' && k !== 'children').map(k => k + '=' + props[k]).join(',') + ']'
+                    }
+                } else if (key !== 'title') {
+                    key += '[' + Object.keys(props).filter(k => k !== 'children').map(k => k + '=' + props[k]).join(',') + '].' + Math.random()
+                }
+                set!.set(key, { type, props })
+                break
+        }
+    })
+    return set!
 }

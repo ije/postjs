@@ -1,5 +1,5 @@
-import React from 'react'
 import { Head, SEO } from '@postjs/core'
+import React from 'react'
 import Nav from '../components/nav'
 
 export async function getStaticProps() {
@@ -18,10 +18,10 @@ export default function Home({ name, description }: any) {
             <SEO
                 title={`Hello ${name}!`}
                 description={description}
-                keywords={`react, ${name}`}
+                keywords={`react,${name}`}
             />
             <Nav />
-            <h1>Welcome to use {name}!</h1>
+            <h1>Hello {name}!</h1>
         </div>
     )
 }

@@ -26,7 +26,12 @@ export function App({ baseUrl, initialPage }: AppProps) {
             if (url.pagePath && url.pagePath in ssrData) {
                 staticProps = (ssrData[url.pagePath] || {}).staticProps || null
             }
-            setPage({ url, staticProps, Component: component || Default404Page })
+            setPage(page => {
+                if (page.url.pagePath !== url.pagePath) {
+                    return { url, staticProps, Component: component || Default404Page }
+                }
+                return page
+            })
         }
         const hotUpdate = (pagePath: string, component: ComponentType) => {
             setPage(page => {
@@ -45,15 +50,6 @@ export function App({ baseUrl, initialPage }: AppProps) {
             hotEmitter.off('postPageHotUpdate', hotUpdate)
         }
     }, [])
-
-    document.head.childNodes.forEach(node => {
-        if (typeof node['tagName'] === 'string') {
-            const el = node as HTMLElement
-            if (el.hasAttribute(`data-post-${el.tagName.toLowerCase()}`)) {
-                document.head.removeChild(node)
-            }
-        }
-    })
 
     return (
         <RouterContext.Provider value={new RouterStore(page.url)}>

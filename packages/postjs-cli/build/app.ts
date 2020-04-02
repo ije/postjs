@@ -63,6 +63,9 @@ export function craeteAppEntry({ baseUrl, babelPresetEnv }: AppConfig) {
 
         window.addEventListener('load', () => {
             const { __POST_INITIAL_PAGE: initialPage, __POST_SSR_DATA: ssrData } = window
+            document.head.querySelectorAll('[data-jsx]').forEach(el => {
+                 document.head.removeChild(el)
+            })
             if (initialPage && ssrData) {
                 const { reqComponent } = initialPage
                 const { url, staticProps } = ssrData

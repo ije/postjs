@@ -13,7 +13,7 @@ export default ({ name, description }: any) => {
     return (
         <div>
             <Head>
-                <meta http-equiv="X-UA-Compatible" content="IE=edge, chrome=1" />
+                <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
             </Head>
             <SEO
                 title={`About ${name}`}
@@ -21,7 +21,7 @@ export default ({ name, description }: any) => {
                 keywords={`react, ${name}`}
             />
             <Nav />
-            <h1>About {name}</h1>
+            <h1>About the {name}</h1>
         </div>
     )
 }
