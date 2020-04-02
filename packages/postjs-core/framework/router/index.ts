@@ -1,5 +1,5 @@
-import { createContext, useContext } from 'react'
 import { ParsedUrlQuery } from 'querystring'
+import { createContext, useContext } from 'react'
 import { redirect } from './redirect'
 
 export * from './fetch'
@@ -20,9 +20,20 @@ export class RouterStore {
         this._url = url || { pagePath: '/', pathname: '/', params: {}, query: {} }
     }
 
-    // url returns the url as copy
-    get url(): URL {
-        return { ...this._url }
+    get pagePath() {
+        return this._url.pagePath
+    }
+
+    get pathname() {
+        return this._url.pathname
+    }
+
+    get params() {
+        return { ...this._url.params }
+    }
+
+    get query() {
+        return { ...this._url.query }
     }
 
     push(pagePath: string, asPath?: string) {

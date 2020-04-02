@@ -6,9 +6,14 @@ const stateOnServer = new Map<string, { type: string, props: any }>()
 const stringify = (s: string) => JSON.stringify(s)
 
 export function Head({ children }: PropsWithChildren<{}>) {
-    const els = renderHead(children)
+    if (isServer) {
+        renderHead(children)
+    }
 
-    useEffect(() => () => els.forEach(el => document.head.removeChild(el)), [])
+    useEffect(() => {
+        const els = renderHead(children)
+        return () => els.forEach(el => document.head.removeChild(el))
+    }, [children])
 
     return null
 }

@@ -1,28 +1,65 @@
+import { CSSProperties } from 'react'
 import hotEmitter from 'webpack/hot/emitter'
 import utils from '../utils'
 import { fetchPage } from './fetch'
 
+const {
+    __POST_PAGES: pages = {},
+    __POST_BUILD_MANIFEST: buildManifest = {}
+} = window as any
 let redirectMark: { pagePath: string, asPath?: string } | null = null
 
-export function redirect(pagePath: string, asPath?: string, replace?: boolean) {
-    const { __POST_PAGES: postPages = {}, __POST_BUILD_MANIFEST: buildManifest = {} } = window as any
+export type Transition = {
+    enterStyle: CSSProperties
+    enterActiveStyle: CSSProperties
+    exitStyle: CSSProperties
+    exitActiveStyle: CSSProperties
+    duration: number | { enter: number, exit: number }
+    timing?: string | { enter: string, exit: string }
+}
+
+export function fade(duration: number, timing?: string): Transition {
+    const enterCommonStyle: CSSProperties = { position: 'relative', top: 0, zIndex: 2 }
+    const exitCommonStyle: CSSProperties = { position: 'absolute', top: 0, zIndex: 1 }
+    return {
+        enterStyle: { ...enterCommonStyle, opacity: 0 },
+        enterActiveStyle: { ...enterCommonStyle, opacity: 1 },
+        exitStyle: { ...exitCommonStyle, opacity: 1 },
+        exitActiveStyle: { ...exitCommonStyle, opacity: 0 },
+        duration: Math.max(duration, 40),
+        timing
+    }
+}
+
+export function slide(direction: 'ltr' | 'rtl' | 'ttb' | 'btt', duration: number, timing?: string): Transition {
+    return {
+        enterStyle: {},
+        enterActiveStyle: {},
+        exitStyle: {},
+        exitActiveStyle: {},
+        duration,
+        timing
+    }
+}
+
+export async function redirect(pagePath: string, asPath?: string, replace?: boolean, transition?: Transition) {
     const buildInfo = buildManifest.pages[pagePath]
 
     if (buildInfo === undefined) {
-        if (pagePath in postPages) {
-            delete postPages[pagePath]
+        if (pagePath in pages) {
+            delete pages[pagePath]
         }
         if (replace) {
-            history.replaceState(null, '', asPath || pagePath)
+            history.replaceState({ transition }, '', asPath || pagePath)
         } else {
-            history.pushState(null, '', asPath || pagePath)
+            history.pushState({ transition }, '', asPath || pagePath)
         }
-        hotEmitter.emit('popstate')
+        hotEmitter.emit('popstate', { type: 'popstate', state: { transition } })
         return
     }
 
-    if (pagePath in postPages) {
-        const page = postPages[pagePath]
+    if (pagePath in pages) {
+        const page = pages[pagePath]
         if (utils.isObject(page)) {
             if (page.fetching === true) {
                 redirectMark = { pagePath, asPath }
@@ -31,34 +68,32 @@ export function redirect(pagePath: string, asPath?: string, replace?: boolean) {
                     redirectMark = null
                 }
                 if (replace) {
-                    history.replaceState(null, '', asPath || pagePath)
+                    history.replaceState({ transition }, '', asPath || pagePath)
                 } else {
-                    history.pushState(null, '', asPath || pagePath)
+                    history.pushState({ transition }, '', asPath || pagePath)
                 }
-                hotEmitter.emit('popstate')
+                hotEmitter.emit('popstate', { type: 'popstate', state: { transition } })
             } else {
-                delete postPages[pagePath]
+                delete pages[pagePath]
             }
         } else {
-            delete postPages[pagePath]
+            delete pages[pagePath]
         }
     } else {
-        postPages[pagePath] = { fetching: true }
+        pages[pagePath] = { fetching: true }
         redirectMark = { pagePath, asPath }
-        fetchPage(pagePath).then(() => {
+        return fetchPage(pagePath).then(() => {
             if (redirectMark !== null && redirectMark.pagePath === pagePath) {
                 const path = redirectMark.asPath || redirectMark.pagePath
                 if (replace) {
-                    history.replaceState(null, '', path)
+                    history.replaceState({ transition }, '', path)
                 } else {
-                    history.pushState(null, '', path)
+                    history.pushState({ transition }, '', path)
                 }
-                hotEmitter.emit('popstate')
+                hotEmitter.emit('popstate', { type: 'popstate', state: { transition } })
             }
-        }).catch(err => {
-            delete postPages[pagePath]
-            alert(`can not load page '${pagePath}': ${err.message || err}`)
-            location.reload()
+        }).catch(() => {
+            delete pages[pagePath]
         })
     }
 }
