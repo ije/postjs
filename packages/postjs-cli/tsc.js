@@ -12,7 +12,7 @@ spawn(
     [
         '--outDir', 'dist',
         '--baseUrl', __dirname,
-        '--target', 'es2018',
+        '--target', 'es2015',
         '--lib', 'es2020,dom,dom.iterable,webworker.importscripts,scripthost',
         '--module', 'commonjs',
         '--moduleResolution', 'node',
