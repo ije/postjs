@@ -3,10 +3,6 @@ import hotEmitter from 'webpack/hot/emitter'
 import utils from '../utils'
 import { fetchPage } from './fetch'
 
-const {
-    __POST_PAGES: pages = {},
-    __POST_BUILD_MANIFEST: buildManifest = {}
-} = window as any
 let redirectMark: { pagePath: string, asPath?: string } | null = null
 
 export type Transition = {
@@ -43,6 +39,10 @@ export function slide(direction: 'ltr' | 'rtl' | 'ttb' | 'btt', duration: number
 }
 
 export async function redirect(pagePath: string, asPath?: string, replace?: boolean, transition?: Transition) {
+    const {
+        __POST_PAGES: pages = {},
+        __POST_BUILD_MANIFEST: buildManifest = {}
+    } = window as any
     const buildInfo = buildManifest.pages[pagePath]
 
     if (buildInfo === undefined) {

@@ -23,7 +23,7 @@ export class DevWatcher {
 
     constructor(appDir: string) {
         const appConfig = loadAppConfig(appDir)
-        const srcDir = path.join(appConfig.root, appConfig.srcDir)
+        const srcDir = path.join(appDir, appConfig.srcDir)
         this._appConfig = appConfig
         this._pageFiles = glob.sync('pages/**/*.{js,jsx,ts,tsx}', { cwd: srcDir }).map(p => utils.trimPrefix(p, 'pages/')).filter(p => /^[a-z0-9\.\/\$\-\*_~ ]+$/i.test(p))
         this._pageChunks = new Map()
@@ -54,7 +54,7 @@ export class DevWatcher {
     private async _renderPage(pagePath: string) {
         if (pagePath !== '' && this._pageChunks.has(pagePath)) {
             const pageChunk = this._pageChunks.get(pagePath)!
-            const { chunks } = await new Compiler(path.join(this._appConfig.root, this._appConfig.srcDir), `
+            const { chunks } = await new Compiler(path.join(this._appConfig.rootDir, this._appConfig.srcDir), `
                 const React = require('react')
                 const { isValidElementType } = require('react-is')
                 const mod = require('./pages${pagePath}')

@@ -1,11 +1,10 @@
 import utils from '../utils'
 
-const {
-    __POST_PAGES: pages = {},
-    __POST_BUILD_MANIFEST: buildManifest = {}
-} = window as any
-
 export function prefetchPage(pagePath: string) {
+    const {
+        __POST_PAGES: pages = {},
+        __POST_BUILD_MANIFEST: buildManifest = {}
+    } = window as any
     const buildInfo = buildManifest.pages[pagePath]
 
     if (buildInfo === undefined) {
@@ -28,6 +27,10 @@ export function prefetchPage(pagePath: string) {
 }
 
 export async function fetchPage(pagePath: string) {
+    const {
+        __POST_PAGES: pages = {},
+        __POST_BUILD_MANIFEST: buildManifest = {}
+    } = window as any
     const buildInfo = buildManifest.pages[pagePath]
     if (buildInfo === undefined) {
         return Promise.reject(new Error('page no found'))
