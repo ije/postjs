@@ -102,23 +102,23 @@ function sendText(req: IncomingMessage, res: ServerResponse, statusCode: number,
 
     // Note: This is not a conformant accept-encoding parser.
     // See https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.3
-    let compressFn: ((buf: Buffer, callback: (err: Error | null, ret: Buffer) => void) => void) | null = null
     let compressType: string | null = null
+    let compress: ((buf: Buffer, callback: (err: Error | null, ret: Buffer) => void) => void) | null = null
     if (buf.length > 1024) {
         if (/\bgzip\b/.test(acceptEncoding)) {
-            compressFn = zlib.gzip
             compressType = 'gzip'
+            compress = zlib.gzip
         } else if (/\bdeflate\b/.test(acceptEncoding)) {
-            compressFn = zlib.deflate
             compressType = 'deflate'
+            compress = zlib.deflate
         }
     }
 
-    if (compressFn !== null) {
-        compressFn(buf, (err, ret) => {
+    if (compress !== null) {
+        compress(buf, (err, ret) => {
             if (err !== null) {
                 res.statusCode = 500
-                res.end('file not found')
+                res.end(err.message)
                 return
             }
             res.writeHead(statusCode, { 'Content-Type': contentType, 'Content-Encoding': compressType! })

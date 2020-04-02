@@ -39,13 +39,14 @@ export async function renderPage(url: URL, PageComponent: ComponentType<any>) {
     }
 }
 
-export function runSSRCode(source: string, deps: Record<string, any>, injects?: Record<string, any>) {
-    const exports: { [key: string]: any } = {}
-    const func = new Function('require', 'exports', ...Object.keys(injects || {}).concat(['module', source]))
+export function runSSRCode(code: string, peerDeps: Record<string, any>, globalVars?: Record<string, any>) {
     const { window } = new JSDOM('', { pretendToBeVisual: true })
     Object.assign(window, { fetch })
     Object.assign(globalThis, { window, fetch, document: window.document })
-    func((name: string) => deps[name], exports, ...Object.values(injects || {}))
+
+    const exports: Record<string, any> = {}
+    const func = new Function('require', 'exports', ...Object.keys(globalVars || {}).concat(['module', code]))
+    func((name: string) => peerDeps[name], exports, ...Object.values(globalVars || {}))
     return exports
 }
 

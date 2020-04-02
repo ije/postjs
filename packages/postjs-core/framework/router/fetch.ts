@@ -27,7 +27,7 @@ export async function fetchPage(pagePath: string) {
     const { __POST_PAGES: postPages = {}, __POST_BUILD_MANIFEST: buildManifest = {} } = window as any
     const buildInfo = buildManifest.pages[pagePath]
     if (buildInfo === undefined) {
-        return Promise.reject(new Error(`page '${pagePath}' no found`))
+        return Promise.reject(new Error('page no found'))
     }
 
     return new Promise<void>((resolve, reject) => {
@@ -43,14 +43,14 @@ export async function fetchPage(pagePath: string) {
                         (window['__POST_SSR_DATA'] = window['__POST_SSR_DATA'] || {})[pagePath] = data
                         resolve()
                     }).catch(err => {
-                        reject(new Error(`can't get page('${pagePath}') data: ${err}`))
+                        reject(new Error('load page data failed'))
                     })
                 } else {
                     resolve()
                 }
             } else {
                 delete postPages[pagePath]
-                reject(new Error(`invalid page '${pagePath}'`))
+                reject(new Error('bad page'))
             }
         }
         // script['onreadystatechange'] = () => {

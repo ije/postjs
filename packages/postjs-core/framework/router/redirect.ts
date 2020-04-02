@@ -57,7 +57,7 @@ export function redirect(pagePath: string, asPath?: string, replace?: boolean) {
             }
         }).catch(err => {
             delete postPages[pagePath]
-            alert(`can not load page '${pagePath}': ${err}`)
+            alert(`can not load page '${pagePath}': ${err.message || err}`)
             location.reload()
         })
     }
