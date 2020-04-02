@@ -63,6 +63,6 @@ export async function fetchPage(pagePath: string) {
         script.onerror = err => {
             reject(err)
         }
-        document.body.appendChild(script)
+        document.head.appendChild(script)
     })
 }
