@@ -25,7 +25,7 @@ export class Compiler {
     private _config: webpack.Configuration
     private _compiler: webpack.Compiler
 
-    constructor(context: string, entry: string | Record<string, string>, config?: Config) {
+    constructor(context: string, entry: string | Record<string, string>, config?: Config & { enableHMR?: true }) {
         const vmp = new VirtualModulesPlugin()
         const webpackEntry: webpack.Entry = {}
         if (utils.isNEString(entry)) {
@@ -47,7 +47,7 @@ export class Compiler {
         this._memfs = new MemoryFS()
         this._config = createConfig(context, webpackEntry, {
             ...config,
-            plugins: [vmp]
+            plugins: ([vmp] as webpack.Plugin[]).concat(config?.enableHMR ? [new webpack.HotModuleReplacementPlugin()] : [], config?.plugins || [])
         })
         this._compiler = webpack(this._config)
         this._compiler.outputFileSystem = this._memfs

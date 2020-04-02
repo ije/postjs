@@ -6,7 +6,6 @@ import './loaders/post-page-loader'
 export type Config = Pick<webpack.Configuration, 'externals' | 'plugins' | 'devtool'> & {
     isServer?: boolean
     isProduction?: boolean
-    enableHMR?: boolean
     enableTerser?: boolean
     splitVendorChunk?: boolean
     babelPresetEnv?: {
@@ -22,7 +21,6 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
         devtool,
         isServer,
         isProduction,
-        enableHMR,
         enableTerser,
         splitVendorChunk,
         babelPresetEnv
@@ -118,7 +116,7 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
                 }
             ]
         },
-        plugins: ([] as webpack.Plugin[]).concat(enableHMR ? [new webpack.HotModuleReplacementPlugin()] : [], plugins || []),
+        plugins,
         resolve: {
             extensions: ['.js', '.jsx', '.mjs', '.ts', '.tsx', '.json', '.wasm']
         },
