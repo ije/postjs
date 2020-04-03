@@ -5,7 +5,7 @@ import { Transition } from './transition'
 
 let redirectMark: { pagePath: string, asPath?: string } | null = null
 
-export async function redirect(pagePath: string, asPath?: string, replace?: boolean, transition?: Transition) {
+export async function redirect(pagePath: string, asPath?: string, replace?: boolean, transition?: Transition | string) {
     const {
         __POST_INITIAL_PAGE: initialPage = {},
         __POST_PAGES: pages = {},

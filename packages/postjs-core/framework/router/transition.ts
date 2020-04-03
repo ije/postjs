@@ -84,13 +84,11 @@ export class Transition {
     }
 
     static fade(duration: number, timing?: TimingFunction): Transition {
-        const enterCommonStyle: CSSProperties = { position: 'relative', top: 0, zIndex: 2 }
-        const exitCommonStyle: CSSProperties = { position: 'absolute', top: 0, zIndex: 1 }
         return new Transition(
-            { ...enterCommonStyle, opacity: 0 },
-            { ...enterCommonStyle, opacity: 1 },
-            { ...exitCommonStyle, opacity: 1 },
-            { ...exitCommonStyle, opacity: 0 },
+            { opacity: 0 },
+            { opacity: 1 },
+            { opacity: 1 },
+            { opacity: 0 },
             duration,
             timing
         )

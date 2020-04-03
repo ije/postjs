@@ -11,14 +11,12 @@ export * from './redirect'
 export * from './route'
 export * from './transition'
 
-type Page = { url: URL, staticProps: any, Component: ComponentType<any> }
+type Page = { url: URL, staticProps: any, style?: CSSProperties, className?: string, Component: ComponentType<any> }
 
 export function AppRouter(props: { baseUrl: string, initialPage: Page }) {
     const { baseUrl, initialPage } = props
     const [page, setPage] = useState(initialPage)
-    const [pageStyle, setPageStyle] = useState<CSSProperties>({})
     const [outPage, setOutPage] = useState<Page | null>(null)
-    const [outPageStyle, setOutPageStyle] = useState<CSSProperties>({})
 
     useEffect(() => {
         let enterTimer: any = null
@@ -29,7 +27,7 @@ export function AppRouter(props: { baseUrl: string, initialPage: Page }) {
                 __POST_SSR_DATA: ssrData = {},
                 __POST_BUILD_MANIFEST: buildManifest = {}
             } = window as any
-            const transition: Transition | undefined = state?.transition
+            const transition: string | Transition | undefined = state?.transition
             const [url, component] = route(
                 baseUrl,
                 Object.keys(buildManifest.pages).map(pagePath => {
@@ -71,42 +69,54 @@ export function AppRouter(props: { baseUrl: string, initialPage: Page }) {
             if (enterTimer !== null) {
                 clearTimeout(enterTimer)
                 enterTimer = null
-                setPageStyle({})
+                setPage(({ style, ...page }) => page)
             }
             if (exitTimer !== null) {
                 clearTimeout(exitTimer)
                 exitTimer = null
-                setOutPageStyle({})
                 setOutPage(null)
             }
 
-            if (transition) {
-                setPageStyle({
-                    ...transition.enterStyle,
-                    transition: `all ${transition.enterDuration}ms ${transition.enterTiming}`
-                })
-                setOutPageStyle({
-                    ...transition.exitStyle,
-                    transition: `all ${transition.exitDuration}ms ${transition.exitTiming}`
-                })
+            if (typeof transition === 'string') {
+                setPage(page => ({ ...page, className: transition + '-enter' }))
+                setOutPage(page => page ? ({ ...page, className: transition + '-exit' }) : null)
                 setTimeout(() => {
-                    setPageStyle(style => ({
-                        ...transition.enterActiveStyle,
-                        transition: style.transition
-                    }))
+                    setPage(page => ({ ...page, className: transition + '-enter-active' }))
+                    setOutPage(page => page ? ({ ...page, className: transition + '-exit-active' }) : null)
                 }, 0)
+            } else if (transition !== undefined) {
+                setPage(page => ({
+                    ...page, style: {
+                        ...transition.enterStyle,
+                        transition: `all ${transition.enterDuration}ms ${transition.enterTiming}`
+                    }
+                }))
+                setOutPage(page => page ? ({
+                    ...page, style: {
+                        ...transition.exitStyle,
+                        transition: `all ${transition.exitDuration}ms ${transition.exitTiming}`
+                    }
+                }) : null)
                 setTimeout(() => {
-                    setOutPageStyle(style => ({
-                        ...transition.exitActiveStyle,
-                        transition: style.transition
+                    setPage(page => ({
+                        ...page, style: {
+                            ...transition.enterActiveStyle,
+                            transition: `all ${transition.enterDuration}ms ${transition.enterTiming}`
+                        }
                     }))
+                    setOutPage(page => page ? ({
+                        ...page, style: {
+                            ...transition.exitActiveStyle,
+                            transition: `all ${transition.exitDuration}ms ${transition.exitTiming}`
+                        }
+                    }) : null)
                 }, 0)
                 enterTimer = setTimeout(() => {
                     enterTimer = null
-                    setPageStyle({})
+                    setPage(({ style, ...page }) => page)
                 }, transition.enterDuration)
                 exitTimer = setTimeout(() => {
-                    setOutPageStyle({})
+                    exitTimer = null
                     setOutPage(null)
                 }, transition.exitDuration)
             }
@@ -132,9 +142,19 @@ export function AppRouter(props: { baseUrl: string, initialPage: Page }) {
     return (
         <RouterContext.Provider value={new RouterStore(page.url)}>
             {outPage && (
-                <outPage.Component {...outPage.staticProps} style={outPageStyle} key={outPage.url.pagePath} />
+                <outPage.Component
+                    {...outPage.staticProps}
+                    style={outPage.style}
+                    className={outPage.className}
+                    key={outPage.url.pagePath}
+                />
             )}
-            <page.Component {...page.staticProps} style={pageStyle} key={page.url.pagePath} />
+            <page.Component
+                {...page.staticProps}
+                style={page.style}
+                className={page.className}
+                key={page.url.pagePath}
+            />
         </RouterContext.Provider>
     )
 }

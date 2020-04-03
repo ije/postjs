@@ -9,7 +9,7 @@ interface LinkProps {
     style?: CSSProperties
     replace?: boolean
     prefetch?: boolean
-    effect?: Transition | ((prevPage: string) => Transition)
+    effect?: string | Transition | ((prevPage: string) => string | Transition)
 }
 
 export function Link({
@@ -97,7 +97,18 @@ export function NavLink({
     activeStyle,
     ...rest
 }: PropsWithChildren<NavLinkProps>) {
+    const router = useRouter()
+    if (router.pagePath === rest.to) {
+        return (
+            <Link
+                {...rest}
+                className={[rest.className, activeClassName].filter(Boolean).join(' ')}
+                style={Object.assign({}, rest.style, activeStyle)}
+            />
+        )
+    }
+
     return (
-        <Link {...rest} />
+        <Link  {...rest} />
     )
 }
