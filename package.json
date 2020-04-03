@@ -6,7 +6,6 @@
     ],
     "scripts": {
         "lerna": "lerna",
-        "build": "lerna run build",
         "watch": "lerna run --parallel watch",
         "post": "node ./packages/postjs-cli/dist/cli/post.js"
     },
