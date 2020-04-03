@@ -64,6 +64,7 @@ export function start(appDir: string, port: number) {
     })
     const wsServer = new WebsocketServer({ httpServer })
 
+    emitter.setMaxListeners(1 << 30)
     watcher.watch(emitter)
     wsServer.on('request', req => {
         const conn = req.accept('hot-update', req.origin)
