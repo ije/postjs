@@ -2,7 +2,9 @@ import { IncomingMessage, ServerResponse } from 'http'
 import path from 'path'
 import zlib from 'zlib'
 
-// todo: implement the production server
+export function start(appDir: string, port: number) {
+
+}
 
 // sendText sends text with compression
 export function sendText(req: IncomingMessage, res: ServerResponse, statusCode: number, contentType: string, text: string) {

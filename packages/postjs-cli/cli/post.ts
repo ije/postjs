@@ -16,7 +16,7 @@ const {
     },
     { permissive: true }
 )
-const commands = ['build', 'dev', 'export', 'start']
+const commands = ['build', 'dev', 'start']
 const hasCommand = args.length > 0 && commands.includes(args[0])
 const command = hasCommand ? args[0] : 'dev'
 const commandArgs = hasCommand ? args.slice(1) : args
