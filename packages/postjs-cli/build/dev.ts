@@ -121,6 +121,16 @@ export class DevWatcher {
             }
         }
 
+        if (this._pageChunks.has('/_404')) {
+            const pageChunk = this._pageChunks.get('/_404')!
+            if (pageChunk.html === undefined) {
+                await this._renderPage('/_404')
+            }
+            if (pageChunk.html) {
+                return [404, pageChunk.html]
+            }
+        }
+
         return [404, html({
             lang: this._appConfig.lang,
             body: '<p><strong><code>404</code></strong><small>&nbsp;-&nbsp;</small><span>Page not found</span></p>',
