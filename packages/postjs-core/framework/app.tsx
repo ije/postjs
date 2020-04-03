@@ -2,7 +2,7 @@ import React, { ComponentType, CSSProperties, useEffect, useState } from 'react'
 import hotEmitter from 'webpack/hot/emitter'
 import { Default404Page } from './404'
 import { LazyPageComponent } from './component'
-import { route, RouterContext, RouterStore, URL } from './router'
+import { route, RouterContext, RouterStore, Transition, URL } from './router'
 
 interface AppProps {
     baseUrl: string
@@ -27,8 +27,8 @@ export function App({ baseUrl, initialPage }: AppProps) {
         } = window as any
         let enterTimer: any = null
         let exitTimer: any = null
-        const routeUpdate = (e: PopStateEvent) => {
-            const { transition } = e.state || {}
+        const routeUpdate = ({ state }) => {
+            const transition: Transition | undefined = state?.transition
             const [url, component] = route(
                 baseUrl,
                 Object.keys(buildManifest.pages).map(pagePath => {
@@ -75,15 +75,13 @@ export function App({ baseUrl, initialPage }: AppProps) {
             }
 
             if (transition) {
-                const enterDuration = transition.duration.enter || transition.duration
-                const exitDuration = transition.duration.exit || transition.duration
                 setPageStyle({
                     ...transition.enterStyle,
-                    transition: `all ${Math.round(enterDuration)}ms ${transition.timing?.enter || transition.timing || ''}`
+                    transition: `all ${transition.enterDuration}ms ${transition.enterTiming}`
                 })
                 setOutPageStyle({
                     ...transition.exitStyle,
-                    transition: `all ${Math.round(exitDuration)}ms ${transition.timing?.exit || transition.timing || ''}`
+                    transition: `all ${transition.exitDuration}ms ${transition.exitTiming}`
                 })
                 setTimeout(() => {
                     setPageStyle(style => ({
@@ -100,11 +98,11 @@ export function App({ baseUrl, initialPage }: AppProps) {
                 enterTimer = setTimeout(() => {
                     enterTimer = null
                     setPageStyle({})
-                }, enterDuration)
+                }, transition.enterDuration)
                 exitTimer = setTimeout(() => {
                     setOutPageStyle({})
                     setOutPage(null)
-                }, exitDuration)
+                }, transition.exitDuration)
             }
         }
         const hotUpdate = (pagePath: string, component: ComponentType) => {

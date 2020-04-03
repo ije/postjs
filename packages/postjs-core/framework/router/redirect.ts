@@ -1,42 +1,9 @@
-import { CSSProperties } from 'react'
 import hotEmitter from 'webpack/hot/emitter'
 import utils from '../utils'
 import { fetchPage } from './fetch'
+import { Transition } from './transition'
 
 let redirectMark: { pagePath: string, asPath?: string } | null = null
-
-export type Transition = {
-    enterStyle: CSSProperties
-    enterActiveStyle: CSSProperties
-    exitStyle: CSSProperties
-    exitActiveStyle: CSSProperties
-    duration: number | { enter: number, exit: number }
-    timing?: string | { enter: string, exit: string }
-}
-
-export function fade(duration: number, timing?: string): Transition {
-    const enterCommonStyle: CSSProperties = { position: 'relative', top: 0, zIndex: 2 }
-    const exitCommonStyle: CSSProperties = { position: 'absolute', top: 0, zIndex: 1 }
-    return {
-        enterStyle: { ...enterCommonStyle, opacity: 0 },
-        enterActiveStyle: { ...enterCommonStyle, opacity: 1 },
-        exitStyle: { ...exitCommonStyle, opacity: 1 },
-        exitActiveStyle: { ...exitCommonStyle, opacity: 0 },
-        duration: Math.max(duration, 40),
-        timing
-    }
-}
-
-export function slide(direction: 'ltr' | 'rtl' | 'ttb' | 'btt', duration: number, timing?: string): Transition {
-    return {
-        enterStyle: {},
-        enterActiveStyle: {},
-        exitStyle: {},
-        exitActiveStyle: {},
-        duration,
-        timing
-    }
-}
 
 export async function redirect(pagePath: string, asPath?: string, replace?: boolean, transition?: Transition) {
     const {
