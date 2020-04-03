@@ -1,27 +1,13 @@
-import { Head, SEO } from '@postjs/core'
+import { Head } from '@postjs/core'
 import React from 'react'
-import Nav from '../components/nav'
 
-export async function getStaticProps() {
-    return {
-        name: 'postjs',
-        description: 'The Post-Front-End Framework'
-    }
-}
-
-export default function Home({ name, description, style }: any) {
+export default function Home() {
     return (
-        <div style={style}>
+        <div style={{ margin: 50 }}>
             <Head>
-                <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+                <title>Welcome to use postjs!</title>
             </Head>
-            <SEO
-                title={`Hello ${name}!`}
-                description={description}
-                keywords={`react,${name}`}
-            />
-            <Nav />
-            <h1>Hello {name}!</h1>
+            <p>Welcome to use <strong>postjs</strong>!</p>
         </div>
     )
 }
