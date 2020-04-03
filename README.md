@@ -1,8 +1,8 @@
-# Postjs
-The post-front-end framework with [React](https://reactjs.org)
+## Postjs
+The Post-Front-End Framework with [React](https://reactjs.org).
 
-# Documentation
+## Documentation
 Please visit https://post-js.org/docs to view the documentation.
 
-# Contributing
+## Contributing
 Please read the [contributing.md](contributing.md).
