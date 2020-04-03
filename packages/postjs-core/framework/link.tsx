@@ -1,5 +1,5 @@
 import React, { Children, cloneElement, CSSProperties, isValidElement, PropsWithChildren, useCallback, useEffect, useMemo } from 'react'
-import { prefetchPage, redirect, Transition, useRouter } from './router'
+import { fetchPage, redirect, Transition, useRouter } from './router'
 import utils from './utils'
 
 interface LinkProps {
@@ -9,7 +9,7 @@ interface LinkProps {
     style?: CSSProperties
     replace?: boolean
     prefetch?: boolean
-    transition?: Transition | ((currentPage: string, nextPage: string) => Transition)
+    effect?: Transition | ((prevPage: string) => Transition)
 }
 
 export function Link({
@@ -19,33 +19,33 @@ export function Link({
     style,
     replace,
     prefetch,
-    transition,
+    effect,
     children
 }: PropsWithChildren<LinkProps>) {
     const router = useRouter()
     const pagePath = useMemo(() => utils.cleanPath(toProp), [toProp])
     const asPath = useMemo(() => utils.isNEString(asProp) ? utils.cleanPath(asProp) : undefined, [asProp])
+    const online = /https?/.test(location.protocol)
     const onClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
         e.preventDefault()
         if (router.pagePath !== pagePath) {
-            if (typeof transition === 'function') {
-                transition = transition(router.pagePath, pagePath)
+            if (typeof effect === 'function') {
+                effect = effect(router.pagePath)
             }
-            if (transition && transition['name'] === 'fade') {
-
-            }
-            redirect(pagePath, asPath, replace, transition).catch(err => {
+            redirect(pagePath, asPath, replace, effect).catch(err => {
                 alert(`can not load page '${pagePath}': ${err.message || err}`)
             })
         }
     }, [pagePath, asPath, replace, router])
     const onMouseEnter = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
-        prefetchPage(pagePath)
+        if (online) {
+            fetchPage(pagePath)
+        }
     }, [pagePath])
 
     useEffect(() => {
-        if (prefetch) {
-            prefetchPage(pagePath)
+        if (prefetch && online) {
+            fetchPage(pagePath)
         }
     }, [prefetch, pagePath])
 

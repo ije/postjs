@@ -7,11 +7,22 @@ let redirectMark: { pagePath: string, asPath?: string } | null = null
 
 export async function redirect(pagePath: string, asPath?: string, replace?: boolean, transition?: Transition) {
     const {
+        __POST_INITIAL_PAGE: initialPage = {},
         __POST_PAGES: pages = {},
-        __POST_BUILD_MANIFEST: buildManifest = {}
+        __POST_BUILD_MANIFEST: buildManifest
     } = window as any
-    const buildInfo = buildManifest.pages[pagePath]
 
+    if (location.protocol === 'file:') {
+        location.href = location.href.replace(initialPage.path.replace(/^\/+/, '') || 'index', pagePath.replace(/^\/+/, '') || 'index')
+        return
+    }
+
+    if (buildManifest === undefined) {
+        location.href = location.protocol + '//' + location.host + (asPath || pagePath)
+        return
+    }
+
+    const buildInfo = buildManifest.pages[pagePath]
     if (buildInfo === undefined) {
         if (pagePath in pages) {
             delete pages[pagePath]
@@ -47,7 +58,6 @@ export async function redirect(pagePath: string, asPath?: string, replace?: bool
             delete pages[pagePath]
         }
     } else {
-        pages[pagePath] = { fetching: true }
         redirectMark = { pagePath, asPath }
         return fetchPage(pagePath).then(() => {
             if (redirectMark !== null && redirectMark.pagePath === pagePath) {
@@ -59,8 +69,6 @@ export async function redirect(pagePath: string, asPath?: string, replace?: bool
                 }
                 hotEmitter.emit('popstate', { type: 'popstate', state: { transition } })
             }
-        }).catch(() => {
-            delete pages[pagePath]
         })
     }
 }

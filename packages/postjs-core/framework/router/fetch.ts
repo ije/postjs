@@ -1,12 +1,11 @@
 import utils from '../utils'
 
-export function prefetchPage(pagePath: string) {
+export async function fetchPage(pagePath: string) {
     const {
         __POST_PAGES: pages = {},
         __POST_BUILD_MANIFEST: buildManifest = {}
     } = window as any
     const buildInfo = buildManifest.pages[pagePath]
-
     if (buildInfo === undefined) {
         if (pagePath in pages) {
             delete pages[pagePath]
@@ -15,27 +14,11 @@ export function prefetchPage(pagePath: string) {
     }
 
     const page = pages[pagePath]
-    if (page === undefined) {
-        pages[pagePath] = { fetching: true, autoRedirect: false }
-        fetchPage(pagePath).catch(err => {
-            delete pages[pagePath]
-        })
-    } else if (!utils.isObject(page) || (page.fetching !== true && page.path !== pagePath)) {
-        delete pages[pagePath]
-        prefetchPage(pagePath) // retry
-    }
-}
-
-export async function fetchPage(pagePath: string) {
-    const {
-        __POST_PAGES: pages = {},
-        __POST_BUILD_MANIFEST: buildManifest = {}
-    } = window as any
-    const buildInfo = buildManifest.pages[pagePath]
-    if (buildInfo === undefined) {
-        return Promise.reject(new Error('page no found'))
+    if (utils.isObject(page) && (page.fetching === true || page.path === pagePath)) {
+        return
     }
 
+    pages[pagePath] = { fetching: true }
     return new Promise<void>((resolve, reject) => {
         const script = document.createElement('script')
         script.src = `_post/pages/${buildInfo.name}.js?v=${buildInfo.hash}`
@@ -45,10 +28,11 @@ export async function fetchPage(pagePath: string) {
             if (page.path === pagePath && utils.isFunction(page.reqComponent)) {
                 const pc = page.reqComponent()
                 if (pc.hasGetStaticPropsMethod === true) {
-                    fetch(`_post/data/${buildInfo.name}.json?v=${buildInfo.hash}`).then(resp => resp.json()).then(data => {
+                    fetch(`_post/pages/${buildInfo.name}.json?v=${buildInfo.hash}`).then(resp => resp.json()).then(data => {
                         (window['__POST_SSR_DATA'] = window['__POST_SSR_DATA'] || {})[pagePath] = data
                         resolve()
                     }).catch(err => {
+                        delete pages[pagePath]
                         reject(new Error('load page data failed'))
                     })
                 } else {
@@ -67,6 +51,7 @@ export async function fetchPage(pagePath: string) {
         //     }
         // }
         script.onerror = err => {
+            delete pages[pagePath]
             reject(err)
         }
         document.head.appendChild(script)
