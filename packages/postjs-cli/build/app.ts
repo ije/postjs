@@ -61,32 +61,35 @@ export function loadAppConfig(appDir: string) {
 }
 
 // app.js
-export function craeteAppEntry({ baseUrl, polyfillsMode = 'usage', polyfills = ['core-js/stable', 'whatwg-fetch'] }: AppConfig) {
-    return (`
-        import React from 'react'
-        import ReactDom from 'react-dom'
-        import { App } from '@postjs/core'
+export const craeteAppEntry = ({ baseUrl, polyfillsMode = 'usage', polyfills = ['core-js/stable', 'whatwg-fetch'] }: AppConfig) => `
+    import React from 'react'
+    import ReactDom from 'react-dom'
+    import { AppRouter } from '@postjs/core'
 
-        // ployfills
-        ${polyfillsMode === 'entry' ? polyfills.map(name => `import ${JSON.stringify(name)}`).join('\n') : ''}
-        ${polyfillsMode === 'entry' ? "import 'regenerator-runtime/runtime'" : "import 'whatwg-fetch'"}
+    // ployfills
+    ${polyfillsMode === 'entry' ? polyfills.map(name => `import ${JSON.stringify(name)}`).join('\n') : ''}
+    ${polyfillsMode === 'entry' ? "import 'regenerator-runtime/runtime'" : "import 'whatwg-fetch'"}
 
-        window.addEventListener('load', () => {
-            const { __POST_INITIAL_PAGE: initialPage, __POST_SSR_DATA: ssrData } = window
-            document.head.querySelectorAll('[data-jsx]').forEach(el => {
-                 document.head.removeChild(el)
-            })
-            if (initialPage && ssrData) {
-                const { reqComponent } = initialPage
-                const { url, staticProps } = ssrData
-                ssrData[url.pagePath] = { staticProps }
-                ReactDom.hydrate((
-                    <App baseUrl="${baseUrl}" initialPage={{ url, staticProps, Component: reqComponent() }} />
-                ), document.querySelector('main'))
-                if (process.env.NODE_ENV === 'development') {
-                    console.log("[postjs] page '" + url.pagePath + "' hydrated.")
-                }
+    if (/https?/.test(location.protocol)) {
+        fetch('build-manifest.json').then(resp => resp.json()).then(data => {
+            window.__POST_BUILD_MANIFEST = data
+        })
+    }
+
+    window.addEventListener('load', () => {
+        const { __POST_INITIAL_PAGE: initialPage } = window
+        const ssrData = JSON.parse(document.getElementById('ssr-data').innerHTML)
+        document.head.querySelectorAll('[data-jsx]').forEach(el => document.head.removeChild(el))
+        if (initialPage && ssrData && 'url' in ssrData) {
+            const { reqComponent } = initialPage
+            const { url, staticProps } = ssrData
+            window.__POST_SSR_DATA = { [url.pagePath]: { staticProps } }
+            ReactDom.hydrate((
+                <AppRouter baseUrl="${baseUrl}" initialPage={{ url, staticProps, Component: reqComponent() }} />
+            ), document.querySelector('main'))
+            if (process.env.NODE_ENV === 'development') {
+                console.log("[postjs] page '" + url.pagePath + "' hydrated.")
             }
-        }, false)
-    `)
-}
+        }
+    })
+`

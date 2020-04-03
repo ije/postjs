@@ -42,7 +42,12 @@ export async function renderPage(url: URL, PageComponent: ComponentType<any>) {
 export function runSSRCode(code: string, peerDeps: Record<string, any>, globalVars?: Record<string, any>) {
     const { window } = new JSDOM('', { pretendToBeVisual: true })
     Object.assign(window, { fetch })
-    Object.assign(globalThis, { window, fetch, document: window.document })
+    Object.assign(globalThis, {
+        window,
+        fetch,
+        document: window.document,
+        location: window.location
+    })
 
     const exports: Record<string, any> = {}
     const func = new Function('require', 'exports', ...Object.keys(globalVars || {}).concat(['module', code]))
@@ -50,20 +55,20 @@ export function runSSRCode(code: string, peerDeps: Record<string, any>, globalVa
     return exports
 }
 
-export const html = ({ lang, helmet, body, scripts }: { lang: string, body: string, helmet?: string[], scripts?: (string | { src: string, async?: boolean })[] }) => (
+export const html = ({ lang, helmet, body, scripts }: { lang: string, body: string, helmet?: string[], scripts?: (string | Record<string, any>)[] }) => (
     `<!DOCTYPE html>
 <html lang="${lang}">
 <head>
     <meta charset="utf-8">
 ${(helmet || [])
         .concat((scripts || []).map(v => {
-            if (!utils.isNEString(v) && v.async && utils.isNEString(v.src.trim())) {
-                return `<link rel="preload" href="${v.src.trim()}" as="script">`
+            if (!utils.isNEString(v) && v.async === true && utils.isNEString(v.src)) {
+                return `<link rel="preload" href=${JSON.stringify(v.src)} as="script">`
             } else {
                 return ''
             }
-        }).filter(v => !!v))
-        .map(v => v.trim()).filter(v => !!v).map(v => ' '.repeat(4) + v).join('\n')}
+        }).filter(Boolean))
+        .map(v => v.trim()).filter(Boolean).map(v => ' '.repeat(4) + v).join('\n')}
 </head>
 <body>
     <main>${body}</main>
@@ -72,12 +77,14 @@ ${(scripts || [])
             if (utils.isNEString(v)) {
                 const js = v.trim()
                 return `<script integrity="sha256-${createHash('sha256').update(js).digest('base64')}">${js}</script>`
-            } else if (utils.isNEString(v.src.trim())) {
-                return `<script src="${v.src.trim()}"${v.async ? ' async' : ''}></script>`
+            } else if (utils.isNEString(v.src)) {
+                return `<script src=${JSON.stringify(v.src)}${v.async ? ' async' : ''}></script>`
+            } else if (v.json && utils.isNEString(v.id) && utils.isObject(v.data)) {
+                return `<script id=${JSON.stringify(v.id)} type="application/json">${JSON.stringify(v.data)}</script>`
             } else {
                 return ''
             }
-        }).filter(v => !!v).map(v => ' '.repeat(4) + v).join('\n')}
+        }).filter(Boolean).map(v => ' '.repeat(4) + v).join('\n')}
 </body>
 </html>`
 )

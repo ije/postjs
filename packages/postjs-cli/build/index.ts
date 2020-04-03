@@ -99,22 +99,20 @@ export default async (appDir: string) => {
         const url = { pagePath, pathname: pagePath, params: {}, query: {} }
         const { staticProps, helmet, body } = await renderPage(url, pages[pagePath].reqComponent())
         const htmlFile = path.join(buildDir, pageName + '.html')
-        const dataJS = 'window.__POST_SSR_DATA = ' + JSON.stringify({ url, staticProps })
         await fs.ensureDir(path.dirname(htmlFile))
         await fs.writeFile(htmlFile, html({
             lang: appConfig.lang,
             body,
             helmet,
             scripts: [
-                dataJS,
-                { src: `_post/build-manifest.js?v=${hash}`, async: true },
+                { json: true, id: 'ssr-data', data: { url, staticProps } },
                 ...Array.from(chunks.values())
                     .filter(({ name }) => !name.startsWith('pages/') || name === 'pages/' + pageName)
                     .map(({ name, hash }) => ({ src: `_post/${name}.js?v=${hash}`, async: true }))
             ]
         }))
         if (staticProps !== null) {
-            const dataFile = path.join(buildDir, '_post/data', pageName + '.json')
+            const dataFile = path.join(buildDir, '_post/pages', pageName + '.json')
             await fs.ensureDir(path.dirname(dataFile))
             await fs.writeJSON(dataFile, { staticProps })
         }
@@ -123,6 +121,12 @@ export default async (appDir: string) => {
             hash: chunks.get('pages/' + pageName)!.hash
         }
     }
-    await fs.writeFile(path.join(buildDir, '_post/build-manifest.js'), 'window.__POST_BUILD_MANIFEST = ' + JSON.stringify(buildManifest))
+    await fs.writeJSON(path.join(buildDir, 'build-manifest.json'), buildManifest)
+    await fs.remove(path.join(appDir, 'dist'))
+    await fs.copy(buildDir, path.join(appDir, 'dist'), { recursive: true })
+
+    if (warnings.length > 0) {
+        warnings.forEach(warning => console.log(warning))
+    }
     console.log('done', hash)
 }

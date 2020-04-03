@@ -1,5 +1,6 @@
 import { route } from '@postjs/core'
 import { EventEmitter } from 'events'
+import fs from 'fs-extra'
 import glob from 'glob'
 import path from 'path'
 import webpack from 'webpack'
@@ -82,14 +83,12 @@ export class DevWatcher {
             const { default: component } = runSSRCode(chunks.get('main')!.content, peerDeps)
             const url = { pagePath, pathname: pagePath, params: {}, query: {} }
             const { staticProps, helmet, body } = await renderPage(url, component())
-            const dataJS = 'window.__POST_SSR_DATA = ' + JSON.stringify({ url, staticProps })
             const pageHtml = html({
                 lang: this._appConfig.lang,
                 helmet,
                 body,
                 scripts: [
-                    dataJS,
-                    { src: `_post/build-manifest.js?v=${this._buildManifest!.hash}`, async: true },
+                    { json: true, id: 'ssr-data', data: { url, staticProps } },
                     { src: `_post/pages/${pagePath.replace(/^\/+/, '') || 'index'}.js?v=${pageChunk.hash}`, async: true },
                     ...Array.from(this._commonChunks.values()).map(({ name, hash }) => ({ src: `_post/${name}.js?v=${hash}`, async: true }))
                 ]
@@ -175,16 +174,21 @@ export class DevWatcher {
     async watch(emitter: EventEmitter) {
         this._devCompiler.hooks.make.tapPromise(
             'addPageEntries',
-            async compilation => Promise.all(this._pageFiles.map(pageFile => {
-                const pagePath = ('/' + pageFile).replace(/(\/index)?\.(js|ts)x?$/i, '').replace(/ /g, '-') || '/'
-                const pageName = pageFile.replace(/\.(js|ts)x?$/i, '')
-                return addEntry(
-                    compilation,
-                    this._devCompiler!.context,
-                    `pages/${pageName}`,
-                    [`post-page-loader?${JSON.stringify({ pagePath, rawRequest: './pages/' + pageFile })}!`]
-                )
-            })).catch(err => console.error(err))
+            async compilation => {
+                this._pageFiles = this._pageFiles.filter(pageFile => {
+                    return fs.existsSync(path.join(this._appConfig.rootDir, 'pages', pageFile))
+                })
+                return Promise.all(this._pageFiles.map(pageFile => {
+                    const pagePath = ('/' + pageFile).replace(/(\/index)?\.(js|ts)x?$/i, '').replace(/ /g, '-') || '/'
+                    const pageName = pageFile.replace(/\.(js|ts)x?$/i, '')
+                    return addEntry(
+                        compilation,
+                        this._devCompiler!.context,
+                        `pages/${pageName}`,
+                        [`post-page-loader?${JSON.stringify({ pagePath, rawRequest: './pages/' + pageFile })}!`]
+                    )
+                })).catch(err => console.error(err))
+            }
         )
 
         this._devCompiler.watch({
