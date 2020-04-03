@@ -50,7 +50,7 @@ export default async (appDir: string) => {
         isProduction: true,
         externals: Object.keys(peerDeps)
     }).compile()
-    const { pages } = runSSRCode(ssrChunks.get('app')!.content, peerDeps)
+    const { pages } = runSSRCode(ssrChunks.get('main')!.content, peerDeps)
     const { hash, chunks, warnings, errors, startTime, endTime } = await new Compiler(path.join(appDir, appConfig.srcDir), Object.keys(pages).reduce((entries, pagePath) => {
         const pageName = pagePath.replace(/^\/+/, '') || 'index'
         entries[`pages/${pageName}`] = `
@@ -78,7 +78,7 @@ export default async (appDir: string) => {
             (window.__POST_PAGES = window.__POST_PAGES || {})[${JSON.stringify(pagePath)}] = exportAs
         `
         return entries
-    }, { app: craeteAppEntry(appConfig) } as Record<string, string>), {
+    }, { main: craeteAppEntry(appConfig) } as Record<string, string>), {
         isProduction: true,
         splitVendorChunk: true,
         enableTerser: true,

@@ -79,7 +79,7 @@ export class DevWatcher {
                 isProduction: true,
                 externals: Object.keys(peerDeps)
             }).compile()
-            const { default: component } = runSSRCode(chunks.get('app')!.content, peerDeps)
+            const { default: component } = runSSRCode(chunks.get('main')!.content, peerDeps)
             const url = { pagePath, pathname: pagePath, params: {}, query: {} }
             const { staticProps, helmet, body } = await renderPage(url, component())
             const dataJS = 'window.__POST_SSR_DATA = ' + JSON.stringify({ url, staticProps })
