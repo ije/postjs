@@ -1815,10 +1815,15 @@
   resolved "https://registry.npm.taobao.org/@types/minimatch/download/@types/minimatch-3.0.3.tgz#3dca0e3f33b200fc7d1139c0cd96c1268cadfd9d"
   integrity sha1-PcoOPzOyAPx9ETnAzZbBJoyt/Z0=
 
-"@types/node@*", "@types/node@>= 8", "@types/node@^13.9.8":
+"@types/node@*", "@types/node@>= 8":
   version "13.9.8"
   resolved "https://registry.npm.taobao.org/@types/node/download/@types/node-13.9.8.tgz#09976420fc80a7a00bf40680c63815ed8c7616f4"
   integrity sha1-CZdkIPyAp6AL9AaAxjgV7Yx2FvQ=
+
+"@types/node@^13.11.0":
+  version "13.11.0"
+  resolved "https://registry.npm.taobao.org/@types/node/download/@types/node-13.11.0.tgz#390ea202539c61c8fa6ba4428b57e05bc36dc47b"
+  integrity sha1-OQ6iAlOcYcj6a6RCi1fgW8NtxHs=
 
 "@types/parse5@*":
   version "5.0.2"
@@ -7701,10 +7706,10 @@ tslint-origin-ordered-imports-rule@^1.2.2:
   dependencies:
     tsutils "^2.27.1"
 
-tslint@^6.1.0:
-  version "6.1.0"
-  resolved "https://registry.npm.taobao.org/tslint/download/tslint-6.1.0.tgz#c6c611b8ba0eed1549bf5a59ba05a7732133d851"
-  integrity sha1-xsYRuLoO7RVJv1pZugWncyEz2FE=
+tslint@^6.1.1:
+  version "6.1.1"
+  resolved "https://registry.npm.taobao.org/tslint/download/tslint-6.1.1.tgz#ac03fbd17f85bfefaae348b353b25a88efe10cde"
+  integrity sha1-rAP70X+Fv++q40izU7JaiO/hDN4=
   dependencies:
     "@babel/code-frame" "^7.0.0"
     builtin-modules "^1.1.1"
@@ -7714,7 +7719,7 @@ tslint@^6.1.0:
     glob "^7.1.1"
     js-yaml "^3.13.1"
     minimatch "^3.0.4"
-    mkdirp "^0.5.1"
+    mkdirp "^0.5.3"
     resolve "^1.3.2"
     semver "^5.3.0"
     tslib "^1.10.0"

@@ -13,7 +13,7 @@
         "lerna": "^3.20.2",
         "react": "^16.13.1",
         "react-dom": "^16.13.1",
-        "tslint": "^6.1.0",
+        "tslint": "^6.1.1",
         "tslint-origin-ordered-imports-rule": "^1.2.2",
         "typescript": "^3.8.3"
     },
