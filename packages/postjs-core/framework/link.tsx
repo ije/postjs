@@ -1,5 +1,5 @@
 import React, { Children, cloneElement, CSSProperties, isValidElement, PropsWithChildren, useCallback, useEffect, useMemo } from 'react'
-import { fetchPage, redirect, Transition, useRouter } from './router'
+import { fetchPage, PageTransition, redirect, useRouter } from './router'
 import utils from './utils'
 
 interface LinkProps {
@@ -9,7 +9,7 @@ interface LinkProps {
     style?: CSSProperties
     replace?: boolean
     prefetch?: boolean
-    effect?: string | Transition | ((prevPage: string) => string | Transition)
+    transition?: string | PageTransition
 }
 
 export function Link({
@@ -19,7 +19,7 @@ export function Link({
     style,
     replace,
     prefetch,
-    effect,
+    transition,
     children
 }: PropsWithChildren<LinkProps>) {
     const router = useRouter()
@@ -29,10 +29,7 @@ export function Link({
     const onClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
         e.preventDefault()
         if (router.pagePath !== pagePath) {
-            if (typeof effect === 'function') {
-                effect = effect(router.pagePath)
-            }
-            redirect(pagePath, asPath, replace, effect).catch(err => {
+            redirect(pagePath, asPath, replace, transition).catch(err => {
                 alert(`can not load page '${pagePath}': ${err.message || err}`)
             })
         }

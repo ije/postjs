@@ -1,4 +1,10 @@
 import { CSSProperties } from 'react'
+import utils from '../utils'
+
+export interface PageTransition {
+    enter: Transition | Transition[]
+    exit: Transition | Transition[]
+}
 
 export type TimingFunction = 'linear'
     | 'ease'
@@ -29,7 +35,7 @@ export type TimingFunction = 'linear'
     | 'easeInBack'
     | 'easeOutBack'
     | 'easeInOutBack'
-    | CubicBezierFunction
+    | CubicBezier
 
 // easings.net
 const cubicBezierTimingPresets = {
@@ -59,96 +65,77 @@ const cubicBezierTimingPresets = {
     easeInOutBack: 'cubic-bezier(0.68, -0.55, 0.265, 1.55)'
 }
 
-export class Transition {
-    enterStyle: CSSProperties
-    enterActiveStyle: CSSProperties
-    exitStyle: CSSProperties
-    exitActiveStyle: CSSProperties
-    duration: number | { enter: number, exit: number }
-    timing?: TimingFunction | { enter: TimingFunction, exit: TimingFunction }
+export class Transition<K extends keyof CSSProperties = any> {
+    key: K
+    value: CSSProperties[K]
+    activeValue: CSSProperties[K]
+    duration: number
+    timing?: TimingFunction
+    delay?: number
 
     constructor(
-        enterStyle: CSSProperties,
-        enterActiveStyle: CSSProperties,
-        exitStyle: CSSProperties,
-        exitActiveStyle: CSSProperties,
-        duration: number | { enter: number, exit: number },
-        timing?: TimingFunction | { enter: TimingFunction, exit: TimingFunction }
+        key: K,
+        value: CSSProperties[K],
+        activeValue: CSSProperties[K],
+        duration: number,
+        timing?: TimingFunction,
+        delay?: number
     ) {
-        this.enterStyle = enterStyle
-        this.enterActiveStyle = enterActiveStyle
-        this.exitStyle = exitStyle
-        this.exitActiveStyle = exitActiveStyle
-        this.duration = typeof duration === 'number' ? fixDuration(duration) : { enter: fixDuration(duration.enter), exit: fixDuration(duration.exit) }
+        this.key = key
+        this.value = value
+        this.activeValue = activeValue
+        this.duration = Math.max(Math.round(duration), 0)
         this.timing = timing
-    }
-
-    static fade(duration: number, timing?: TimingFunction): Transition {
-        return new Transition(
-            { opacity: 0 },
-            { opacity: 1 },
-            { opacity: 1 },
-            { opacity: 0 },
-            duration,
-            timing
-        )
-    }
-
-    static slide(direction: 'ltr' | 'rtl' | 'ttb' | 'btt', duration: number, timing?: TimingFunction): Transition {
-        return new Transition(
-            {},
-            {},
-            {},
-            {},
-            duration,
-            timing
-        )
-    }
-
-    get enterDuration() {
-        if (typeof this.duration === 'number') {
-            return this.duration
-        }
-        return this.duration.enter
-    }
-
-    get exitDuration() {
-        if (typeof this.duration === 'number') {
-            return this.duration
-        }
-        return this.duration.exit
-    }
-
-    get enterTiming(): string {
-        if (this.timing !== undefined) {
-            const timing: TimingFunction = this.timing['enter'] || this.timing
-            if (timing instanceof CubicBezierFunction) {
-                return this.timing.toString()
-            }
-            if (timing in cubicBezierTimingPresets) {
-                return cubicBezierTimingPresets[timing].toString()
-            }
-            return timing.replace(/[A-Z]/g, c => '-' + c.toLowerCase())
-        }
-        return 'ease'
-    }
-
-    get exitTiming(): string {
-        if (this.timing !== undefined) {
-            const timing: TimingFunction = this.timing['enter'] || this.timing
-            if (timing instanceof CubicBezierFunction) {
-                return this.timing.toString()
-            }
-            if (timing in cubicBezierTimingPresets) {
-                return cubicBezierTimingPresets[timing].toString()
-            }
-            return timing.replace(/[A-Z]/g, c => '-' + c.toLowerCase())
-        }
-        return 'ease'
+        this.delay = delay
     }
 }
 
-class CubicBezierFunction {
+export function transition<K extends keyof CSSProperties>(
+    key: K,
+    value: CSSProperties[K],
+    activeValue: CSSProperties[K],
+    duration: number,
+    timing?: TimingFunction,
+    delay?: number
+): Transition<K> {
+    return new Transition(key, value, activeValue, duration, timing, delay)
+}
+
+export function fadeIn(duration: number, timing?: TimingFunction, delay?: number) {
+    return transition('opacity', 0, 1, duration, timing, delay)
+}
+
+export function fadeOut(duration: number, timing?: TimingFunction, delay?: number) {
+    return transition('opacity', 1, 0, duration, timing, delay)
+}
+
+export function transitionsToStyle(a: Transition | Transition[]): [CSSProperties, CSSProperties, number] {
+    const style: CSSProperties = {}
+    const activeStyle: CSSProperties = {}
+    const cssTransitions: Map<string, string> = new Map()
+    const durations: Array<number> = []
+    a = Array.isArray(a) ? a : [a]
+    a.forEach(({ key, value, activeValue, duration, timing: t, delay }) => {
+        let timing = 'ease'
+        if (t) {
+            if (t instanceof CubicBezier) {
+                timing = t.toString()
+            } else if (t in cubicBezierTimingPresets) {
+                timing = cubicBezierTimingPresets[t]
+            } else if (/^(linear|ease|easeIn|easeOut|easeInOut)$/.test(t)) {
+                timing = t.replace(/[A-Z]/g, c => '-' + c.toLowerCase())
+            }
+        }
+        style[key] = value
+        activeStyle[key] = activeValue
+        cssTransitions.set(key, `${key} ${duration}ms ${timing}` + (utils.isUNumber(delay) ? ` ${delay}ms` : ''))
+        durations.push(duration + (utils.isUNumber(delay) ? delay : 0))
+    })
+    style['transition'] = activeStyle['transition'] = Array.from(cssTransitions.values()).join(',')
+    return [style, activeStyle, Math.max(...durations)]
+}
+
+class CubicBezier {
     x1: number
     y1: number
     x2: number
@@ -166,10 +153,6 @@ class CubicBezierFunction {
     }
 }
 
-export function CubicBezier(x1: number, y1: number, x2: number, y2: number) {
-    return new CubicBezierFunction(x1, y1, x2, y2)
-}
-
-function fixDuration(d: number) {
-    return Math.max(Math.round(d), 50)
+export function cubicBezier(x1: number, y1: number, x2: number, y2: number) {
+    return new CubicBezier(x1, y1, x2, y2)
 }
