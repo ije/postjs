@@ -4,13 +4,13 @@ import React from 'react'
 export default function E404() {
     return (
         <div style={{
-            background: '#ffce42',
-            color: 'white',
             position: 'absolute',
             top: 0,
             left: 0,
             width: '100%',
-            height: '100%'
+            height: '100%',
+            background: '#ffce42',
+            color: 'white'
         }}>
             <Head>
                 <title>404 - page not found</title>

@@ -1,5 +1,5 @@
 import React, { PropsWithChildren, useEffect, useState } from 'react'
-import { Default404Page } from './404'
+import { Head } from './head'
 import { fetchPage } from './router'
 
 interface Props {
@@ -43,4 +43,15 @@ export function LazyPageComponent({ pagePath, fallback, ...rest }: any) {
 
     const Component = pages[pagePath].reqComponent()
     return <Component {...rest} />
+}
+
+export function Default404Page() {
+    return (
+        <p>
+            <Head><title>404 - Page not found</title></Head>
+            <strong><code>404</code></strong>
+            <small>&nbsp;-&nbsp;</small>
+            <span>Page not found</span>
+        </p>
+    )
 }

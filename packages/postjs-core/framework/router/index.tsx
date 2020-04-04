@@ -13,8 +13,7 @@ export * from './transition'
 
 type Page = { url: URL, staticProps: any, style?: CSSProperties, className?: string, Component: ComponentType<any> }
 
-export function AppRouter(props: { baseUrl: string, initialPage: Page }) {
-    const { baseUrl, initialPage } = props
+export function AppRouter({ baseUrl, initialPage }: { baseUrl: string, initialPage: Page }) {
     const [page, setPage] = useState(initialPage)
     const [outPage, setOutPage] = useState<Page | null>(null)
 
@@ -46,7 +45,7 @@ export function AppRouter(props: { baseUrl: string, initialPage: Page }) {
                 {
                     fallback: {
                         path: '/_404',
-                        component: (props: any) => <LazyPageComponent {...props} pagePath={'/_404'} />
+                        component: (props: any) => <LazyPageComponent {...props} pagePath="/_404" />
                     }
                 }
             )
