@@ -25,10 +25,10 @@ export async function renderPage(url: URL, PageComponent: ComponentType<any>) {
         }
     }
 
-    const body = renderToString((
-        <RouterContext.Provider value={new RouterStore(url)}>
-            <PageComponent {...staticProps} />
-        </RouterContext.Provider>
+    const body = renderToString(React.createElement(
+        RouterContext.Provider,
+        { value: new RouterStore(url) },
+        React.createElement(PageComponent, staticProps)
     ))
     const helmet = renderHeadToString()
 
@@ -40,18 +40,20 @@ export async function renderPage(url: URL, PageComponent: ComponentType<any>) {
 }
 
 export function runSSRCode(code: string, peerDeps: Record<string, any>, globalVars?: Record<string, any>) {
-    const { window } = new JSDOM('', { pretendToBeVisual: true })
-    Object.assign(window, { fetch })
-    Object.assign(globalThis, {
-        window,
-        fetch,
-        document: window.document,
-        location: window.location
+    const { window } = new JSDOM(undefined, {
+        url: 'http://localhost',
+        pretendToBeVisual: true
     })
+    Object.keys(window).filter(key => {
+        return !key.startsWith('_') && !/^setTimeout|setInterval|clearTimeout|clearInterval$/.test(key)
+    }).forEach(key => {
+        globalThis[key] = window[key]
+    })
+    Object.assign(globalThis, { fetch }, globalVars)
 
     const exports: Record<string, any> = {}
-    const func = new Function('require', 'exports', ...Object.keys(globalVars || {}).concat(['module', code]))
-    func((name: string) => peerDeps[name], exports, ...Object.values(globalVars || {}))
+    const func = new Function('require', 'exports', 'module', code)
+    func.call(window, (name: string) => peerDeps[name], exports, undefined)
     return exports
 }
 
