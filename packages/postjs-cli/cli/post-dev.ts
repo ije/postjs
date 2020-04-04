@@ -6,7 +6,7 @@ import arg from '../shared/arg'
 const helpMessage = `Starts the postjs app in development mode
 
 Usage
-    $ post <dir> [...option]
+    $ post dev <dir> [...option]
 
 <dir> represents the directory of the postjs app.
 If the <dir> is empty, the current directory will be used.

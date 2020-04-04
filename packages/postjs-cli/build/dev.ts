@@ -8,7 +8,7 @@ import DynamicEntryPlugin from 'webpack/lib/DynamicEntryPlugin'
 import { peerDeps } from '.'
 import utils from '../shared/utils'
 import { AppConfig, craeteAppEntry, loadAppConfig } from './app'
-import { html, renderPage, runSSRCode, ssrStaticMethods } from './ssr'
+import { html, renderPage, runJS, ssrStaticMethods } from './ssr'
 import { ChunkWithContent, Compiler } from './webpack'
 
 // A component returns nothing
@@ -80,7 +80,7 @@ export class DevWatcher {
                 isProduction: true,
                 externals: Object.keys(peerDeps)
             }).compile()
-            const { default: component } = runSSRCode(chunks.get('main')!.content, peerDeps)
+            const { default: component } = runJS(chunks.get('main')!.content, peerDeps)
             const url = { pagePath, pathname: pagePath, params: {}, query: {} }
             const { staticProps, helmet, body } = await renderPage(url, component())
             const pageHtml = html({

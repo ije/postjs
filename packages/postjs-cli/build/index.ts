@@ -4,7 +4,7 @@ import path from 'path'
 import * as React from 'react'
 import * as ReactDom from 'react-dom'
 import { craeteAppEntry, loadAppConfig } from './app'
-import { html, renderPage, runSSRCode, ssrStaticMethods } from './ssr'
+import { html, renderPage, runJS, ssrStaticMethods } from './ssr'
 import { Compiler } from './webpack'
 
 export const peerDeps = {
@@ -50,7 +50,7 @@ export default async (appDir: string) => {
         isProduction: true,
         externals: Object.keys(peerDeps)
     }).compile()
-    const { pages } = runSSRCode(ssrChunks.get('main')!.content, peerDeps)
+    const { pages } = runJS(ssrChunks.get('main')!.content, peerDeps)
     const { hash, chunks, warnings, errors, startTime, endTime } = await new Compiler(path.join(appDir, appConfig.srcDir), Object.keys(pages).reduce((entries, pagePath) => {
         const pageName = pagePath.replace(/^\/+/, '') || 'index'
         entries[`pages/${pageName}`] = `

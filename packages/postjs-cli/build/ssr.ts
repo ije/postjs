@@ -39,21 +39,17 @@ export async function renderPage(url: URL, PageComponent: ComponentType<any>) {
     }
 }
 
-export function runSSRCode(code: string, peerDeps: Record<string, any>, globalVars?: Record<string, any>) {
-    const { window } = new JSDOM(undefined, {
-        url: 'http://localhost',
-        pretendToBeVisual: true
-    })
+export function runJS(code: string, peerDeps: Record<string, any>, globalVars?: Record<string, any>) {
+    const fn = new Function('require', 'exports', 'module', code)
+    const exports: Record<string, any> = {}
+    const { window } = new JSDOM(undefined, { url: 'http://localhost', pretendToBeVisual: true })
     Object.keys(window).filter(key => {
-        return !key.startsWith('_') && !/^setTimeout|setInterval|clearTimeout|clearInterval$/.test(key)
+        return !key.startsWith('_') && !/^(set|clear)(Timeout|Interval)$/.test(key)
     }).forEach(key => {
         globalThis[key] = window[key]
     })
     Object.assign(globalThis, { fetch }, globalVars)
-
-    const exports: Record<string, any> = {}
-    const func = new Function('require', 'exports', 'module', code)
-    func.call(window, (name: string) => peerDeps[name], exports, undefined)
+    fn((name: string) => peerDeps[name], exports, undefined)
     return exports
 }
 
