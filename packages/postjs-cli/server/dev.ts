@@ -14,8 +14,6 @@ export function start(appDir: string, port: number) {
         const pathname = utils.cleanPath((url.pathname || '/'))
         const wantContentType = getContentType(pathname)
 
-        console.log('new request:', pathname)
-
         if (pathname === '/build-manifest.json') {
             sendText(req, res, 200, wantContentType, JSON.stringify(watcher.buildManifest))
             return
@@ -28,6 +26,8 @@ export function start(appDir: string, port: number) {
                 res.end('file not found')
                 return
             }
+
+            console.log('hot-update:', pathname)
 
             sendText(req, res, 200, wantContentType, content.toString())
             return

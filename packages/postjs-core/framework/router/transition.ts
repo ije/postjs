@@ -37,7 +37,7 @@ export type TimingFunction = 'linear'
     | 'easeInOutBack'
     | CubicBezier
 
-// easings.net
+// https://easings.net
 const cubicBezierTimingPresets = {
     easeInSine: 'cubic-bezier(0.47, 0, 0.745, 0.715)',
     easeOutSine: 'cubic-bezier(0.39, 0.575, 0.565, 1)',
