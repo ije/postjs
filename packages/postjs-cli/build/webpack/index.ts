@@ -18,6 +18,7 @@ export interface ChunkWithContent {
     readonly name: string
     readonly hash: string
     readonly content: string
+    readonly css?: string
 }
 
 export class Compiler {
@@ -62,13 +63,13 @@ export class Compiler {
             vmp.writeModule('./[vm]_hmr_client.js', `
                 window.addEventListener('load', async () => {
                     const hotEmitter = require('webpack/hot/emitter')
-                    const url = 'ws://' + location.host + '/_post/hmr-socket?page=' + location.pathname
+                    const url = 'ws://' + location.host + '/_post/hmr-socket?page=' + encodeURI(location.pathname)
                     const socket = new WebSocket(url, 'hot-update')
                     socket.onmessage = ({ data }) => {
                         const buildManifest = JSON.parse(data)
                         if (buildManifest.hash) {
                             window.__POST_BUILD_MANIFEST = buildManifest
-                            if (!buildManifest.errors || (Array.isArray(buildManifest.errors) && buildManifest.errors.length === 0)) {
+                            if (!(Array.isArray(buildManifest.errors) && buildManifest.errors.length > 0)) {
                                 hotEmitter.emit('webpackHotUpdate', buildManifest.hash)
                             }
                         }
@@ -88,15 +89,6 @@ export class Compiler {
 
     get hooks() {
         return this._compiler.hooks
-    }
-
-    getChunkContent(name: string): string | null {
-        const { filename, path: outPath } = this._config.output!
-        const filepath = path.join(outPath!, String(filename!).replace('[name]', name))
-        if (this._memfs.existsSync(filepath)) {
-            return this._memfs.readFileSync(filepath).toString()
-        }
-        return null
     }
 
     compile(): Promise<MiniStats> {
@@ -119,9 +111,17 @@ export class Compiler {
                         errors: []
                     }
                     namedChunks.forEach(({ hash }, name) => {
-                        const content = this.getChunkContent(name)
-                        if (content !== null) {
-                            ret.chunks.set(name, { name, hash, content })
+                        const { filename, path: outPath } = this._config.output!
+                        const filepath = path.join(outPath!, String(filename!).replace('[name]', name))
+                        if (this._memfs.existsSync(filepath)) {
+                            const content = this._memfs.readFileSync(filepath).toString()
+                            const chunk = { name, hash, content } as ChunkWithContent
+                            const cssFilepath = filepath.replace(/\.js$/, '.css')
+                            if (this._memfs.existsSync(cssFilepath)) {
+                                const css = this._memfs.readFileSync(cssFilepath).toString()
+                                Object.assign(chunk, { css })
+                            }
+                            ret.chunks.set(name, chunk)
                         }
                     })
                     resolve(ret)

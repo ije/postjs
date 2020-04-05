@@ -11,7 +11,12 @@ export const ssrStaticMethods = [
     'getStaticPaths'
 ]
 
-export async function renderPage(url: URL, PageComponent: ComponentType<any>) {
+export async function renderPage(
+    APP: ComponentType<any>,
+    appStaticProps: Record<string, any>,
+    url: URL,
+    PageComponent: ComponentType<any>
+) {
     let staticProps: any = null
     if ('getStaticProps' in PageComponent) {
         const getStaticProps = (PageComponent as any)['getStaticProps']
@@ -28,13 +33,20 @@ export async function renderPage(url: URL, PageComponent: ComponentType<any>) {
     const body = renderToString(React.createElement(
         RouterContext.Provider,
         { value: new RouterStore(url) },
-        React.createElement(PageComponent, staticProps)
+        React.createElement(
+            APP,
+            appStaticProps,
+            React.createElement(
+                PageComponent,
+                Object.assign({}, appStaticProps, staticProps)
+            )
+        )
     ))
-    const helmet = renderHeadToString()
+    const head = renderHeadToString()
 
     return {
         body,
-        helmet,
+        head,
         staticProps
     }
 }
@@ -53,28 +65,30 @@ export function runJS(code: string, peerDeps: Record<string, any>, globalVars?: 
     return exports
 }
 
-export const html = ({ lang, helmet, body, scripts }: { lang: string, body: string, helmet?: string[], scripts?: (string | Record<string, any>)[] }) => (
+export const html = ({ lang, head, body, scripts }: { lang: string, body: string, head?: string[], scripts?: (string | Record<string, any>)[] }) => (
     `<!DOCTYPE html>
 <html lang="${lang}">
 <head>
-    <meta charset="utf-8">
-${(helmet || [])
+    <meta charSet="utf-8">
+${(head || [])
         .concat((scripts || []).map(v => {
-            if (!utils.isNEString(v) && v.async === true && utils.isNEString(v.src)) {
+            if (!utils.isString(v) && utils.isNEString(v.src) && v.async === true) {
                 return `<link rel="preload" href=${JSON.stringify(v.src)} as="script">`
             } else {
                 return ''
             }
         }).filter(Boolean))
-        .map(v => v.trim()).filter(Boolean).map(v => ' '.repeat(4) + v).join('\n')}
+        .map(v => v.trim()).filter(Boolean)
+        .filter(v => /^<[a-z0-9\-]+[> ]/i.test(v))
+        .sort((a, b) => getHeadElementOrder(a) - getHeadElementOrder(b))
+        .map(v => ' '.repeat(4) + v).join('\n')}
 </head>
 <body>
     <main>${body}</main>
 ${(scripts || [])
         .map(v => {
-            if (utils.isNEString(v)) {
-                const js = v.trim()
-                return `<script integrity="sha256-${createHash('sha256').update(js).digest('base64')}">${js}</script>`
+            if (utils.isString(v)) {
+                return `<script integrity="sha256-${createHash('sha256').update(v).digest('base64')}">${v}</script>`
             } else if (utils.isNEString(v.src)) {
                 return `<script src=${JSON.stringify(v.src)}${v.async ? ' async' : ''}></script>`
             } else if (v.json && utils.isNEString(v.id) && utils.isObject(v.data)) {
@@ -82,7 +96,14 @@ ${(scripts || [])
             } else {
                 return ''
             }
-        }).filter(Boolean).map(v => ' '.repeat(4) + v).join('\n')}
+        }).filter(Boolean)
+        .map(v => ' '.repeat(4) + v).join('\n')}
 </body>
 </html>`
 )
+
+const headElementTypes = ['base', 'title', 'meta', 'link', 'style', 'script', 'no-script']
+function getHeadElementOrder(tag: string) {
+    const type = tag.split(/[> ]/)[0].slice(1)
+    return headElementTypes.indexOf(type)
+}

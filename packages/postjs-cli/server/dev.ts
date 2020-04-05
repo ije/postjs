@@ -7,7 +7,7 @@ import { DevWatcher } from '../build/dev'
 import utils from '../shared/utils'
 
 export function start(appDir: string, port: number) {
-    const emitter = new EventEmitter()
+    const emitter = new EventEmitter().setMaxListeners(1 << 30)
     const watcher = new DevWatcher(appDir)
     const httpServer = http.createServer(async (req, res) => {
         const url = parse(req.url || '/')
@@ -22,14 +22,14 @@ export function start(appDir: string, port: number) {
         }
 
         if (pathname.endsWith('.hot-update.json') || pathname.endsWith('.hot-update.js')) {
-            const content = watcher.getHotUpdateContent(pathname)
+            const content = watcher.getOutputContent(pathname)
             if (content === null) {
                 res.statusCode = 404
                 res.end('file not found')
                 return
             }
 
-            sendText(req, res, 200, wantContentType, content)
+            sendText(req, res, 200, wantContentType, content.toString())
             return
         }
 
@@ -64,13 +64,16 @@ export function start(appDir: string, port: number) {
     })
     const wsServer = new WebsocketServer({ httpServer })
 
-    emitter.setMaxListeners(1 << 30)
     watcher.watch(emitter)
+    httpServer.listen(port)
     wsServer.on('request', req => {
         const conn = req.accept('hot-update', req.origin)
-        emitter.on('webpackHotUpdate', async manifest => {
+        const sendUpdate = async manifest => {
             conn.sendUTF(JSON.stringify(manifest))
+        }
+        emitter.on('webpackHotUpdate', sendUpdate)
+        conn.on('close', () => {
+            emitter.off('webpackHotUpdate', sendUpdate)
         })
     })
-    httpServer.listen(port)
 }

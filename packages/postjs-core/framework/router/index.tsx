@@ -1,4 +1,4 @@
-import React, { ComponentType, CSSProperties, useEffect, useState } from 'react'
+import React, { ComponentType, CSSProperties, Fragment, useEffect, useState } from 'react'
 import hotEmitter from 'webpack/hot/emitter'
 import { LazyPageComponent } from '../component'
 import { RouterContext, RouterStore, URL } from './context'
@@ -11,11 +11,18 @@ export * from './redirect'
 export * from './route'
 export * from './transition'
 
-type Page = { url: URL, staticProps: any, style?: CSSProperties, className?: string, Component: ComponentType<any> }
+interface IPage {
+    url: URL
+    staticProps: any
+    Component: ComponentType<any>
+    className?: string
+    style?: CSSProperties
+}
 
-export function AppRouter({ baseUrl, initialPage }: { baseUrl: string, initialPage: Page }) {
+export function AppRouter({ baseUrl, initialPage, initialApp = { App: Fragment, staticProps: {} } }: { baseUrl: string, initialPage: IPage, initialApp?: { App: ComponentType, staticProps: Record<string, any> } }) {
+    const [app, setApp] = useState(initialApp)
     const [page, setPage] = useState(initialPage)
-    const [outPage, setOutPage] = useState<Page | null>(null)
+    const [outPage, setOutPage] = useState<IPage | null>(null)
 
     useEffect(() => {
         let enterTimer: any = null
@@ -102,7 +109,7 @@ export function AppRouter({ baseUrl, initialPage }: { baseUrl: string, initialPa
                 }, exitDuration)
             }
         }
-        const hotUpdate = (pagePath: string, component: ComponentType) => {
+        const pageHotUpdate = (pagePath: string, component: ComponentType) => {
             setPage(page => {
                 if (page.url.pagePath === pagePath) {
                     return { url: page.url, staticProps: page.staticProps, Component: component }
@@ -110,32 +117,39 @@ export function AppRouter({ baseUrl, initialPage }: { baseUrl: string, initialPa
                 return page
             })
         }
+        const appHotUpdate = (App: ComponentType) => {
+            setApp(({ staticProps }) => ({ App, staticProps }))
+        }
         window.addEventListener('popstate', routeUpdate)
         hotEmitter.on('popstate', routeUpdate)
-        hotEmitter.on('postPageHotUpdate', hotUpdate)
+        hotEmitter.on('postPageHotUpdate', pageHotUpdate)
+        hotEmitter.on('postAppHotUpdate', appHotUpdate)
         return () => {
             window.removeEventListener('popstate', routeUpdate)
             hotEmitter.off('popstate', routeUpdate)
-            hotEmitter.off('postPageHotUpdate', hotUpdate)
+            hotEmitter.off('postPageHotUpdate', pageHotUpdate)
+            hotEmitter.off('postAppHotUpdate', appHotUpdate)
         }
     }, [])
 
     return (
         <RouterContext.Provider value={new RouterStore(page.url)}>
-            {outPage && (
-                <outPage.Component
-                    {...outPage.staticProps}
-                    style={outPage.style}
-                    className={outPage.className}
-                    key={outPage.url.pagePath}
+            <app.App {...app.staticProps}>
+                {outPage && (
+                    <outPage.Component
+                        {...Object.assign({}, app.staticProps, outPage.staticProps)}
+                        style={outPage.style}
+                        className={outPage.className}
+                        key={outPage.url.pagePath}
+                    />
+                )}
+                <page.Component
+                    {...Object.assign({}, app.staticProps, page.staticProps)}
+                    style={page.style}
+                    className={page.className}
+                    key={page.url.pagePath}
                 />
-            )}
-            <page.Component
-                {...page.staticProps}
-                style={page.style}
-                className={page.className}
-                key={page.url.pagePath}
-            />
+            </app.App>
         </RouterContext.Provider>
     )
 }

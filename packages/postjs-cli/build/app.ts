@@ -70,22 +70,26 @@ export const craeteAppEntry = ({ baseUrl, polyfillsMode = 'usage', polyfills = [
     ${polyfillsMode === 'entry' ? polyfills.map(name => `import ${JSON.stringify(name)}`).join('\n') : ''}
     ${polyfillsMode === 'entry' ? "import 'regenerator-runtime/runtime'" : "import 'whatwg-fetch'"}
 
-    if (/https?/.test(location.protocol)) {
+    if (/^https?/.test(location.protocol)) {
         fetch('build-manifest.json').then(resp => resp.json()).then(data => {
             window.__POST_BUILD_MANIFEST = data
         })
     }
 
     window.addEventListener('load', () => {
-        const { __POST_INITIAL_PAGE: initialPage } = window
+        const { __POST_APP: App, __POST_INITIAL_PAGE: initialPage } = window
         const ssrData = JSON.parse(document.getElementById('ssr-data').innerHTML)
         document.head.querySelectorAll('[data-jsx]').forEach(el => document.head.removeChild(el))
         if (initialPage && ssrData && 'url' in ssrData) {
             const { reqComponent } = initialPage
-            const { url, staticProps } = ssrData
+            const { url, staticProps, appStaticProps } = ssrData
             window.__POST_SSR_DATA = { [url.pagePath]: { staticProps } }
             ReactDom.hydrate((
-                <AppRouter baseUrl="${baseUrl}" initialPage={{ url, staticProps, Component: reqComponent() }} />
+                <AppRouter
+                    baseUrl="${baseUrl}"
+                    initialPage={{ url, staticProps, Component: reqComponent() }}
+                    initialApp={{ App, staticProps: appStaticProps}}
+                />
             ), document.querySelector('main'))
             if (process.env.NODE_ENV === 'development') {
                 console.log("[postjs] page '" + url.pagePath + "' hydrated.")

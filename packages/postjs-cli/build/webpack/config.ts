@@ -1,13 +1,19 @@
+import autoPrefixer from 'autoprefixer'
+import CssnanoSimple from 'cssnano-simple'
+import MiniCssExtractPlugin from 'mini-css-extract-plugin'
 import path from 'path'
+import postcss from 'postcss'
 import TerserPlugin from 'terser-webpack-plugin'
 import webpack from 'webpack'
+import './loaders/post-app-loader'
 import './loaders/post-page-loader'
 
 export type Config = Pick<webpack.Configuration, 'externals' | 'plugins' | 'devtool'> & {
     isServer?: boolean
     isProduction?: boolean
-    enableTerser?: boolean
     splitVendorChunk?: boolean
+    terserPluginOptions?: TerserPlugin.TerserPluginOptions
+    postcssPlugins?: postcss.AcceptedPlugin[]
     babelPresetEnv?: {
         targets?: string | Record<string, any>
         useBuiltIns?: 'usage' | 'entry'
@@ -21,14 +27,35 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
         devtool,
         isServer,
         isProduction,
-        enableTerser,
         splitVendorChunk,
+        terserPluginOptions,
+        postcssPlugins,
         babelPresetEnv
     } = config || {}
     const {
         targets = '> 1%, last 2 versions, Firefox ESR',
         useBuiltIns = 'usage'
     } = babelPresetEnv || {}
+    const cssLoader: webpack.RuleSetUse = [
+        isProduction || isServer ? MiniCssExtractPlugin.loader : 'style-loader',
+        {
+            loader: 'css-loader',
+            options: {
+                importLoaders: 1,
+                sourceMap: true
+            }
+        },
+        {
+            loader: 'postcss-loader',
+            options: {
+                ident: 'postcss',
+                plugins: ([
+                    autoPrefixer({ overrideBrowserslist: targets })
+                ] as postcss.AcceptedPlugin[]).concat(isProduction ? [new CssnanoSimple()] : [], postcssPlugins || []),
+                sourceMap: true
+            }
+        }
+    ]
 
     return {
         context,
@@ -65,8 +92,7 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
                                 !isServer && ['@babel/plugin-transform-runtime', {
                                     corejs: false, // use preset-env
                                     regenerator: useBuiltIns !== 'usage',
-                                    helpers: useBuiltIns === 'usage',
-                                    version: '^7.8.4' // https://github.com/babel/babel/issues/9903
+                                    helpers: useBuiltIns === 'usage'
                                 }],
                                 ['@babel/plugin-proposal-class-properties', { loose: true }],
                                 ['@babel/plugin-proposal-object-rest-spread', { useBuiltIns: true }],
@@ -81,19 +107,25 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
                 },
                 {
                     test: /\.(less|css)$/i,
-                    use: [
-                        'style-loader',
-                        'css-loader',
-                        'less-loader'
-                    ]
+                    use: cssLoader.concat([
+                        {
+                            loader: 'less-loader',
+                            options: {
+                                sourceMap: true
+                            }
+                        }
+                    ])
                 },
                 {
                     test: /\.(sass|scss)$/i,
-                    use: [
-                        'style-loader',
-                        'css-loader',
-                        'sass-loader'
-                    ]
+                    use: cssLoader.concat([
+                        {
+                            loader: 'sass-loader',
+                            options: {
+                                sourceMap: true
+                            }
+                        }
+                    ])
                 },
                 {
                     test: /\.(jpe?g|png|gif|webp|svg|eot|ttf|woff2?)$/i,
@@ -116,12 +148,17 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
                 }
             ]
         },
-        plugins,
+        plugins: isProduction || isServer ? [new MiniCssExtractPlugin({
+            filename: '[name].css',
+            chunkFilename: '[name].css',
+            ignoreOrder: true // remove order warnings
+        })].concat(plugins || []) : plugins,
         resolve: {
             extensions: ['.js', '.jsx', '.mjs', '.ts', '.tsx', '.json', '.wasm']
         },
         resolveLoader: {
             alias: {
+                'post-app-loader': path.join(__dirname, 'loaders/post-app-loader.js'),
                 'post-page-loader': path.join(__dirname, 'loaders/post-page-loader.js')
             },
             modules: [path.join(context, 'node_modules'), 'node_modules']
@@ -145,14 +182,12 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
                     }
                 }
             },
-            minimize: enableTerser,
-            minimizer: enableTerser ? [
-                new TerserPlugin({
+            minimize: isProduction,
+            minimizer: isProduction ? [
+                new TerserPlugin(terserPluginOptions || {
                     cache: true,
                     extractComments: false,
                     terserOptions: {
-                        ecma: 2015,
-                        compress: true,
                         safari10: true
                     }
                 })

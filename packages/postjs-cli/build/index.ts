@@ -3,6 +3,7 @@ import fs from 'fs-extra'
 import path from 'path'
 import * as React from 'react'
 import * as ReactDom from 'react-dom'
+import utils from '../shared/utils'
 import { craeteAppEntry, loadAppConfig } from './app'
 import { html, renderPage, runJS, ssrStaticMethods } from './ssr'
 import { Compiler } from './webpack'
@@ -14,15 +15,15 @@ export const peerDeps = {
 }
 
 export default async (appDir: string) => {
-    const appConfig = await loadAppConfig(appDir)
+    const appConfig = loadAppConfig(appDir)
     const { chunks: ssrChunks } = await new Compiler(path.join(appDir, appConfig.srcDir), `
         const React = require('react')
         const { isValidElementType } = require('react-is')
-        const r = require.context('./pages', true, /\\.(js|ts)x?$/i)
+        const r = require.context('./pages', true, /\\.(jsx?|mjs|tsx?)$/i)
         const pages = {}
 
         r.keys().filter(key => /^[a-z0-9\\.\\/\\$\\-\\*_~ ]+$/i.test(key)).forEach(key => {
-            const pagePath = key.replace(/^[\\.]+/, '').replace(/(\\/index)?\\.(js|ts)x?$/i, '').replace(/ /g, '-') || '/'
+            const pagePath = key.replace(/^[\\.]+/, '').replace(/(\\/index)?\\.(jsx?|mjs|tsx?)$/i, '').replace(/ /g, '-') || '/'
             pages[pagePath] = {
                 rawRequest: './pages/' + key.replace(/^[\\.\\/]+/, ''),
                 reqComponent: () => {
@@ -47,41 +48,56 @@ export default async (appDir: string) => {
         exports.pages = pages
     `, {
         isServer: true,
-        isProduction: true,
         externals: Object.keys(peerDeps)
     }).compile()
-    const { pages } = runJS(ssrChunks.get('main')!.content, peerDeps)
-    const { hash, chunks, warnings, errors, startTime, endTime } = await new Compiler(path.join(appDir, appConfig.srcDir), Object.keys(pages).reduce((entries, pagePath) => {
+    const { pages: ssrPages } = runJS(ssrChunks.get('main')!.content, peerDeps)
+    const { hash, chunks, warnings, errors, startTime, endTime } = await new Compiler(path.join(appDir, appConfig.srcDir), Object.keys(ssrPages).reduce((entries, pagePath) => {
         const pageName = pagePath.replace(/^\/+/, '') || 'index'
-        entries[`pages/${pageName}`] = `
-            const React = require('react')
-            const { isValidElementType } = require('react-is')
+        const fullPath = path.join(appDir, appConfig.srcDir, ssrPages[pagePath].rawRequest)
+        if (pageName === '_app') {
+            entries['app'] = `
+                const React = require('react')
+                const { isValidElementType } = require('react-is')
 
-            const exportAs = {
-                path: ${JSON.stringify(pagePath)},
-                reqComponent:() => {
-                    const mod = require(${JSON.stringify(path.join(appDir, appConfig.srcDir, pages[pagePath].rawRequest))})
-                    const component = mod.default
-                    if (component === undefined) {
-                        return () => <p style={{color: 'red'}}>bad page: miss default export</p>
-                    } else if (!isValidElementType(component)) {
-                        return () => <p style={{color: 'red'}}>bad page: invalid element type</p>
-                    }
-                    component.hasGetStaticPropsMethod = typeof mod['getStaticProps'] === 'function' || typeof component['getStaticProps'] === 'function'
-                    return component
+                const mod = require(${JSON.stringify(fullPath)})
+                const component = mod.default
+                if (component === undefined) {
+                    component = () => <p style={{color: 'red'}}>bad app: miss default export</p>
+                } else if (!isValidElementType(component)) {
+                    component = () => <p style={{color: 'red'}}>bad app: invalid element type</p>
                 }
-            }
+                window.__POST_APP = component
+            `
+        } else {
+            entries[`pages/${pageName}`] = `
+                const React = require('react')
+                const { isValidElementType } = require('react-is')
 
-            if (!window.__POST_INITIAL_PAGE) {
-                window.__POST_INITIAL_PAGE = exportAs
-            }
-            (window.__POST_PAGES = window.__POST_PAGES || {})[${JSON.stringify(pagePath)}] = exportAs
-        `
+                const exportAs = {
+                    path: ${JSON.stringify(pagePath)},
+                    reqComponent:() => {
+                        const mod = require(${JSON.stringify(fullPath)})
+                        const component = mod.default
+                        if (component === undefined) {
+                            return () => <p style={{color: 'red'}}>bad page: miss default export</p>
+                        } else if (!isValidElementType(component)) {
+                            return () => <p style={{color: 'red'}}>bad page: invalid element type</p>
+                        }
+                        component.hasGetStaticPropsMethod = typeof mod['getStaticProps'] === 'function' || typeof component['getStaticProps'] === 'function'
+                        return component
+                    }
+                }
+
+                if (!window.__POST_INITIAL_PAGE) {
+                    window.__POST_INITIAL_PAGE = exportAs
+                }
+                (window.__POST_PAGES = window.__POST_PAGES || {})[${JSON.stringify(pagePath)}] = exportAs
+            `
+        }
         return entries
     }, { main: craeteAppEntry(appConfig) } as Record<string, string>), {
         isProduction: true,
         splitVendorChunk: true,
-        enableTerser: true,
         babelPresetEnv: {
             targets: appConfig.browserslist,
             useBuiltIns: appConfig.polyfillsMode
@@ -94,18 +110,33 @@ export default async (appDir: string) => {
         await fs.ensureDir(path.dirname(jsFile))
         await fs.writeFile(jsFile, chuck.content)
     }
-    for (const pagePath of Object.keys(pages)) {
+    let APP: React.ComponentType<any> = React.Fragment
+    let appStaticProps: Record<string, any> = {}
+    if (chunks.has('app')) {
+        APP = ssrPages['/_app'].reqComponent()
+        if ('getStaticProps' in APP) {
+            const getStaticProps = APP['getStaticProps'] as any
+            if (typeof getStaticProps === 'function') {
+                const props = await getStaticProps(appConfig)
+                if (utils.isObject(props)) {
+                    appStaticProps = props
+                }
+            }
+        }
+    }
+    for (const pagePath of Object.keys(ssrPages).filter(p => p !== '/_app')) {
         const pageName = pagePath.replace(/^\/+/, '') || 'index'
+        const pageChunk = chunks.get('pages/' + pageName)!
         const url = { pagePath, pathname: pagePath, params: {}, query: {} }
-        const { staticProps, helmet, body } = await renderPage(url, pages[pagePath].reqComponent())
+        const { staticProps, head, body } = await renderPage(APP, appStaticProps, url, ssrPages[pagePath].reqComponent())
         const htmlFile = path.join(buildDir, pageName + '.html')
         await fs.ensureDir(path.dirname(htmlFile))
         await fs.writeFile(htmlFile, html({
             lang: appConfig.lang,
+            head: head.concat(Array.from(chunks.values()).filter(({ css }) => utils.isNEString(css)).map(({ name, css }) => `<style data-post-style="${name}">${css!.trim()}</style>`)),
             body,
-            helmet,
             scripts: [
-                { json: true, id: 'ssr-data', data: { url, staticProps } },
+                { json: true, id: 'ssr-data', data: { url, staticProps, appStaticProps } },
                 ...Array.from(chunks.values())
                     .filter(({ name }) => !name.startsWith('pages/') || name === 'pages/' + pageName)
                     .map(({ name, hash }) => ({ src: `_post/${name}.js?v=${hash}`, async: true }))
@@ -118,7 +149,7 @@ export default async (appDir: string) => {
         }
         buildManifest.pages[pagePath] = {
             name: pageName,
-            hash: chunks.get('pages/' + pageName)!.hash
+            hash: pageChunk.hash
         }
     }
     await fs.writeJSON(path.join(buildDir, 'build-manifest.json'), buildManifest)
