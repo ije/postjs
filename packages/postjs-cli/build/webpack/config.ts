@@ -8,7 +8,7 @@ import webpack from 'webpack'
 import './loaders/post-app-loader'
 import './loaders/post-page-loader'
 
-export type Config = Pick<webpack.Configuration, 'externals' | 'plugins' | 'devtool'> & {
+export type Config = Pick<webpack.Configuration, 'externals' | 'plugins'> & {
     isServer?: boolean
     isProduction?: boolean
     splitVendorChunk?: boolean
@@ -20,11 +20,11 @@ export type Config = Pick<webpack.Configuration, 'externals' | 'plugins' | 'devt
     }
 }
 
+// https://webpack.js.org/configuration/
 export default function createConfig(context: string, entry: webpack.Entry, config?: Config): webpack.Configuration {
     const {
         externals,
         plugins,
-        devtool,
         isServer,
         isProduction,
         splitVendorChunk,
@@ -151,11 +151,13 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
                 }
             ]
         },
-        plugins: isProduction || isServer ? [new MiniCssExtractPlugin({
-            filename: '[name].css',
-            chunkFilename: '[name].css',
-            ignoreOrder: true // remove order warnings
-        })].concat(plugins || []) : plugins,
+        plugins: (isProduction || isServer ? [
+            new MiniCssExtractPlugin({
+                filename: '[name].css',
+                chunkFilename: '[name].css',
+                ignoreOrder: true // remove order warnings
+            })
+        ] : []).concat(plugins || []),
         resolve: {
             extensions: ['.js', '.jsx', '.mjs', '.ts', '.tsx', '.json', '.wasm']
         },
@@ -196,6 +198,10 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
                 })
             ] : undefined
         },
-        devtool
+        performance: {
+            maxEntrypointSize: 1 << 20, // 1mb
+            maxAssetSize: 1 << 20
+        },
+        devtool: !isProduction ? 'eval-source-map' : false
     }
 }
