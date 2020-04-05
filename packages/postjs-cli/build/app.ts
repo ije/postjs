@@ -80,9 +80,9 @@ export const craeteAppEntry = ({ baseUrl, polyfillsMode = 'usage', polyfills = [
         const { __POST_APP: App = React.Fragment, __POST_INITIAL_PAGE: initialPage } = window
         const ssrData = JSON.parse(document.getElementById('ssr-data').innerHTML)
         const charsetEl = document.head.querySelector('meta[charSet]')
-        const toDelHeadEls = []
 
         let toDelHeadEl = charsetEl?.nextElementSibling
+        let toDelHeadEls = []
         while (toDelHeadEl) {
             if (toDelHeadEl.tagName.toLowerCase() === 'meta' && toDelHeadEl.getAttribute('name') === 'post-head-end') {
                 toDelHeadEl = null
