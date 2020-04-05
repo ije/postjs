@@ -1,6 +1,5 @@
 import { Head } from '@postjs/core'
 import React from 'react'
-import '../style/home.less'
 
 export default function Home({ name }) {
     return (

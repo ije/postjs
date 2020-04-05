@@ -1,14 +1,13 @@
 import { Head } from '@postjs/core'
 import React from 'react'
-import '../style/about.less'
 
-export default function About() {
+export default function About({ description }) {
     return (
         <div className="about">
             <Head>
-                <title>The Post-Front-End Frame.</title>
+                <title>{description}</title>
             </Head>
-            <p>The Post-Front-End Frame.</p>
+            <p>{description}</p>
         </div>
     )
 }

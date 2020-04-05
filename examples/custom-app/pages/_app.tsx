@@ -1,16 +1,16 @@
 import { Link } from '@postjs/core'
 import React, { PropsWithChildren } from 'react'
-import '../style/app.less'
 
 export function getStaticProps() {
     return {
-        name: 'postjs'
+        name: 'postjs',
+        description: 'The Post-Front-End Framework'
     }
 }
 
 export default function APP({ name, children }: PropsWithChildren<{ name: string }>) {
     return (
-        <div className="app">
+        <div style={{ margin: 50 }}>
             <header>
                 <h1>- {name}</h1>
                 <nav>

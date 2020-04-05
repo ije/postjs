@@ -1,4 +1,4 @@
-import { Head } from '@postjs/core'
+import { Head, Link } from '@postjs/core'
 import React from 'react'
 
 export default function Home() {
@@ -7,7 +7,7 @@ export default function Home() {
             <Head>
                 <title>Welcome to use postjs!</title>
             </Head>
-            <p>Welcome to use <strong>postjs</strong>!</p>
+            <p>Welcome to use <strong>postjs</strong>! <Link style={{ paddingLeft: 15 }} to="/about">&rarr;&nbsp; About</Link></p>
         </div>
     )
 }
