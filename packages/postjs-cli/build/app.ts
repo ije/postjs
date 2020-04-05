@@ -70,6 +70,7 @@ export const craeteAppEntry = ({ baseUrl, polyfillsMode = 'usage', polyfills = [
     ${polyfillsMode === 'entry' ? polyfills.map(name => `import ${JSON.stringify(name)}`).join('\n') : ''}
     ${polyfillsMode === 'entry' ? "import 'regenerator-runtime/runtime'" : "import 'whatwg-fetch'"}
 
+    // fetch build manifest as soon as possible
     if (/^https?/.test(location.protocol)) {
         fetch('build-manifest.json').then(resp => resp.json()).then(data => {
             window.__POST_BUILD_MANIFEST = data
@@ -79,25 +80,28 @@ export const craeteAppEntry = ({ baseUrl, polyfillsMode = 'usage', polyfills = [
     window.addEventListener('load', () => {
         const { __POST_APP: App = React.Fragment, __POST_INITIAL_PAGE: initialPage } = window
         const ssrData = JSON.parse(document.getElementById('ssr-data').innerHTML)
-        const charsetEl = document.head.querySelector('meta[charSet]')
-
-        let toDelHeadEl = charsetEl?.nextElementSibling
-        let toDelHeadEls = []
-        while (toDelHeadEl) {
-            if (toDelHeadEl.tagName.toLowerCase() === 'meta' && toDelHeadEl.getAttribute('name') === 'post-head-end') {
-                toDelHeadEl = null
-            } else {
-                toDelHeadEls.push(toDelHeadEl)
-                toDelHeadEl = toDelHeadEl.nextElementSibling
-            }
-        }
-        toDelHeadEls.forEach(el => document.head.removeChild(el))
-        toDelHeadEls = null
-
         if (initialPage && ssrData && 'url' in ssrData) {
             const { reqComponent } = initialPage
             const { url, staticProps, appStaticProps = {} } = ssrData
+
+            // delete ssr head elements
+            let toDelHeadEl = document.head.querySelector('meta[charSet]')?.nextElementSibling
+            let toDelHeadEls = []
+            while (toDelHeadEl) {
+                if (toDelHeadEl.tagName.toLowerCase() === 'meta' && toDelHeadEl.getAttribute('name') === 'post-head-end') {
+                    toDelHeadEl = null
+                } else {
+                    toDelHeadEls.push(toDelHeadEl)
+                    toDelHeadEl = toDelHeadEl.nextElementSibling
+                }
+            }
+            toDelHeadEls.forEach(el => document.head.removeChild(el))
+            toDelHeadEls = null
+
+            // store current ssr data
             window.__POST_SSR_DATA = { [url.pagePath]: { staticProps } }
+
+            // hydrate app
             ReactDom.hydrate((
                 <AppRouter
                     baseUrl="${baseUrl}"

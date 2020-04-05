@@ -30,17 +30,17 @@ export class Compiler {
         const vmp = new VirtualModulesPlugin()
         const webpackEntry: webpack.Entry = {}
         if (utils.isNEString(entry)) {
-            webpackEntry['main'] = './[vm]_main.js'
+            webpackEntry['main'] = './_main.js'
         } else if (utils.isObject(entry)) {
             Object.keys(entry).forEach(name => {
-                webpackEntry[name] = `./[vm]_${name}.js`
+                webpackEntry[name] = `./_${name}.js`
             })
         }
         if (config?.enableHMR) {
             Object.keys(webpackEntry).forEach(key => {
                 webpackEntry[key] = [
                     require.resolve('webpack/hot/dev-server'),
-                    './[vm]_hmr_client.js',
+                    './_hmr_client.js',
                     String(webpackEntry[key])
                 ]
             })
@@ -53,14 +53,14 @@ export class Compiler {
         this._compiler = webpack(this._config)
         this._compiler.outputFileSystem = this._memfs
         if (utils.isNEString(entry)) {
-            vmp.writeModule('./[vm]_main.js', entry)
+            vmp.writeModule('./_main.js', entry)
         } else if (utils.isObject(entry)) {
             Object.keys(entry).forEach(name => {
-                vmp.writeModule(`./[vm]_${name}.js`, entry[name])
+                vmp.writeModule(`./_${name}.js`, entry[name])
             })
         }
         if (config?.enableHMR) {
-            vmp.writeModule('./[vm]_hmr_client.js', `
+            vmp.writeModule('./_hmr_client.js', `
                 window.addEventListener('load', async () => {
                     const hotEmitter = require('webpack/hot/emitter')
                     const url = 'ws://' + location.host + '/_post/hmr-socket?page=' + encodeURI(location.pathname)
