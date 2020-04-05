@@ -66,6 +66,7 @@ export default async (appDir: string) => {
                 } else if (!isValidElementType(component)) {
                     component = () => <p style={{color: 'red'}}>bad app: invalid element type</p>
                 }
+
                 window.__POST_APP = component
             `
         } else {
@@ -110,8 +111,9 @@ export default async (appDir: string) => {
         await fs.ensureDir(path.dirname(jsFile))
         await fs.writeFile(jsFile, chuck.content)
     }
+
     let APP: React.ComponentType<any> = React.Fragment
-    let appStaticProps: Record<string, any> = {}
+    let appStaticProps: any = null
     if (chunks.has('app')) {
         APP = ssrPages['/_app'].reqComponent()
         if ('getStaticProps' in APP) {
@@ -124,6 +126,7 @@ export default async (appDir: string) => {
             }
         }
     }
+
     for (const pagePath of Object.keys(ssrPages).filter(p => p !== '/_app')) {
         const pageName = pagePath.replace(/^\/+/, '') || 'index'
         const pageChunk = chunks.get('pages/' + pageName)!

@@ -13,7 +13,7 @@ export const ssrStaticMethods = [
 
 export async function renderPage(
     APP: ComponentType<any>,
-    appStaticProps: Record<string, any>,
+    appStaticProps: any,
     url: URL,
     PageComponent: ComponentType<any>
 ) {

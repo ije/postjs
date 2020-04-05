@@ -3,6 +3,7 @@ import { EventEmitter } from 'events'
 import fs from 'fs-extra'
 import glob from 'glob'
 import path from 'path'
+import React, { Fragment } from 'react'
 import webpack from 'webpack'
 import DynamicEntryPlugin from 'webpack/lib/DynamicEntryPlugin'
 import { peerDeps } from '.'
@@ -70,7 +71,7 @@ export class DevWatcher {
             const { chunks } = await new Compiler(this._srcDir, `
                 const React = require('react')
                 const { isValidElementType } = require('react-is')
-                const App = ${appRequest !== undefined} ? require('./pages/${appRequest}') : {default: React.Fragment}
+                const App = ${appRequest !== undefined} ? require('./pages/${appRequest}') : null
                 const PageComponent = require('./pages${pagePath}')
 
                 function validComponent(mod, name) {
@@ -89,7 +90,7 @@ export class DevWatcher {
                     return component
                 }
 
-                exports.reqApp = () => validComponent(App, 'app')
+                exports.reqApp = () => App ? validComponent(App, 'app') : null
                 exports.reqPageComponent = () => validComponent(PageComponent, 'page')
             `, {
                 isServer: true,
@@ -98,9 +99,9 @@ export class DevWatcher {
             const { content: mainJS, css: mainCSS } = chunks.get('main')!
             const { reqApp, reqPageComponent } = runJS(mainJS, peerDeps)
 
-            let APP: React.ComponentType<any> = reqApp()
-            let appStaticProps: Record<string, any> = {}
-            if ('getStaticProps' in APP) {
+            let APP: React.ComponentType<any> = reqApp() || Fragment
+            let appStaticProps: any = null
+            if (APP !== Fragment && 'getStaticProps' in APP) {
                 const getStaticProps = APP['getStaticProps'] as any
                 if (typeof getStaticProps === 'function') {
                     const props = await getStaticProps(this._appConfig)
@@ -134,7 +135,7 @@ export class DevWatcher {
             return [403, html({
                 lang: this._appConfig.lang,
                 head: ['<title>403 - First compilation not ready</title>'],
-                body: '<p><strong><code>403</code></strong><small>&nbsp;-&nbsp;</small><span>First compilation not ready</span></p>'
+                body: '<p style="margin: 50px"><strong><code>403</code></strong><small>&nbsp;-&nbsp;</small><span>First compilation not ready</span></p>'
             })]
         }
 
@@ -164,7 +165,7 @@ export class DevWatcher {
         return [404, html({
             lang: this._appConfig.lang,
             head: ['<title>404 - Page not found</title>'],
-            body: '<p><strong><code>404</code></strong><small>&nbsp;-&nbsp;</small><span>Page not found</span></p>'
+            body: '<p style="margin: 50px"><strong><code>404</code></strong><small>&nbsp;-&nbsp;</small><span>Page not found</span></p>'
         })]
     }
 

@@ -77,18 +77,18 @@ export const craeteAppEntry = ({ baseUrl, polyfillsMode = 'usage', polyfills = [
     }
 
     window.addEventListener('load', () => {
-        const { __POST_APP: App, __POST_INITIAL_PAGE: initialPage } = window
+        const { __POST_APP: App = React.Fragment, __POST_INITIAL_PAGE: initialPage } = window
         const ssrData = JSON.parse(document.getElementById('ssr-data').innerHTML)
         document.head.querySelectorAll('[data-jsx]').forEach(el => document.head.removeChild(el))
         if (initialPage && ssrData && 'url' in ssrData) {
             const { reqComponent } = initialPage
-            const { url, staticProps, appStaticProps } = ssrData
+            const { url, staticProps, appStaticProps = {} } = ssrData
             window.__POST_SSR_DATA = { [url.pagePath]: { staticProps } }
             ReactDom.hydrate((
                 <AppRouter
                     baseUrl="${baseUrl}"
                     initialPage={{ url, staticProps, Component: reqComponent() }}
-                    initialApp={{ App, staticProps: appStaticProps}}
+                    initialApp={{ App, staticProps: appStaticProps }}
                 />
             ), document.querySelector('main'))
             if (process.env.NODE_ENV === 'development') {
