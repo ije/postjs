@@ -7,36 +7,32 @@ const stringify = (s: string) => JSON.stringify(s)
 
 export function Head({ children }: PropsWithChildren<{}>) {
     if (isServer) {
-        renderHead(children)
+        parse(children).forEach(({ type, props }, key) => stateOnServer.set(key, { type, props }))
     }
 
     useEffect(() => {
-        const els = renderHead(children)
+        const els: Array<HTMLElement> = []
+        parse(children).forEach(({ type, props }) => {
+            const el = document.createElement(type)
+            document.head.appendChild(el)
+            els.push(el)
+            Object.keys(props).forEach(key => {
+                const value = props[key]
+                if (key === 'children') {
+                    if (utils.isNEString(value)) {
+                        el!.innerText = value
+                    } else if (utils.isNEArray(value)) {
+                        el!.innerText = value.join('')
+                    }
+                } else {
+                    el!.setAttribute(key, '' + (value || ''))
+                }
+            })
+        })
         return () => els.forEach(el => document.head.removeChild(el))
     }, [children])
 
     return null
-}
-
-export function renderHeadToString(): string[] {
-    const helmet: string[] = []
-    stateOnServer.forEach(({ type, props }) => {
-        const attrs = Object.keys(props)
-            .filter(key => key !== 'children' && utils.isString(props[key]))
-            .map(key => `${key}=${stringify(props[key])}`)
-            .join(' ')
-        if (attrs !== '') {
-            if (utils.isNEString(props.children)) {
-                helmet.push(`<${type} ${attrs} data-jsx="true">${props.children}</${type}>`)
-            } else {
-                helmet.push(`<${type} ${attrs} data-jsx="true">`)
-            }
-        } else if (type === 'title' && utils.isString(props.children)) {
-            helmet.push(`<title data-jsx="true">${props.children}</title>`)
-        }
-    })
-    stateOnServer.clear()
-    return helmet
 }
 
 interface SEOProps {
@@ -72,28 +68,31 @@ export function SEO({ title, description, keywords, url, image }: SEOProps) {
     )
 }
 
-function renderHead(node: ReactNode) {
-    const els: Array<HTMLElement> = []
-    parse(node).forEach(({ type, props }, key) => {
-        if (isServer) {
-            stateOnServer.set(key, { type, props })
-        } else {
-            const el = document.createElement(type)
-            document.head.appendChild(el)
-            els.push(el)
-            Object.keys(props).forEach(key => {
-                const value = props[key]
-                if (utils.isString(value)) {
-                    if (key === 'children') {
-                        el!.innerText = value
-                    } else {
-                        el!.setAttribute(key, value)
-                    }
-                }
-            })
+export function renderHeadToString(): string[] {
+    const helmet: string[] = []
+    stateOnServer.forEach(({ type, props }) => {
+        const attrs = Object.keys(props)
+            .filter(key => key !== 'children' && utils.isString(props[key]))
+            .map(key => `${key}=${stringify(props[key])}`)
+            .join(' ')
+        if (attrs !== '') {
+            if (utils.isNEString(props.children)) {
+                helmet.push(`<${type} ${attrs} data-jsx="true">${props.children}</${type}>`)
+            } else if (utils.isNEArray(props.children)) {
+                helmet.push(`<${type} ${attrs} data-jsx="true">${props.children.join('')}</${type}>`)
+            } else {
+                helmet.push(`<${type} ${attrs} data-jsx="true">`)
+            }
+        } else if (type === 'title') {
+            if (utils.isNEString(props.children)) {
+                helmet.push(`<title data-jsx="true">${props.children}</title>`)
+            } else if (utils.isNEArray(props.children)) {
+                helmet.push(`<title data-jsx="true">${props.children.join('')}</title>`)
+            }
         }
     })
-    return els
+    stateOnServer.clear()
+    return helmet
 }
 
 function parse(node: ReactNode, set?: Map<string, { type: string, props: any }>) {
@@ -117,6 +116,7 @@ function parse(node: ReactNode, set?: Map<string, { type: string, props: any }>)
                 if (Object.keys(props).map(key => key.toLowerCase()).includes('charset')) {
                     return // ignore charset, always use utf-8
                 }
+            case 'base':
             case 'title':
             case 'link':
             case 'style':
@@ -131,10 +131,10 @@ function parse(node: ReactNode, set?: Map<string, { type: string, props: any }>)
                     } else if (utils.isString(props['http-equiv'])) {
                         key += `[http-equiv=${props['http-equiv']}]`
                     } else {
-                        key += '[' + Object.keys(props).filter(k => k !== 'content' && k !== 'children').map(k => k + '=' + props[k]).join(',') + ']'
+                        key += '[' + Object.keys(props).filter(k => k !== 'content' && k !== 'children').map(k => k + '=' + JSON.stringify(props[k])).join(',') + ']'
                     }
                 } else if (key !== 'title') {
-                    key += '[' + Object.keys(props).filter(k => k !== 'children').map(k => k + '=' + props[k]).join(',') + '].' + Math.random()
+                    key += '[' + Object.keys(props).filter(k => k !== 'children').map(k => k + '=' + JSON.stringify(props[k])).join(',') + '].' + Math.random()
                 }
                 set!.set(key, { type, props })
                 break
