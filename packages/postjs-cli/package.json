@@ -1,6 +1,6 @@
 {
     "name": "@postjs/cli",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "description": "The Post-Front-End Framework",
     "repository": "https://github.com/postui/postjs",
     "bugs": "https://github.com/postui/postjs/issues",
@@ -9,6 +9,9 @@
     "bin": {
         "post": "./dist/cli/post.js"
     },
+    "files": [
+        "dist/"
+    ],
     "scripts": {
         "build": "rm -rf ./dist && node tsc.js",
         "watch": "rm -rf ./dist && node tsc.js --watch"

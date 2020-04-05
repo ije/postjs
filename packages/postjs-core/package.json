@@ -1,6 +1,6 @@
 {
     "name": "@postjs/core",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "description": "The Post-Front-End Framework",
     "repository": "https://github.com/postui/postjs",
     "bugs": "https://github.com/postui/postjs/issues",
@@ -8,8 +8,12 @@
     "license": "MIT",
     "main": "./dist/index.js",
     "types": "./typings/index.d.ts",
+    "files": [
+        "dist/",
+        "typings/"
+    ],
     "scripts": {
-        "build": "rm -rf ./dist && node tsc.js",
+        "build": "rm -rf ./dist && rm -rf ./typings && node tsc.js",
         "watch": "rm -rf ./dist && node tsc.js --watch"
     },
     "dependencies": {
