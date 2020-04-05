@@ -115,13 +115,14 @@ export class DevWatcher {
             const { staticProps, head, body } = await renderPage(APP, appStaticProps, url, reqPageComponent())
             const pageHtml = html({
                 lang: this._appConfig.lang,
-                head: head.concat(mainCSS ? [`<style data-post-style="dev">${mainCSS.trim()}</style>`] : []),
-                body,
+                head: head.length > 0 ? head.concat('<meta name="post-head-end" content="true" />') : head,
+                styles: mainCSS ? [{ 'data-post-style': 'dev', content: mainCSS }] : undefined,
                 scripts: [
-                    { json: true, id: 'ssr-data', data: { url, staticProps, appStaticProps } },
+                    { type: 'application/json', id: 'ssr-data', innerText: JSON.stringify({ url, staticProps, appStaticProps }) },
                     { src: `_post/pages/${pagePath.replace(/^\/+/, '') || 'index'}.js?v=${pageChunk.hash}`, async: true },
                     ...Array.from(this._commonChunks.values()).map(({ name, hash }) => ({ src: `_post/${name}.js?v=${hash}`, async: true }))
-                ]
+                ],
+                body
             })
 
             pageChunk.html = pageHtml

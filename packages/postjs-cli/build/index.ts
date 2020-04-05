@@ -136,14 +136,15 @@ export default async (appDir: string) => {
         await fs.ensureDir(path.dirname(htmlFile))
         await fs.writeFile(htmlFile, html({
             lang: appConfig.lang,
-            head: head.concat(Array.from(chunks.values()).filter(({ css }) => utils.isNEString(css)).map(({ name, css }) => `<style data-post-style="${name}">${css!.trim()}</style>`)),
-            body,
+            head: head.length > 0 ? head.concat('<meta name="post-head-end" content="true" />') : head,
+            styles: Array.from(chunks.values()).filter(({ css }) => Boolean(css)).map(({ name, css }) => ({ 'data-post-style': name, content: css! })),
             scripts: [
-                { json: true, id: 'ssr-data', data: { url, staticProps, appStaticProps } },
+                { type: 'application/json', id: 'ssr-data', innerText: JSON.stringify({ url, staticProps, appStaticProps }) },
                 ...Array.from(chunks.values())
                     .filter(({ name }) => !name.startsWith('pages/') || name === 'pages/' + pageName)
                     .map(({ name, hash }) => ({ src: `_post/${name}.js?v=${hash}`, async: true }))
-            ]
+            ],
+            body
         }))
         if (staticProps !== null) {
             const dataFile = path.join(buildDir, '_post/pages', pageName + '.json')

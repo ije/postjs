@@ -54,7 +54,7 @@ export async function renderPage(
 export function runJS(code: string, peerDeps: Record<string, any>, globalVars?: Record<string, any>) {
     const fn = new Function('require', 'exports', 'module', code)
     const exports: Record<string, any> = {}
-    const { window } = new JSDOM(undefined, { url: 'http://localhost', pretendToBeVisual: true })
+    const { window } = new JSDOM(undefined, { url: 'http://localhost/', pretendToBeVisual: true })
     Object.keys(window).filter(key => {
         return !key.startsWith('_') && !/^(set|clear)(Timeout|Interval)$/.test(key)
     }).forEach(key => {
@@ -65,45 +65,58 @@ export function runJS(code: string, peerDeps: Record<string, any>, globalVars?: 
     return exports
 }
 
-export const html = ({ lang, head, body, scripts }: { lang: string, body: string, head?: string[], scripts?: (string | Record<string, any>)[] }) => (
-    `<!DOCTYPE html>
+export const html = ({
+    lang = 'en',
+    head = [],
+    styles = [],
+    scripts = [],
+    body
+}: {
+    lang?: string,
+    head?: string[],
+    styles?: { [key: string]: string, content: string }[],
+    scripts?: (string | { type?: string, id?: string, src?: string, async?: boolean, innerText?: string })[],
+    body: string
+}) => (`<!DOCTYPE html>
 <html lang="${lang}">
 <head>
-    <meta charSet="utf-8">
-${(head || [])
-        .concat((scripts || []).map(v => {
+    <meta charSet="utf-8" />
+${head.filter(v => /^\s*<[a-z0-9\-]+[> ]/i.test(v))
+        .concat(scripts.map(v => {
             if (!utils.isString(v) && utils.isNEString(v.src) && v.async === true) {
-                return `<link rel="preload" href=${JSON.stringify(v.src)} as="script">`
+                return `<link rel="preload" href=${JSON.stringify(v.src)} as="script" />`
             } else {
                 return ''
             }
         }).filter(Boolean))
-        .map(v => v.trim()).filter(Boolean)
-        .filter(v => /^<[a-z0-9\-]+[> ]/i.test(v))
-        .sort((a, b) => getHeadElementOrder(a) - getHeadElementOrder(b))
+        .concat(styles.map(({ content, ...rest }) => {
+            if (utils.isNEString(content)) {
+                return `<style${toAttrs(rest)}>${content}</style>`
+            } else {
+                return ''
+            }
+        }).filter(Boolean))
         .map(v => ' '.repeat(4) + v).join('\n')}
 </head>
 <body>
     <main>${body}</main>
-${(scripts || [])
+${scripts
         .map(v => {
             if (utils.isString(v)) {
                 return `<script integrity="sha256-${createHash('sha256').update(v).digest('base64')}">${v}</script>`
+            } else if (utils.isNEString(v.innerText)) {
+                const { innerText, ...rest } = v
+                return `<script${toAttrs(rest)}>${innerText}</script>`
             } else if (utils.isNEString(v.src)) {
-                return `<script src=${JSON.stringify(v.src)}${v.async ? ' async' : ''}></script>`
-            } else if (v.json && utils.isNEString(v.id) && utils.isObject(v.data)) {
-                return `<script id=${JSON.stringify(v.id)} type="application/json">${JSON.stringify(v.data)}</script>`
+                return `<script${toAttrs(v)}></script>`
             } else {
                 return ''
             }
         }).filter(Boolean)
         .map(v => ' '.repeat(4) + v).join('\n')}
 </body>
-</html>`
-)
+</html>`)
 
-const headElementTypes = ['base', 'title', 'meta', 'link', 'style', 'script', 'no-script']
-function getHeadElementOrder(tag: string) {
-    const type = tag.split(/[> ]/)[0].slice(1)
-    return headElementTypes.indexOf(type)
+function toAttrs(v: any) {
+    return Object.keys(v).map(k => ` ${k}=${JSON.stringify(String(v[k]))}`).join('')
 }

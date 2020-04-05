@@ -41,7 +41,7 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
         {
             loader: 'css-loader',
             options: {
-                importLoaders: 1,
+                // importLoaders: 1,
                 sourceMap: true
             }
         },
@@ -51,7 +51,10 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
                 ident: 'postcss',
                 plugins: ([
                     autoPrefixer({ overrideBrowserslist: targets })
-                ] as postcss.AcceptedPlugin[]).concat(isProduction ? [new CssnanoSimple()] : [], postcssPlugins || []),
+                ] as postcss.AcceptedPlugin[]).concat(
+                    isProduction ? [new CssnanoSimple()] : [],
+                    postcssPlugins || []
+                ),
                 sourceMap: true
             }
         }

@@ -79,7 +79,21 @@ export const craeteAppEntry = ({ baseUrl, polyfillsMode = 'usage', polyfills = [
     window.addEventListener('load', () => {
         const { __POST_APP: App = React.Fragment, __POST_INITIAL_PAGE: initialPage } = window
         const ssrData = JSON.parse(document.getElementById('ssr-data').innerHTML)
-        document.head.querySelectorAll('[data-jsx]').forEach(el => document.head.removeChild(el))
+        const charsetEl = document.head.querySelector('meta[charSet]')
+        const toDelHeadEls = []
+
+        let toDelHeadEl = charsetEl?.nextElementSibling
+        while (toDelHeadEl) {
+            if (toDelHeadEl.tagName.toLowerCase() === 'meta' && toDelHeadEl.getAttribute('name') === 'post-head-end') {
+                toDelHeadEl = null
+            } else {
+                toDelHeadEls.push(toDelHeadEl)
+                toDelHeadEl = toDelHeadEl.nextElementSibling
+            }
+        }
+        toDelHeadEls.forEach(el => document.head.removeChild(el))
+        toDelHeadEls = null
+
         if (initialPage && ssrData && 'url' in ssrData) {
             const { reqComponent } = initialPage
             const { url, staticProps, appStaticProps = {} } = ssrData

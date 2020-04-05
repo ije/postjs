@@ -14,7 +14,12 @@ export function Head({ children }: PropsWithChildren<{}>) {
         const els: Array<HTMLElement> = []
         parse(children).forEach(({ type, props }) => {
             const el = document.createElement(type)
-            document.head.appendChild(el)
+            const anchor = document.head.querySelector('meta[name="post-head-end"]')
+            if (anchor) {
+                document.head.insertBefore(el, anchor)
+            } else {
+                document.head.appendChild(el)
+            }
             els.push(el)
             Object.keys(props).forEach(key => {
                 const value = props[key]
@@ -71,23 +76,23 @@ export function SEO({ title, description, keywords, url, image }: SEOProps) {
 export function renderHeadToString(): string[] {
     const helmet: string[] = []
     stateOnServer.forEach(({ type, props }) => {
-        const attrs = Object.keys(props)
-            .filter(key => key !== 'children' && utils.isString(props[key]))
-            .map(key => `${key}=${stringify(props[key])}`)
-            .join(' ')
-        if (attrs !== '') {
+        if (type === 'title') {
             if (utils.isNEString(props.children)) {
-                helmet.push(`<${type} ${attrs} data-jsx="true">${props.children}</${type}>`)
+                helmet.push(`<title>${props.children}</title>`)
             } else if (utils.isNEArray(props.children)) {
-                helmet.push(`<${type} ${attrs} data-jsx="true">${props.children.join('')}</${type}>`)
-            } else {
-                helmet.push(`<${type} ${attrs} data-jsx="true">`)
+                helmet.push(`<title>${props.children.join('')}</title>`)
             }
-        } else if (type === 'title') {
+        } else {
+            const attrs = Object.keys(props)
+                .filter(key => key !== 'children')
+                .map(key => ` ${key}=${stringify(String(props[key]))}`)
+                .join('')
             if (utils.isNEString(props.children)) {
-                helmet.push(`<title data-jsx="true">${props.children}</title>`)
+                helmet.push(`<${type}${attrs}>${props.children}</${type}>`)
             } else if (utils.isNEArray(props.children)) {
-                helmet.push(`<title data-jsx="true">${props.children.join('')}</title>`)
+                helmet.push(`<${type}${attrs}>${props.children.join('')}</${type}>`)
+            } else {
+                helmet.push(`<${type}${attrs} />`)
             }
         }
     })
