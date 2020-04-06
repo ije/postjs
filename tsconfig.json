@@ -1,7 +1,7 @@
 {
     "compilerOptions": {
-        "baseUrl": ".",
-        "target": "es2018",
+        "baseUrl": "./packages",
+        "target": "es2015",
         "lib": [
             "es2020",
             "dom",

@@ -11,7 +11,7 @@ spawn(
     path.join(__dirname, 'node_modules', '.bin', 'tsc'),
     [
         '--outDir', 'dist',
-        '--baseUrl', __dirname,
+        '--baseUrl', path.join(__dirname, '../'),
         '--target', 'es2015',
         '--lib', 'es2020,dom,dom.iterable,webworker.importscripts,scripthost',
         '--module', 'commonjs',
