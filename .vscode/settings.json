@@ -6,7 +6,9 @@
         "**/.DS_Store": true,
         "**/*.log": true,
         "**/Thumbs.db": true,
-        "**/node_modules/": true
+        "**/node_modules/": true,
+        "**/dist/": true,
+        "**/.post/": true
     },
     "editor.formatOnSave": true,
     "editor.formatOnPaste": true,
