@@ -11,11 +11,13 @@
         "post": "node ./packages/postjs-cli/dist/cli/post.js"
     },
     "devDependencies": {
+        "@typescript-eslint/eslint-plugin": "^2.27.0",
+        "@typescript-eslint/parser": "^2.27.0",
+        "eslint": "^6.8.0",
+        "eslint-plugin-react": "^7.19.0",
         "lerna": "^3.20.2",
         "react": "^16.13.1",
         "react-dom": "^16.13.1",
-        "tslint": "^6.1.1",
-        "tslint-origin-ordered-imports-rule": "^1.2.2",
         "typescript": "^3.8.3"
     },
     "engines": {
