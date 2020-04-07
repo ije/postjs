@@ -1,44 +1,10 @@
 import { CSSProperties } from 'react'
 import utils from '../utils'
 
-export interface PageTransition {
-    enter: Transition | Transition[]
-    exit: Transition | Transition[]
-}
-
-export type TimingFunction = 'linear'
-    | 'ease'
-    | 'easeIn'
-    | 'easeOut'
-    | 'easeInOut'
-    | 'easeInSine'
-    | 'easeOutSine'
-    | 'easeInOutSine'
-    | 'easeInQuad'
-    | 'easeOutQuad'
-    | 'easeInOutQuad'
-    | 'easeInCubic'
-    | 'easeOutCubic'
-    | 'easeInOutCubic'
-    | 'easeInQuart'
-    | 'easeOutQuart'
-    | 'easeInOutQuart'
-    | 'easeInQuint'
-    | 'easeOutQuint'
-    | 'easeInOutQuint'
-    | 'easeInExpo'
-    | 'easeOutExpo'
-    | 'easeInOutExpo'
-    | 'easeInCirc'
-    | 'easeOutCirc'
-    | 'easeInOutCirc'
-    | 'easeInBack'
-    | 'easeOutBack'
-    | 'easeInOutBack'
-    | CubicBezier
+export type TimingFunction = 'linear' | 'ease' | 'easeIn' | 'easeOut' | 'easeInOut' | keyof typeof cubicBezierPresets | CubicBezier
 
 // https://easings.net
-const cubicBezierTimingPresets = {
+const cubicBezierPresets = {
     easeInSine: 'cubic-bezier(0.47, 0, 0.745, 0.715)',
     easeOutSine: 'cubic-bezier(0.39, 0.575, 0.565, 1)',
     easeInOutSine: 'cubic-bezier(0.445, 0.05, 0.55, 0.95)',
@@ -101,12 +67,19 @@ export function transition<K extends keyof CSSProperties>(
     return new Transition(key, value, activeValue, duration, timing, delay)
 }
 
+/** fadeIn is an alias of `transition('opacity', 0, 1, duration, timing, delay)` */
 export function fadeIn(duration: number, timing?: TimingFunction, delay?: number) {
     return transition('opacity', 0, 1, duration, timing, delay)
 }
 
+/** fadeOut is an alias of `transition('opacity', 1, 0, duration, timing, delay)` */
 export function fadeOut(duration: number, timing?: TimingFunction, delay?: number) {
     return transition('opacity', 1, 0, duration, timing, delay)
+}
+
+export interface PageTransition {
+    enter: Transition | Transition[]
+    exit: Transition | Transition[]
 }
 
 export function transitionsToStyle(a: Transition | Transition[]): [CSSProperties, CSSProperties, number] {
@@ -120,8 +93,8 @@ export function transitionsToStyle(a: Transition | Transition[]): [CSSProperties
         if (t) {
             if (t instanceof CubicBezier) {
                 timing = t.toString()
-            } else if (t in cubicBezierTimingPresets) {
-                timing = cubicBezierTimingPresets[t]
+            } else if (t in cubicBezierPresets) {
+                timing = cubicBezierPresets[t]
             } else if (/^(linear|ease|easeIn|easeOut|easeInOut)$/.test(t)) {
                 timing = t.replace(/[A-Z]/g, c => '-' + c.toLowerCase())
             }

@@ -1,14 +1,12 @@
 import React, { ComponentType, CSSProperties, Fragment, useEffect, useState } from 'react'
 import hotEmitter from 'webpack/hot/emitter'
-import { LazyPageComponent } from '../component'
 import { RouterContext, RouterStore, URL } from './context'
+import { Page } from './page'
 import { route } from './route'
 import { PageTransition, transitionsToStyle } from './transition'
 
 export * from './context'
-export * from './fetch'
 export * from './redirect'
-export * from './route'
 export * from './transition'
 
 interface IPage {
@@ -25,14 +23,24 @@ export function AppRouter({ baseUrl, initialPage, initialApp = { App: Fragment, 
     const [outPage, setOutPage] = useState<IPage | null>(null)
 
     useEffect(() => {
+        const {
+            __POST_HMR: hmr,
+            __POST_PAGES: pages = {},
+            __POST_SSR_DATA: ssrData = {},
+            __POST_BUILD_MANIFEST: buildManifest = {}
+        } = window as any
+        const appHotUpdate = (App: ComponentType) => setApp(({ staticProps }) => ({ App, staticProps }))
+        const pageHotUpdate = (pagePath: string, component: ComponentType) => {
+            setPage(page => {
+                if (page.url.pagePath === pagePath) {
+                    return { url: page.url, staticProps: page.staticProps, Component: component }
+                }
+                return page
+            })
+        }
         let enterTimer: any = null
         let exitTimer: any = null
         const routeUpdate = ({ state }) => {
-            const {
-                __POST_PAGES: pages = {},
-                __POST_SSR_DATA: ssrData = {},
-                __POST_BUILD_MANIFEST: buildManifest = {}
-            } = window as any
             const transition: string | PageTransition | undefined = state?.transition
             const [url, component] = route(
                 baseUrl,
@@ -45,14 +53,14 @@ export function AppRouter({ baseUrl, initialPage, initialApp = { App: Fragment, 
                     } else {
                         return {
                             path: pagePath,
-                            component: (props: any) => <LazyPageComponent {...props} pagePath={pagePath} />
+                            component: (props: any) => <Page pagePath={pagePath} props={props} />
                         }
                     }
                 }),
                 {
                     fallback: {
                         path: '/_404',
-                        component: (props: any) => <LazyPageComponent {...props} pagePath="/_404" />
+                        component: (props: any) => <Page pagePath="/_404" props={props} />
                     }
                 }
             )
@@ -109,26 +117,22 @@ export function AppRouter({ baseUrl, initialPage, initialApp = { App: Fragment, 
                 }, exitDuration)
             }
         }
-        const pageHotUpdate = (pagePath: string, component: ComponentType) => {
-            setPage(page => {
-                if (page.url.pagePath === pagePath) {
-                    return { url: page.url, staticProps: page.staticProps, Component: component }
-                }
-                return page
-            })
+
+        if (hmr) {
+            hotEmitter.on('postAppHotUpdate', appHotUpdate)
+            hotEmitter.on('postPageHotUpdate', pageHotUpdate)
         }
-        const appHotUpdate = (App: ComponentType) => {
-            setApp(({ staticProps }) => ({ App, staticProps }))
-        }
-        window.addEventListener('popstate', routeUpdate)
+
         hotEmitter.on('popstate', routeUpdate)
-        hotEmitter.on('postPageHotUpdate', pageHotUpdate)
-        hotEmitter.on('postAppHotUpdate', appHotUpdate)
+        window.addEventListener('popstate', routeUpdate)
+
         return () => {
-            window.removeEventListener('popstate', routeUpdate)
+            if (hmr) {
+                hotEmitter.off('postAppHotUpdate', appHotUpdate)
+                hotEmitter.off('postPageHotUpdate', pageHotUpdate)
+            }
             hotEmitter.off('popstate', routeUpdate)
-            hotEmitter.off('postPageHotUpdate', pageHotUpdate)
-            hotEmitter.off('postAppHotUpdate', appHotUpdate)
+            window.removeEventListener('popstate', routeUpdate)
         }
     }, [])
 

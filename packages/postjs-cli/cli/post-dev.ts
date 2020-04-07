@@ -34,6 +34,11 @@ export default function (...argv: string[]) {
         process.exit(0)
     }
 
+    if (!fs.existsSync(path.join(appDir, 'pages'))) {
+        console.error('exit: no pages')
+        process.exit(0)
+    }
+
     if (!(/^\d+$/.test(port))) {
         console.log(`invalid port number ${port}`)
         process.exit(0)

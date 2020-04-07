@@ -1,5 +1,8 @@
 import React, { Children, cloneElement, CSSProperties, isValidElement, PropsWithChildren, useCallback, useEffect, useMemo } from 'react'
-import { fetchPage, PageTransition, redirect, useRouter } from './router'
+import { useRouter } from './router/context'
+import { fetchPage } from './router/fetch'
+import { redirect } from './router/redirect'
+import { PageTransition } from './router/transition'
 import utils from './utils'
 
 interface LinkProps {
@@ -25,23 +28,20 @@ export function Link({
     const router = useRouter()
     const pagePath = useMemo(() => utils.cleanPath(toProp), [toProp])
     const asPath = useMemo(() => utils.isNEString(asProp) ? utils.cleanPath(asProp) : undefined, [asProp])
-    const online = /https?/.test(location.protocol)
     const onClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
         e.preventDefault()
         if (router.pagePath !== pagePath) {
             redirect(pagePath, asPath, replace, transition).catch(err => {
-                alert(`can not load page '${pagePath}': ${err.message || err}`)
+                alert(`can't load page '${pagePath}': ${err.message || err}`)
             })
         }
     }, [pagePath, asPath, replace, router])
     const onMouseEnter = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
-        if (online) {
-            fetchPage(pagePath)
-        }
+        fetchPage(pagePath)
     }, [pagePath])
 
     useEffect(() => {
-        if (prefetch && online) {
+        if (prefetch) {
             fetchPage(pagePath)
         }
     }, [prefetch, pagePath])
@@ -57,15 +57,19 @@ export function Link({
                 href: asPath || pagePath,
                 'aria-current': props['aria-current'] || 'page',
                 onClick: (e: React.MouseEvent<HTMLAnchorElement>) => {
-                    onClick(e)
                     if (utils.isFunction(props.onClick)) {
                         props.onClick(e)
                     }
+                    if (!e.defaultPrevented) {
+                        onClick(e)
+                    }
                 },
                 onMouseEnter: (e: React.MouseEvent<HTMLAnchorElement>) => {
-                    onMouseEnter(e)
                     if (utils.isFunction(props.onMouseEnter)) {
                         props.onMouseEnter(e)
+                    }
+                    if (!e.defaultPrevented) {
+                        onMouseEnter(e)
                     }
                 }
             })

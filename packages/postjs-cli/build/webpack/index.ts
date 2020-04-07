@@ -61,8 +61,10 @@ export class Compiler {
         }
         if (config?.enableHMR) {
             vmp.writeModule('./_hmr_client.js', `
+                const hotEmitter = require('webpack/hot/emitter')
+
+                window['__POST_HMR'] = true
                 window.addEventListener('load', async () => {
-                    const hotEmitter = require('webpack/hot/emitter')
                     const url = 'ws://' + location.host + '/_post/hmr-socket?page=' + encodeURI(location.pathname)
                     const socket = new WebSocket(url, 'hot-update')
                     socket.onmessage = ({ data }) => {
@@ -99,6 +101,9 @@ export class Compiler {
                     return
                 }
 
+                if (this._memfs.existsSync('/0.js')) {
+                    console.log(this._memfs.readFileSync('/0.js').toString())
+                }
                 if (stats.hash && !stats.hasErrors()) {
                     const { namedChunks } = stats.compilation
                     const errorsWarnings = stats.toJson('errors-warnings')

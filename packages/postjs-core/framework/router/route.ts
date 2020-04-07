@@ -1,7 +1,7 @@
 import { parse, ParsedUrlQuery } from 'querystring'
 import { ComponentType } from 'react'
 import utils from '../utils'
-import { URL } from '.'
+import { URL } from './context'
 
 export interface Route {
     path: string
@@ -13,21 +13,21 @@ export function route(base: string, routes: Route[], options?: { location?: { pa
     const fallback = options?.fallback
 
     let pagePath = ''
-    let pathname = loc.pathname
+    let asPath = loc.pathname
     let params: Record<string, string> = {}
     let query: ParsedUrlQuery = parse((loc.search || '').replace(/^\?/, ''))
     let component: ComponentType<any> | null = null
 
     if (base.length > 1 && base.startsWith('/')) {
-        pathname = utils.trimPrefix(pathname, base)
-        if (!pathname.startsWith('/')) {
-            pathname = '/' + pathname
+        asPath = utils.trimPrefix(asPath, base)
+        if (!asPath.startsWith('/')) {
+            asPath = '/' + asPath
         }
     }
 
     routes.sort()
     utils.each(routes, route => {
-        const [_params, ok] = matchPath(route.path, pathname)
+        const [_params, ok] = matchPath(route.path, asPath)
         if (ok) {
             pagePath = route.path
             params = _params
@@ -42,10 +42,10 @@ export function route(base: string, routes: Route[], options?: { location?: { pa
         component = fallback.component
     }
 
-    return [{ pagePath, pathname, params, query }, component]
+    return [{ pagePath, asPath, params, query }, component]
 }
 
-function matchPath(routePath: string, locPath: string): [Record<string, string>, boolean] {
+export function matchPath(routePath: string, locPath: string): [Record<string, string>, boolean] {
     const routeSegments = utils.cleanPath(routePath).replace(/^\//, '').split('/')
     const locSegments = utils.cleanPath(locPath).replace(/^\//, '').split('/')
     const isRoot = locSegments[0] === ''
@@ -64,7 +64,7 @@ function matchPath(routePath: string, locPath: string): [Record<string, string>,
             break
         }
 
-        if (locSeg === undefined) {
+        if (locSeg === undefined || routeSeg === undefined) {
             ok = false
             break
         }

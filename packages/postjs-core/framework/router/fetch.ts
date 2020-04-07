@@ -1,10 +1,20 @@
-import utils from '../utils'
+import utils, { isServer } from '../utils'
 
 export async function fetchPage(pagePath: string) {
+    if (isServer || location.protocol === 'file:') {
+        // only in browser and not a file
+        return
+    }
+
     const {
-        __POST_PAGES: pages = {},
-        __POST_BUILD_MANIFEST: buildManifest = {}
+        __POST_PAGES: pages,
+        __POST_BUILD_MANIFEST: buildManifest
     } = window as any
+
+    if (buildManifest === undefined) {
+        return Promise.reject(new Error('the build-manifest not ready'))
+    }
+
     const buildInfo = buildManifest.pages[pagePath]
     if (buildInfo === undefined) {
         if (pagePath in pages) {
@@ -43,13 +53,6 @@ export async function fetchPage(pagePath: string) {
                 reject(new Error('bad page'))
             }
         }
-        // script['onreadystatechange'] = () => {
-        //     const { readyState } = script as any
-        //     if (!done && readyState === 'loaded' || readyState === 'complete') {
-        //         done = true
-        //         resolve()
-        //     }
-        // }
         script.onerror = err => {
             delete pages[pagePath]
             reject(err)

@@ -4,7 +4,7 @@ import { redirect } from './redirect'
 
 export interface URL {
     pagePath: string
-    pathname: string
+    asPath: string
     params: Record<string, string>
     query: ParsedUrlQuery
 }
@@ -12,16 +12,16 @@ export interface URL {
 export class RouterStore {
     private _url: URL
 
-    constructor(url?: URL) {
-        this._url = url || { pagePath: '/', pathname: '/', params: {}, query: {} }
+    constructor(url: URL) {
+        this._url = url
     }
 
     get pagePath() {
         return this._url.pagePath
     }
 
-    get pathname() {
-        return this._url.pathname
+    get asPath() {
+        return this._url.asPath
     }
 
     get params() {
@@ -41,7 +41,7 @@ export class RouterStore {
     }
 }
 
-export const RouterContext = createContext(new RouterStore())
+export const RouterContext = createContext(new RouterStore({ pagePath: '/', asPath: '/', params: {}, query: {} }))
 
 export function useRouter() {
     return useContext(RouterContext)

@@ -3,16 +3,19 @@ import CssnanoSimple from 'cssnano-simple'
 import MiniCssExtractPlugin from 'mini-css-extract-plugin'
 import path from 'path'
 import postcss from 'postcss'
+import { MinifyOptions } from 'terser'
 import TerserPlugin from 'terser-webpack-plugin'
 import webpack from 'webpack'
 import './loaders/post-app-loader'
+import './loaders/post-component-loader'
 import './loaders/post-page-loader'
 
 export type Config = Pick<webpack.Configuration, 'externals' | 'plugins'> & {
     isServer?: boolean
     isProduction?: boolean
     splitVendorChunk?: boolean
-    terserPluginOptions?: TerserPlugin.TerserPluginOptions
+    forceUseStyleLoader?: boolean
+    terserOptions?: MinifyOptions
     postcssPlugins?: postcss.AcceptedPlugin[]
     babelPresetEnv?: {
         targets?: string | Record<string, any>
@@ -28,7 +31,8 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
         isServer,
         isProduction,
         splitVendorChunk,
-        terserPluginOptions,
+        forceUseStyleLoader,
+        terserOptions,
         postcssPlugins,
         babelPresetEnv
     } = config || {}
@@ -37,11 +41,11 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
         useBuiltIns = 'usage'
     } = babelPresetEnv || {}
     const cssLoader: webpack.RuleSetUse = [
-        isProduction || isServer ? MiniCssExtractPlugin.loader : 'style-loader',
+        (isProduction || isServer && !forceUseStyleLoader) ? MiniCssExtractPlugin.loader : 'style-loader',
         {
             loader: 'css-loader',
             options: {
-                // importLoaders: 1,
+                importLoaders: 1,
                 sourceMap: true
             }
         },
@@ -51,7 +55,7 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
                 ident: 'postcss',
                 plugins: ([
                     autoPrefixer({ overrideBrowserslist: targets })
-                ] as postcss.AcceptedPlugin[]).concat(
+                ] as Array<any>).concat(
                     isProduction ? [new CssnanoSimple()] : [],
                     postcssPlugins || []
                 ),
@@ -92,6 +96,17 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
                                 ['@babel/preset-typescript', { allowNamespaces: true }]
                             ],
                             plugins: [
+                                ['babel-plugin-module-resolver', {
+                                    root: [context],
+                                    alias: [
+                                        'components',
+                                        'style',
+                                        'assets'
+                                    ].reduce((alias, name) => {
+                                        alias[name] = path.join(context, name)
+                                        return alias
+                                    }, {})
+                                }],
                                 !isServer && ['@babel/plugin-transform-runtime', {
                                     corejs: false, // use preset-env
                                     regenerator: useBuiltIns !== 'usage',
@@ -104,6 +119,7 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
                                 '@babel/plugin-proposal-numeric-separator',
                                 isServer && '@babel/plugin-syntax-bigint',
                                 !isProduction && ['babel-plugin-transform-react-remove-prop-types', { removeImport: true }]
+
                             ].filter(Boolean)
                         }
                     }
@@ -162,10 +178,14 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
             extensions: ['.js', '.jsx', '.mjs', '.ts', '.tsx', '.json', '.wasm']
         },
         resolveLoader: {
-            alias: {
-                'post-app-loader': path.join(__dirname, 'loaders/post-app-loader.js'),
-                'post-page-loader': path.join(__dirname, 'loaders/post-page-loader.js')
-            },
+            alias: [
+                'post-app-loader',
+                'post-component-loader',
+                'post-page-loader'
+            ].reduce((alias, name) => {
+                alias[name] = path.join(__dirname, `loaders/${name}.js`)
+                return alias
+            }, {}),
             modules: [path.join(context, 'node_modules'), 'node_modules']
         },
         externals,
@@ -189,11 +209,13 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
             },
             minimize: isProduction,
             minimizer: isProduction ? [
-                new TerserPlugin(terserPluginOptions || {
+                new TerserPlugin({
                     cache: true,
                     extractComments: false,
                     terserOptions: {
-                        safari10: true
+                        compress: true,
+                        safari10: true,
+                        ...terserOptions
                     }
                 })
             ] : undefined
@@ -202,6 +224,6 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
             maxEntrypointSize: 1 << 20, // 1mb
             maxAssetSize: 1 << 20
         },
-        devtool: !isProduction ? 'eval-source-map' : false
+        devtool: !isProduction ? 'inline-source-map' : false
     }
 }

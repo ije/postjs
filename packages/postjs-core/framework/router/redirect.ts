@@ -1,11 +1,16 @@
 import hotEmitter from 'webpack/hot/emitter'
-import utils from '../utils'
+import utils, { isServer } from '../utils'
 import { fetchPage } from './fetch'
 import { PageTransition } from './transition'
 
 let redirectMark: { pagePath: string, asPath?: string } | null = null
 
 export async function redirect(pagePath: string, asPath?: string, replace?: boolean, transition?: PageTransition | string) {
+    if (isServer) {
+        // only in browser
+        return
+    }
+
     const {
         __POST_INITIAL_PAGE: initialPage = {},
         __POST_PAGES: pages = {},

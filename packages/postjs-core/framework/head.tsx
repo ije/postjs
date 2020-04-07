@@ -1,9 +1,7 @@
 import React, { Children, Fragment, isValidElement, PropsWithChildren, ReactNode, useEffect } from 'react'
-import utils from './utils'
+import utils, { isServer } from './utils'
 
-const isServer = !process['browser']
 const stateOnServer = new Map<string, { type: string, props: any }>()
-const stringify = (s: string) => JSON.stringify(s)
 
 export function Head({ children }: PropsWithChildren<{}>) {
     if (isServer) {
@@ -85,7 +83,7 @@ export function renderHeadToString(): string[] {
         } else {
             const attrs = Object.keys(props)
                 .filter(key => key !== 'children')
-                .map(key => ` ${key}=${stringify(String(props[key]))}`)
+                .map(key => ` ${key}=${JSON.stringify(String(props[key]))}`)
                 .join('')
             if (utils.isNEString(props.children)) {
                 helmet.push(`<${type}${attrs}>${props.children}</${type}>`)

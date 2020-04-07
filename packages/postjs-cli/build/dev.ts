@@ -1,24 +1,21 @@
-import { route } from '@postjs/core'
+import { URL } from '@postjs/core'
+import { route } from '@postjs/core/dist/router/route'
 import { EventEmitter } from 'events'
 import fs from 'fs-extra'
-import glob from 'glob'
 import path from 'path'
 import React, { Fragment } from 'react'
-import webpack from 'webpack'
-import DynamicEntryPlugin from 'webpack/lib/DynamicEntryPlugin'
 import { peerDeps } from '.'
 import utils from '../shared/utils'
 import { AppConfig, craeteAppEntry, loadAppConfig } from './app'
-import { html, renderPage, runJS, ssrStaticMethods } from './ssr'
+import { html, renderPage, ssrStaticMethods } from './ssr'
+import { addEntry, getJSXFiles, NullComponent, runJS } from './utils'
 import { ChunkWithContent, Compiler } from './webpack'
-
-// A component returns nothing
-const NullComponent = () => null
 
 export class DevWatcher {
     private _appConfig: AppConfig
-    private _pageFiles: string[]
+    private _jsxFiles: string[]
     private _pageChunks: Map<string, ChunkWithContent & { html?: string, staticProps?: any }>
+    private _componentChunks: Map<string, ChunkWithContent>
     private _commonChunks: Map<string, ChunkWithContent>
     private _buildManifest: Record<string, any> | null
     private _compiler: Compiler
@@ -26,8 +23,12 @@ export class DevWatcher {
     constructor(appDir: string) {
         const appConfig = loadAppConfig(appDir)
         this._appConfig = appConfig
-        this._pageFiles = this._getPageFiles()
+        this._jsxFiles = [
+            ...getJSXFiles('components/', this._srcDir),
+            ...getJSXFiles('pages/', this._srcDir)
+        ]
         this._pageChunks = new Map()
+        this._componentChunks = new Map()
         this._commonChunks = new Map()
         this._buildManifest = null
         this._compiler = new Compiler(this._srcDir, craeteAppEntry(this._appConfig), {
@@ -38,6 +39,11 @@ export class DevWatcher {
                 useBuiltIns: appConfig.polyfillsMode
             }
         })
+    }
+
+    private get _srcDir() {
+        const { rootDir, srcDir } = this._appConfig
+        return path.join(rootDir, srcDir)
     }
 
     get isInitiated() {
@@ -52,27 +58,20 @@ export class DevWatcher {
         return { ...this._buildManifest }
     }
 
-    private get _srcDir() {
-        const { rootDir, srcDir } = this._appConfig
-        return path.join(rootDir, srcDir)
-    }
-
-    private _getPageFiles() {
-        return glob.sync(
-            'pages/**/*.{js,jsx,mjs,ts,tsx}',
-            { cwd: this._srcDir }
-        ).map(p => utils.trimPrefix(p, 'pages/')).filter(p => /^[a-z0-9\.\/\$\-\*_~ ]+$/i.test(p))
-    }
-
-    private async _renderPage(pagePath: string) {
-        if (pagePath !== '' && this._pageChunks.has(pagePath)) {
-            const pageChunk = this._pageChunks.get(pagePath)!
-            const appRequest = this._pageFiles.find(file => /^_app\.(jsx?|mjs|tsx?)$/.test(file))
-            const { chunks } = await new Compiler(this._srcDir, `
+    private async _renderPage(url: URL) {
+        const pageRawRequest = this._jsxFiles.find(name => {
+            const chunkName = name.replace(/\.(jsx?|mjs|tsx?)$/i, '').replace(/ /g, '-')
+            const _pagePath = utils.trimPrefix(chunkName, 'pages').replace(/\/index$/, '') || '/'
+            return _pagePath === url.pagePath
+        })
+        if (pageRawRequest && this._pageChunks.has(url.pagePath)) {
+            const pageChunk = this._pageChunks.get(url.pagePath)!
+            const appRawRequest = this._jsxFiles.find(name => /^pages\/_app\.(jsx?|mjs|tsx?)$/i.test(name))
+            const { hash, chunks } = await new Compiler(this._srcDir, `
                 const React = require('react')
                 const { isValidElementType } = require('react-is')
-                const App = ${appRequest !== undefined} ? require('./pages/${appRequest}') : null
-                const PageComponent = require('./pages${pagePath}')
+                const App = ${appRawRequest !== undefined} ? require('./${appRawRequest}') : null
+                const PageComponent = require(${JSON.stringify(pageRawRequest)})
 
                 function validComponent(mod, name) {
                     const component = mod.default
@@ -111,7 +110,6 @@ export class DevWatcher {
                 }
             }
 
-            const url = { pagePath, pathname: pagePath, params: {}, query: {} }
             const { staticProps, head, body } = await renderPage(APP, appStaticProps, url, reqPageComponent())
             const pageHtml = html({
                 lang: this._appConfig.lang,
@@ -119,15 +117,16 @@ export class DevWatcher {
                 styles: mainCSS ? [{ 'data-post-style': 'dev', content: mainCSS }] : undefined,
                 scripts: [
                     { type: 'application/json', id: 'ssr-data', innerText: JSON.stringify({ url, staticProps, appStaticProps }) },
-                    { src: `_post/pages/${pagePath.replace(/^\/+/, '') || 'index'}.js?v=${pageChunk.hash}`, async: true },
-                    ...Array.from(this._commonChunks.values()).map(({ name, hash }) => ({ src: `_post/${name}.js?v=${hash}`, async: true }))
+                    { src: `/_post/build-manifest.js?v=${hash}`, async: true },
+                    { src: `/_post/pages/${url.pagePath.replace(/^\/+/, '') || 'index'}.js?v=${pageChunk.hash}`, async: true },
+                    ...Array.from(this._commonChunks.values()).map(({ name, hash }) => ({ src: `/_post/${name}.js?v=${hash}`, async: true }))
                 ],
                 body
             })
 
             pageChunk.html = pageHtml
             pageChunk.staticProps = staticProps
-            console.log('render page: ' + pagePath)
+            console.log('render page: ' + url.pagePath)
         }
     }
 
@@ -146,7 +145,7 @@ export class DevWatcher {
         if (pagePath !== '' && this._pageChunks.has(pagePath)) {
             const pageChunk = this._pageChunks.get(pagePath)!
             if (pageChunk.html === undefined) {
-                await this._renderPage(pagePath)
+                await this._renderPage(url)
             }
             if (pageChunk.html) {
                 return [200, pageChunk.html]
@@ -156,7 +155,7 @@ export class DevWatcher {
         if (this._pageChunks.has('/_404')) {
             const pageChunk = this._pageChunks.get('/_404')!
             if (pageChunk.html === undefined) {
-                await this._renderPage('/_404')
+                await this._renderPage({ ...url, pagePath: '/_404' })
             }
             if (pageChunk.html) {
                 return [404, pageChunk.html]
@@ -181,7 +180,7 @@ export class DevWatcher {
         if (pagePath !== '' && this._pageChunks.has(pagePath)) {
             const pageChunk = this._pageChunks.get(pagePath)!
             if (pageChunk.staticProps === undefined) {
-                await this._renderPage(pagePath)
+                await this._renderPage(url)
             }
             return pageChunk.staticProps
         }
@@ -194,6 +193,11 @@ export class DevWatcher {
             const pagePath = '/' + name.replace(/^pages\/(index)?/, '')
             if (this._pageChunks.has(pagePath)) {
                 return this._pageChunks.get(pagePath)!
+            }
+        } if (name.startsWith('components/')) {
+            name = utils.trimPrefix(name, 'components/')
+            if (this._componentChunks.has(name)) {
+                return this._componentChunks.get(name)!
             }
         } else if (this._commonChunks.has(name)) {
             return this._commonChunks.get(name)!
@@ -215,20 +219,34 @@ export class DevWatcher {
 
     async watch(emitter: EventEmitter) {
         this._compiler.hooks.make.tapPromise(
-            'addPageEntries',
+            'add entries',
             async compilation => {
-                this._pageFiles = this._pageFiles.filter(pageFile => {
-                    return fs.existsSync(path.join(this._srcDir, 'pages', pageFile))
+                this._jsxFiles = this._jsxFiles.filter(jsxFile => {
+                    return fs.existsSync(path.join(this._srcDir, jsxFile))
                 })
-                return Promise.all(this._pageFiles.map(pageFile => {
-                    const pagePath = ('/' + pageFile).replace(/(\/index)?\.(js|ts)x?$/i, '').replace(/ /g, '-') || '/'
-                    const pageName = pageFile.replace(/\.(js|ts)x?$/i, '')
-                    const isApp = pageName === '_app'
+                return Promise.all(this._jsxFiles.map(jsxFile => {
+                    let loader = { type: '', options: { rawRequest: './' + jsxFile } }
+                    let chunkName = jsxFile.replace(/\.(jsx?|mjs|tsx?)$/i, '').replace(/ /g, '-')
+                    if (chunkName === 'pages/_app') {
+                        loader.type = 'app'
+                        chunkName = 'app'
+                    } else if (chunkName.startsWith('pages/')) {
+                        const pagePath = utils.trimPrefix(chunkName, 'pages').replace(/\/index$/i, '') || '/'
+                        loader.type = 'page'
+                        loader.options['pagePath'] = pagePath
+                    } else if (chunkName.startsWith('components/')) {
+                        const name = utils.trimPrefix(chunkName, 'components/')
+                        loader.type = 'component'
+                        loader.options['name'] = name
+                    } else {
+                        return Promise.resolve()
+                    }
+
                     return addEntry(
                         compilation,
-                        this._compiler!.context,
-                        isApp ? 'app' : `pages/${pageName}`,
-                        [`post-${isApp ? 'app' : 'page'}-loader?${JSON.stringify({ pagePath, rawRequest: './pages/' + pageFile })}!`]
+                        this._srcDir,
+                        chunkName,
+                        [`post-${loader.type}-loader?${JSON.stringify(loader.options)}!`]
                     )
                 })).catch(err => console.error(err))
             }
@@ -239,7 +257,7 @@ export class DevWatcher {
             ignored: /[\\/]node_modules[\\/]/
         }, (err, stats) => {
             if (err) {
-                console.error(err)
+                console.error('watch error:', err)
                 return
             }
 
@@ -255,43 +273,47 @@ export class DevWatcher {
                 warnings: errorsWarnings.warnings,
                 startTime,
                 endTime,
+                components: {},
                 pages: {}
             }
 
             if (!stats.hasErrors()) {
-                const removedPages = Array.from(this._pageChunks.keys()).reduce((set, key) => {
-                    set.add(key)
-                    return set
-                }, new Set<string>())
-                compilation.namedChunks.forEach(({ name, hash }) => {
+                compilation.namedChunks.forEach(({ name, hash, rawRequest }) => {
                     const chunkFileName = '/' + name + '.js'
                     if (memfs.existsSync(chunkFileName)) {
+                        const content = memfs.readFileSync(chunkFileName).toString()
                         if (name.startsWith('pages/')) {
-                            const pageName = name.replace('pages/', '') || 'index'
-                            const pagePath = '/' + name.replace(/^pages\/(index)?/, '')
-                            const content = memfs.readFileSync(chunkFileName).toString()
-                            removedPages.delete(pagePath)
-                            if (compilation.namedChunks.has('app')) {
-                                hash = compilation.namedChunks.get('app')!.hash + '.' + hash
-                            }
+                            const pageName = utils.trimPrefix(name, 'pages/')
+                            const pagePath = ('/' + pageName).replace(/\/index$/i, '') || '/'
+                            name = utils.trimPrefix(name, 'pages/')
                             if (!this._pageChunks.has(pagePath) || this._pageChunks.get(pagePath)!.hash !== hash) {
                                 this._pageChunks.set(pagePath, { name: pageName, hash, content })
                             }
                             this._buildManifest!.pages[pagePath] = { name: pageName, hash }
+                        } else if (name.startsWith('components/')) {
+                            name = utils.trimPrefix(name, 'components/')
+                            if (!this._componentChunks.has(name) || this._componentChunks.get(name)!.hash !== hash) {
+                                this._componentChunks.set(name, { name, hash, content })
+                            }
+                            this._buildManifest!.components[name] = { hash }
                         } else if (!this._commonChunks.has(name) || this._commonChunks.get(name)!.hash !== hash) {
-                            const content = memfs.readFileSync(chunkFileName).toString()
                             this._commonChunks.set(name, { name, hash, content })
                         }
                     }
                 })
 
                 // clear
-                removedPages.forEach(pagePath => this._pageChunks.delete(pagePath))
                 if (this._commonChunks.has('app') && !compilation.namedChunks.has('app')) {
                     this._commonChunks.delete('app')
                 }
+                Array.from(this._pageChunks.keys()).filter(pagePath => !Object.keys(this._buildManifest!.pages).includes(pagePath)).forEach(pagePath => {
+                    this._pageChunks.delete(pagePath)
+                })
+                Array.from(this._componentChunks.keys()).filter(name => !Object.keys(this._buildManifest!.components).includes(name)).forEach(name => {
+                    this._componentChunks.delete(name)
+                })
             } else {
-                console.error(errorsWarnings.errors)
+                console.error('watch error:', errorsWarnings.errors)
             }
 
             if (isInitiated) {
@@ -299,23 +321,4 @@ export class DevWatcher {
             }
         })
     }
-}
-
-// Based on https://github.com/webpack/webpack/blob/master/lib/DynamicEntryPlugin.js
-function addEntry(
-    compilation: webpack.compilation.Compilation,
-    context: string,
-    name: string,
-    entry: string[]
-) {
-    return new Promise((resolve, reject) => {
-        const dep = DynamicEntryPlugin.createDependency(entry, name)
-        compilation.addEntry(context, dep, name, (err: Error | null) => {
-            if (err) {
-                reject(err)
-                return
-            }
-            resolve()
-        })
-    })
 }

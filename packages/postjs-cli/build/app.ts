@@ -1,23 +1,27 @@
 import fs from 'fs-extra'
 import path from 'path'
+import postcss from 'postcss'
 import utils from '../shared/utils'
 
 export interface AppConfig {
     readonly rootDir: string
     readonly srcDir: string
-    readonly lang: string
     readonly baseUrl: string
-    readonly browserslist?: any
+    readonly lang: string
+    readonly browserslist?: string | string[] | Record<string, any>
     readonly polyfillsMode?: 'usage' | 'entry'
     readonly polyfills?: string[]
+    readonly postcss?: {
+        plugins?: postcss.AcceptedPlugin[]
+    }
 }
 
 export function loadAppConfig(appDir: string) {
     const appConfig: AppConfig = {
         rootDir: path.resolve(appDir),
         srcDir: '/',
-        lang: 'en',
-        baseUrl: '/'
+        baseUrl: '/',
+        lang: 'en'
     }
     let settings: any = {}
 
@@ -32,23 +36,23 @@ export function loadAppConfig(appDir: string) {
     }
 
     const {
-        lang,
-        baseUrl,
         srcDir,
+        baseUrl,
+        lang,
         browserslist,
         polyfillsMode,
         polyfills
     } = settings
-    if (/^[a-z]{2}(\-[a-z0-9]+)?$/i.test(lang)) {
-        Object.assign(appConfig, { lang })
+    if (utils.isNEString(srcDir)) {
+        Object.assign(appConfig, { srcDir: utils.cleanPath(srcDir) })
     }
     if (utils.isNEString(baseUrl)) {
         Object.assign(appConfig, { baseUrl: utils.cleanPath(encodeURI(baseUrl)) })
     }
-    if (utils.isNEString(srcDir)) {
-        Object.assign(appConfig, { srcDir: utils.cleanPath(srcDir) })
+    if (/^[a-z]{2}(\-[a-z0-9]+)?$/i.test(lang)) {
+        Object.assign(appConfig, { lang })
     }
-    if (utils.isNEString(browserslist) || utils.isObject(browserslist) || utils.isArray(browserslist)) {
+    if (utils.isNEString(browserslist) || utils.isNEArray(browserslist) || utils.isObject(browserslist)) {
         Object.assign(appConfig, { browserslist })
     }
     if (/^usage|entry$/.test(polyfillsMode)) {
@@ -69,13 +73,6 @@ export const craeteAppEntry = ({ baseUrl, polyfillsMode = 'usage', polyfills = [
     // ployfills
     ${polyfillsMode === 'entry' ? polyfills.map(name => `import ${JSON.stringify(name)}`).join('\n') : ''}
     ${polyfillsMode === 'entry' ? "import 'regenerator-runtime/runtime'" : "import 'whatwg-fetch'"}
-
-    // fetch build manifest as soon as possible
-    if (/^https?/.test(location.protocol)) {
-        fetch('build-manifest.json').then(resp => resp.json()).then(data => {
-            window.__POST_BUILD_MANIFEST = data
-        })
-    }
 
     window.addEventListener('load', () => {
         const { __POST_APP: App = React.Fragment, __POST_INITIAL_PAGE: initialPage } = window

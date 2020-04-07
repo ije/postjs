@@ -76,3 +76,5 @@ export default {
             .join('/')
     }
 }
+
+export const isServer = !process['browser']

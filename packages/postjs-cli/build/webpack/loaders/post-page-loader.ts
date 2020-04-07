@@ -26,7 +26,7 @@ const template = (pagePath: string, rawRequest: string) => `
         path: ${pagePath},
         reqComponent:() => {
             const mod = require(${rawRequest})
-            const component =  validComponent(mod.default)
+            const component = validComponent(mod.default)
             component.hasGetStaticPropsMethod = typeof mod['getStaticProps'] === 'function' || typeof component['getStaticProps'] === 'function'
             return component
         }

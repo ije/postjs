@@ -6,7 +6,7 @@ const template = (rawRequest: string) => `
     const { isValidElementType } = require('react-is')
     const hotEmitter = require('webpack/hot/emitter')
 
-     function validComponent(component) {
+    function validComponent(component) {
        if (component === undefined) {
             return () => React.createElement('p', {style: {color: 'red'}}, 'bad app: miss default export')
         } else if (!isValidElementType(component)) {

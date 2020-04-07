@@ -14,11 +14,6 @@ export function start(appDir: string, port: number) {
         const pathname = utils.cleanPath((url.pathname || '/'))
         const wantContentType = getContentType(pathname)
 
-        if (pathname === '/build-manifest.json') {
-            sendText(req, res, 200, wantContentType, JSON.stringify(watcher.buildManifest))
-            return
-        }
-
         if (pathname.endsWith('.hot-update.json') || pathname.endsWith('.hot-update.js')) {
             const content = watcher.getOutputContent(pathname)
             if (content === null) {
@@ -34,6 +29,11 @@ export function start(appDir: string, port: number) {
         }
 
         if (pathname.startsWith('/_post/')) {
+            if (pathname === '/_post/build-manifest.js') {
+                sendText(req, res, 200, wantContentType, 'window.__POST_BUILD_MANIFEST = ' + JSON.stringify(watcher.buildManifest))
+                return
+            }
+
             if (pathname.startsWith('/_post/pages/') && pathname.endsWith('.json')) {
                 const pagePath = utils.trimPrefix(pathname, '/_post/pages').replace(/(index)?\.json?$/i, '')
                 const staticProps = await watcher.getPageStaticProps(pagePath)

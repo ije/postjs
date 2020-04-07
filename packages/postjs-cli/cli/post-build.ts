@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
-import arg from '../shared/arg'
 import build from '../build'
+import arg from '../shared/arg'
 
 const helpMessage = `Compiles the postjs app for production deployment
 
@@ -18,6 +18,11 @@ export default function (...argv: string[]) {
     const appDir = path.resolve(dir)
     if (!fs.existsSync(appDir)) {
         console.error(`no such directory: ${dir}`)
+        process.exit(0)
+    }
+
+    if (!fs.existsSync(path.join(appDir, 'pages'))) {
+        console.error('exit: no pages')
         process.exit(0)
     }
 
