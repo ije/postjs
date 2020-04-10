@@ -26,30 +26,43 @@
     ],
     "rules": {
         "eol-last": [
-            "error",
+            "warn",
             "always"
         ],
+        "no-multiple-empty-lines": [
+            "warn",
+            {
+                "max": 1
+            }
+        ],
         "quotes": [
-            "error",
+            "warn",
             "single",
             {
                 "avoidEscape": true
             }
         ],
         "semi": [
-            "error",
+            "warn",
             "never"
         ],
         "comma-dangle": [
-            "error",
+            "warn",
             "never"
         ],
         "comma-spacing": [
-            "error",
+            "warn",
             {
                 "before": false,
                 "after": true
             }
+        ],
+        "eqeqeq": [
+            "error",
+            "always"
+        ],
+        "no-empty": [
+            "warn"
         ],
         "no-unused-vars": "off",
         "@typescript-eslint/no-unused-vars": [
