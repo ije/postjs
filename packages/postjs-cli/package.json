@@ -4,7 +4,7 @@
     "description": "The Post-Front-End Framework",
     "repository": "https://github.com/postui/postjs",
     "bugs": "https://github.com/postui/postjs/issues",
-    "homepage": "https://postui.com/postjs",
+    "homepage": "https://post-js.org",
     "license": "MIT",
     "bin": {
         "post": "./dist/cli/post.js"
@@ -73,7 +73,7 @@
         "@types/memory-fs": "^0.3.2",
         "@types/mime": "^2.0.1",
         "@types/mini-css-extract-plugin": "^0.9.1",
-        "@types/node": "^13.11.0",
+        "@types/node": "^13.11.1",
         "@types/react": "^16.9.31",
         "@types/react-dom": "^16.9.6",
         "@types/terser-webpack-plugin": "^2.2.0",

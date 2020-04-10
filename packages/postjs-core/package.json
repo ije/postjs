@@ -4,7 +4,7 @@
     "description": "The Post-Front-End Framework",
     "repository": "https://github.com/postui/postjs",
     "bugs": "https://github.com/postui/postjs/issues",
-    "homepage": "https://postui.com/postjs",
+    "homepage": "https://post-js.org",
     "license": "MIT",
     "main": "./dist/index.js",
     "types": "./typings/index.d.ts",
@@ -17,7 +17,8 @@
         "watch": "rm -rf ./dist && node tsc.js --watch"
     },
     "dependencies": {
-        "querystring": "^0.2.0"
+        "querystring": "^0.2.0",
+        "react-is": "^16.13.1"
     },
     "peerDependencies": {
         "react": "^16.8.0",
@@ -26,6 +27,7 @@
     "devDependencies": {
         "@types/react": "^16.9.31",
         "@types/react-dom": "^16.9.6",
+        "@types/react-is": "^16.7.1",
         "typescript": "^3.8.3"
     },
     "engines": {
