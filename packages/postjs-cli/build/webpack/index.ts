@@ -1,8 +1,8 @@
+import { utils } from '@postjs/core'
 import MemoryFS from 'memory-fs'
 import path from 'path'
 import webpack from 'webpack'
 import VirtualModulesPlugin from 'webpack-virtual-modules'
-import utils from '../../shared/utils'
 import createConfig, { Config } from './config'
 
 export interface MiniStats {
@@ -30,19 +30,20 @@ export class Compiler {
         const vmp = new VirtualModulesPlugin()
         const webpackEntry: webpack.Entry = {}
         if (utils.isNEString(entry)) {
-            webpackEntry['main'] = './_main.js'
+            webpackEntry['main'] = ['./_main.js']
         } else if (utils.isObject(entry)) {
             Object.keys(entry).forEach(name => {
-                webpackEntry[name] = `./_${name}.js`
+                if (utils.isNEString(entry[name])) {
+                    webpackEntry[name] = [`./_${name}.js`]
+                }
             })
         }
         if (config?.enableHMR) {
             Object.keys(webpackEntry).forEach(key => {
                 webpackEntry[key] = [
                     require.resolve('webpack/hot/dev-server'),
-                    './_hmr_client.js',
-                    String(webpackEntry[key])
-                ]
+                    './_hmr_client.js'
+                ].concat(webpackEntry[key])
             })
         }
         this._memfs = new MemoryFS()
@@ -56,27 +57,28 @@ export class Compiler {
             vmp.writeModule('./_main.js', entry)
         } else if (utils.isObject(entry)) {
             Object.keys(entry).forEach(name => {
-                vmp.writeModule(`./_${name}.js`, entry[name])
+                if (utils.isNEString(entry[name])) {
+                    vmp.writeModule(`./_${name}.js`, entry[name])
+                }
             })
         }
         if (config?.enableHMR) {
             vmp.writeModule('./_hmr_client.js', `
-                const hotEmitter = require('webpack/hot/emitter')
-
                 window['__POST_HMR'] = true
-                window.addEventListener('load', async () => {
-                    const url = 'ws://' + location.host + '/_post/hmr-socket?page=' + encodeURI(location.pathname)
+                window.addEventListener('load', () => {
+                    const hotEmitter = require('webpack/hot/emitter')
+                    const url = location.protocol.replace(/^http/, 'ws') + '//' + location.host + '/_post/hmr-socket?page=' + encodeURI(location.pathname)
                     const socket = new WebSocket(url, 'hot-update')
                     socket.onmessage = ({ data }) => {
                         const buildManifest = JSON.parse(data)
-                        if (buildManifest.hash) {
+                        if (buildManifest && buildManifest.hash) {
                             window.__POST_BUILD_MANIFEST = buildManifest
                             if (!(Array.isArray(buildManifest.errors) && buildManifest.errors.length > 0)) {
                                 hotEmitter.emit('webpackHotUpdate', buildManifest.hash)
                             }
                         }
                     }
-                }, false)
+                })
             `)
         }
     }
@@ -101,9 +103,6 @@ export class Compiler {
                     return
                 }
 
-                if (this._memfs.existsSync('/0.js')) {
-                    console.log(this._memfs.readFileSync('/0.js').toString())
-                }
                 if (stats.hash && !stats.hasErrors()) {
                     const { namedChunks } = stats.compilation
                     const errorsWarnings = stats.toJson('errors-warnings')

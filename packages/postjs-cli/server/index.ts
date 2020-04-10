@@ -3,7 +3,7 @@ import path from 'path'
 import zlib from 'zlib'
 
 export function start(appDir: string, port: number) {
-
+    console.log(`Server ready on http://localhost:${port}`)
 }
 
 // sendText sends text with compression

@@ -41,7 +41,9 @@ export class RouterStore {
     }
 }
 
-export const RouterContext = createContext(new RouterStore({ pagePath: '/', asPath: '/', params: {}, query: {} }))
+export const RouterContext = createContext(
+    new RouterStore({ pagePath: '/', asPath: '/', params: {}, query: {} })
+)
 
 export function useRouter() {
     return useContext(RouterContext)

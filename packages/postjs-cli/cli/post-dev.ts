@@ -46,5 +46,4 @@ export default function (...argv: string[]) {
     }
 
     start(appDir, parseInt(port))
-    console.log(`Server ready on http://localhost:${port}`)
 }

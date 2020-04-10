@@ -2,28 +2,18 @@ import loaderUtils from 'loader-utils'
 import webpack from 'webpack'
 
 const template = (rawRequest: string) => `
-    const React = require('react')
-    const { isValidElementType } = require('react-is')
+    const { utils } = require('@postjs/core')
     const hotEmitter = require('webpack/hot/emitter')
-
-    function validComponent(component) {
-       if (component === undefined) {
-            return () => React.createElement('p', {style: {color: 'red'}}, 'bad app: miss default export')
-        } else if (!isValidElementType(component)) {
-            return () => React.createElement('p', {style: {color: 'red'}}, 'bad app: invalid element type')
-        }
-        return component
-    }
+    const mod = require(${rawRequest})
 
     if (module.hot) {
         module.hot.accept(${rawRequest}, () => {
-            const { default: component } = require(${rawRequest})
-            hotEmitter.emit('postAppHotUpdate', validComponent(component))
+            const mod = require(${rawRequest})
+            hotEmitter.emit('postAppHotUpdate', utils.isComponent(mod.default, 'app'))
         })
     }
 
-    const { default: component } = require(${rawRequest})
-    window.__POST_APP = validComponent(component)
+    (window.__POST_APP = window.__POST_APP || {}).Component = utils.isComponent(mod.default, 'app')
 `
 
 const loader: webpack.loader.Loader = function () {

@@ -1,7 +1,11 @@
 export * from './component'
 export * from './head'
 export * from './link'
+export * from './page'
+export * from './redirect'
 export * from './router'
+export * from './transition'
+export * from './utils'
 
 export interface AppConfig {
     lang?: string                      // default is 'en'

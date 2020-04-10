@@ -1,5 +1,6 @@
-import autoPrefixer from 'autoprefixer'
-import CssnanoSimple from 'cssnano-simple'
+import autoprefixer from 'autoprefixer'
+import Cssnano from 'cssnano-simple'
+import fs from 'fs'
 import MiniCssExtractPlugin from 'mini-css-extract-plugin'
 import path from 'path'
 import postcss from 'postcss'
@@ -14,13 +15,11 @@ export type Config = Pick<webpack.Configuration, 'externals' | 'plugins'> & {
     isServer?: boolean
     isProduction?: boolean
     splitVendorChunk?: boolean
-    forceUseStyleLoader?: boolean
     terserOptions?: MinifyOptions
+    useSass?: boolean
     postcssPlugins?: postcss.AcceptedPlugin[]
-    babelPresetEnv?: {
-        targets?: string | Record<string, any>
-        useBuiltIns?: 'usage' | 'entry'
-    }
+    browserslist?: string | Record<string, any>
+    useBuiltIns?: 'usage' | 'entry'
 }
 
 // https://webpack.js.org/configuration/
@@ -31,17 +30,14 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
         isServer,
         isProduction,
         splitVendorChunk,
-        forceUseStyleLoader,
         terserOptions,
+        useSass,
         postcssPlugins,
-        babelPresetEnv
-    } = config || {}
-    const {
-        targets = '> 1%, last 2 versions, Firefox ESR',
+        browserslist = '> 1%, last 2 versions, Firefox ESR',
         useBuiltIns = 'usage'
-    } = babelPresetEnv || {}
+    } = config || {}
     const cssLoader: webpack.RuleSetUse = [
-        (isProduction || isServer && !forceUseStyleLoader) ? MiniCssExtractPlugin.loader : 'style-loader',
+        isProduction || isServer ? MiniCssExtractPlugin.loader : 'style-loader',
         {
             loader: 'css-loader',
             options: {
@@ -54,9 +50,9 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
             options: {
                 ident: 'postcss',
                 plugins: ([
-                    autoPrefixer({ overrideBrowserslist: targets })
-                ] as Array<any>).concat(
-                    isProduction ? [new CssnanoSimple()] : [],
+                    autoprefixer({ overrideBrowserslist: browserslist })
+                ] as postcss.AcceptedPlugin[]).concat(
+                    isProduction ? new Cssnano() : [],
                     postcssPlugins || []
                 ),
                 sourceMap: true
@@ -87,7 +83,7 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
                             sourceType: 'unambiguous',
                             presets: [
                                 ['@babel/preset-env', isServer ? { targets: { node: 'current' } } : {
-                                    targets,
+                                    targets: browserslist,
                                     useBuiltIns,
                                     corejs: 3,
                                     modules: false
@@ -98,16 +94,25 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
                             plugins: [
                                 ['babel-plugin-module-resolver', {
                                     root: [context],
-                                    alias: [
-                                        'components',
-                                        'style',
-                                        'assets'
-                                    ].reduce((alias, name) => {
-                                        alias[name] = path.join(context, name)
+                                    alias: (() => {
+                                        const alias = {}
+                                        const items = fs.readdirSync(context)
+                                        items.forEach(name => {
+                                            const fullPath = path.join(context, name)
+                                            const stat = fs.statSync(fullPath)
+                                            if (
+                                                stat.isDirectory() &&
+                                                !name.startsWith('.') &&
+                                                !(/^dist|node_modules$/.test(name)) &&
+                                                !fs.existsSync(path.join(context, 'node_modules', name))
+                                            ) {
+                                                alias[name] = fullPath
+                                            }
+                                        })
                                         return alias
-                                    }, {})
+                                    })()
                                 }],
-                                !isServer && ['@babel/plugin-transform-runtime', {
+                                ['@babel/plugin-transform-runtime', {
                                     corejs: false, // use preset-env
                                     regenerator: useBuiltIns !== 'usage',
                                     helpers: useBuiltIns === 'usage'
@@ -119,7 +124,6 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
                                 '@babel/plugin-proposal-numeric-separator',
                                 isServer && '@babel/plugin-syntax-bigint',
                                 !isProduction && ['babel-plugin-transform-react-remove-prop-types', { removeImport: true }]
-
                             ].filter(Boolean)
                         }
                     }
@@ -135,7 +139,7 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
                         }
                     ])
                 },
-                {
+                useSass && {
                     test: /\.(sass|scss)$/i,
                     use: cssLoader.concat([
                         {
@@ -165,7 +169,7 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
                         }
                     }
                 }
-            ]
+            ].filter(Boolean) as webpack.RuleSetRule[]
         },
         plugins: (isProduction || isServer ? [
             new MiniCssExtractPlugin({
@@ -193,14 +197,20 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
             runtimeChunk: !isServer && { name: 'webpack-runtime' },
             splitChunks: splitVendorChunk && {
                 cacheGroups: {
-                    vendor: {
+                    commons: {
                         priority: 1,
+                        name: 'commons',
+                        chunks: 'initial',
+                        minChunks: 2
+                    },
+                    vendor: {
+                        priority: 2,
                         test: /[\\/](node_modules|packages[\\/]postjs-core)[\\/]/,
                         name: 'vendor',
                         chunks: 'initial'
                     },
                     ployfills: {
-                        priority: 2,
+                        priority: 3,
                         test: /[\\/]node_modules[\\/](@babel[\\/]runtime|core-js|regenerator-runtime|whatwg-fetch)[\\/]/,
                         name: 'ployfills',
                         chunks: 'initial'
@@ -222,8 +232,8 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
         },
         performance: {
             maxEntrypointSize: 1 << 20, // 1mb
-            maxAssetSize: 1 << 20
+            maxAssetSize: 1 << 20 // 1mb
         },
-        devtool: !isProduction ? 'inline-source-map' : false
+        devtool: !isProduction && !isServer ? 'inline-source-map' : false
     }
 }

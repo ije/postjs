@@ -1,100 +1,114 @@
-import React, { Children, ComponentType, PropsWithChildren, useEffect, useState } from 'react'
+import React, { Children, ComponentType, Fragment, PropsWithChildren, useEffect, useState } from 'react'
 import hotEmitter from 'webpack/hot/emitter'
-import utils from './utils'
+import { isServer, utils } from './utils'
 
-interface ComponentProps {
+export const activatedLazyComponents = new Set<string>()
+
+interface LazyComponentProps {
     is: string
     props?: Record<string, any>
     ssr?: boolean
     package?: string
 }
 
-export function Component({ is, props, ssr, children }: PropsWithChildren<ComponentProps>) {
+export function LazyComponent({ is: name, props, children }: PropsWithChildren<LazyComponentProps>): JSX.Element | null {
     const [isLoading, setIsLoading] = useState(true)
-    const [error, setError] = useState<Error | null>(null)
+    const [error, setError] = useState<string | null>(null)
+
+    if (isServer()) {
+        // todo: ssr?
+        activatedLazyComponents.add(name)
+    }
 
     useEffect(() => {
         const {
             __POST_COMPONENTS: components = {},
-            __POST_BUILD_MANIFEST: buildManifest
+            __POST_BUILD_MANIFEST: buildManifest = {}
         } = window as any
-        const buildInfo = buildManifest.components[is]
+        const buildInfo = (buildManifest.components || {})[name]
         if (buildInfo !== undefined) {
-            if (is in components) {
+            if (name in components) {
                 setIsLoading(false)
             } else {
                 const script = document.createElement('script')
-                script.src = `_post/components/${is}.js?v=${buildInfo.hash}`
+                const loadScriptBaseUrl = window['__post_loadScriptBaseUrl'] || ''
+                script.src = `${loadScriptBaseUrl}_post/components/${name}.js?v=${buildInfo.hash}`
                 script.async = false
                 script.onload = () => {
                     setIsLoading(false)
                 }
                 script.onerror = () => {
                     setIsLoading(false)
-                    setError(new Error(`can't get component '${is}'`))
+                    setError(`can't fetch component '${name}'`)
                 }
                 document.head.appendChild(script)
             }
         } else {
             setIsLoading(false)
-            setError(new Error(`component '${is}' not found`))
+            setError(`component '${name}' not found`)
         }
-    }, [])
+    }, [name])
 
     if (isLoading) {
         if (Children.count(children) > 0) {
-            return children
+            return <Fragment>{children}</Fragment>
         }
-        return <Loading text="loading..." />
+        return <Loading />
     }
 
     if (error) {
         return <Loading error={error} />
     }
 
-    const { __POST_COMPONENTS: components = {} } = window as any
-    if (is in components) {
-        return <ComponentWrapper component={components[is]} props={props} />
-    }
-
-    return null
+    return <HotComponent name={name} props={props} />
 }
 
-export function Loading({ text, error }: { text?: string, error?: Error }) {
-    return <div className="loading">{error ? 'Error: ' + error.message : text}</div>
-}
-
-function ComponentWrapper({ component, props }: { component: { name: string, style: string, reqComponent: () => ComponentType }, props: any }) {
-    const [mod, setMod] = useState<{ Component: ComponentType }>({ Component: component.reqComponent() })
+function HotComponent({ name, props }: { name: string, props: any }) {
+    const [hot, setHot] = useState<{ Component: ComponentType | null }>(() => {
+        const { __POST_COMPONENTS: components = {} } = window as any
+        if (name in components) {
+            const component = components[name]
+            if (utils.isNEString(component.style) && document.head.querySelector(`style[data-post-component-styl=${JSON.stringify(name)}]`) === null) {
+                const styleEl = document.createElement('style')
+                styleEl.setAttribute('data-post-component-style', name)
+                styleEl.innerText = component.style
+                document.head.appendChild(styleEl)
+            }
+            return { Component: component.reqComponent() }
+        }
+        return { Component: null }
+    })
 
     useEffect(() => {
-        const hmr = window['__POST_HMR'] = true
-        const hasStyle = utils.isNEString(component.style)
-        const hotUpdate = (Component: ComponentType) => setMod({ Component })
+        const hmr = window['__POST_HMR']
+        const hotUpdate = (Component: ComponentType) => setHot({ Component })
 
         if (hmr) {
-            hotEmitter.on('postComponentHotUpdate-' + component.name, hotUpdate)
-        }
-
-        if (hasStyle) {
-            const styleEl = document.createElement('style')
-            styleEl.setAttribute('data-post-component-style', component.name)
-            styleEl.innerText = component.style
-            document.head.appendChild(styleEl)
+            hotEmitter.on('postComponentHotUpdate:' + name, hotUpdate)
         }
 
         return () => {
             if (hmr) {
-                hotEmitter.off('postComponentHotUpdate-' + component.name, hotUpdate)
-            }
-            if (hasStyle) {
-                const el = document.head.querySelector(`style[data-post-component-style=${JSON.stringify(component.name)}]`)
-                if (el) {
-                    document.head.removeChild(el)
-                }
+                hotEmitter.off('postComponentHotUpdate:' + name, hotUpdate)
             }
         }
-    }, [])
+    }, [name])
 
-    return <mod.Component {...props} />
+    if (hot.Component === null) {
+        return <Loading error={`component '${name}' not found`} />
+    }
+
+    return <hot.Component {...props} />
+}
+
+export function Loading({ text, error }: { text?: string, error?: string }) {
+    if (error) {
+        return (
+            <div className="post-error">
+                <p style={{ padding: 50 }}>{'Error: ' + error}</p>
+            </div>
+        )
+    }
+
+    return <div className="post-loading">{text}</div>
 }

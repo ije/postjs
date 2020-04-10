@@ -1,5 +1,5 @@
 import { CSSProperties } from 'react'
-import utils from '../utils'
+import { utils } from './utils'
 
 export type TimingFunction = 'linear' | 'ease' | 'easeIn' | 'easeOut' | 'easeInOut' | keyof typeof cubicBezierPresets | CubicBezier
 
@@ -31,29 +31,13 @@ const cubicBezierPresets = {
     easeInOutBack: 'cubic-bezier(0.68, -0.55, 0.265, 1.55)'
 }
 
-export class Transition<K extends keyof CSSProperties = any> {
+export interface Transition<K extends keyof CSSProperties = any> {
     key: K
     value: CSSProperties[K]
     activeValue: CSSProperties[K]
     duration: number
     timing?: TimingFunction
     delay?: number
-
-    constructor(
-        key: K,
-        value: CSSProperties[K],
-        activeValue: CSSProperties[K],
-        duration: number,
-        timing?: TimingFunction,
-        delay?: number
-    ) {
-        this.key = key
-        this.value = value
-        this.activeValue = activeValue
-        this.duration = Math.max(Math.round(duration), 0)
-        this.timing = timing
-        this.delay = delay
-    }
 }
 
 export function transition<K extends keyof CSSProperties>(
@@ -64,7 +48,7 @@ export function transition<K extends keyof CSSProperties>(
     timing?: TimingFunction,
     delay?: number
 ): Transition<K> {
-    return new Transition(key, value, activeValue, duration, timing, delay)
+    return { key, value, activeValue, duration, timing, delay }
 }
 
 /** fadeIn is an alias of `transition('opacity', 0, 1, duration, timing, delay)` */

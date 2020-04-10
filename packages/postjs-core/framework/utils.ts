@@ -1,6 +1,10 @@
-const { hasOwnProperty } = Object.prototype
+import React, { ReactType } from 'react'
+import { isValidElementType } from 'react-is'
 
-export default {
+export const isServer = () => !process['browser']
+export const isDev = () => process.env.NODE_ENV === 'development'
+
+export const utils = {
     isNumber(a: any): a is number {
         return typeof a === 'number' && !Number.isNaN(a)
     },
@@ -31,12 +35,20 @@ export default {
     isFunction(a: any): a is Function {
         return typeof a === 'function'
     },
+    isComponent(component: any, name: string = 'component'): ReactType {
+        if (component === undefined) {
+            return () => React.createElement('div', null, React.createElement('p', { style: { color: 'red' } }, `bad ${name}: miss default export`))
+        } else if (!isValidElementType(component)) {
+            return () => React.createElement('div', null, React.createElement('p', { style: { color: 'red' } }, `bad ${name}: not a valid component`))
+        }
+        return component
+    },
 
     /**
      * Perform the specified action for each element in an array or object,
      * break loop when the stepCallback return false.
      */
-    each(a: any, stepCallback: (value: any, key: any) => void | boolean) {
+    each(a: any, stepCallback: (value: any, key: string | number) => void | boolean) {
         if (this.isArray(a)) {
             const l = a.length
             for (let i = 0; i < l; i++) {
@@ -45,11 +57,9 @@ export default {
                 }
             }
         } else if (this.isObject(a)) {
-            for (const key in a) {
-                if (hasOwnProperty.call(a, key)) {
-                    if (stepCallback(a[key], key) === false) {
-                        break
-                    }
+            for (const key of Object.keys(a)) {
+                if (stepCallback(a[key], key) === false) {
+                    break
                 }
             }
         }
@@ -70,11 +80,9 @@ export default {
     },
 
     cleanPath(path: string): string {
-        return '/' + path.replace(/^[\.\/]+/, '').split('/')
+        return '/' + path.replace(/^[./]+/, '').split('/')
             .map(p => p.trim())
-            .filter(p => p.length > 0)
+            .filter(Boolean)
             .join('/')
     }
 }
-
-export const isServer = !process['browser']

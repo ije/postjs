@@ -1,9 +1,9 @@
 import React, { Children, cloneElement, CSSProperties, isValidElement, PropsWithChildren, useCallback, useEffect, useMemo } from 'react'
-import { useRouter } from './router/context'
-import { fetchPage } from './router/fetch'
-import { redirect } from './router/redirect'
-import { PageTransition } from './router/transition'
-import utils from './utils'
+import { fetchPage } from './page'
+import { redirect } from './redirect'
+import { useRouter } from './router'
+import { PageTransition } from './transition'
+import { utils } from './utils'
 
 interface LinkProps {
     to: string
@@ -36,7 +36,7 @@ export function Link({
             })
         }
     }, [pagePath, asPath, replace, router])
-    const onMouseEnter = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
+    const onMouseEnter = useCallback(() => {
         fetchPage(pagePath)
     }, [pagePath])
 
@@ -69,7 +69,7 @@ export function Link({
                         props.onMouseEnter(e)
                     }
                     if (!e.defaultPrevented) {
-                        onMouseEnter(e)
+                        onMouseEnter()
                     }
                 }
             })
@@ -110,6 +110,6 @@ export function NavLink({
     }
 
     return (
-        <Link  {...rest} />
+        <Link {...rest} />
     )
 }

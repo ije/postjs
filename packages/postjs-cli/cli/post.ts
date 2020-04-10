@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import arg from 'arg'
 import fs from 'fs-extra'
+import { JSDOM } from 'jsdom'
+import fetch from 'node-fetch'
 import path from 'path'
 
 const {
@@ -41,6 +43,15 @@ if (!hasCommand && h) {
     console.log(helpMessage)
     process.exit(0)
 }
+
+// enhance globalThis
+const { window: vw } = new JSDOM(undefined, { url: 'http://localhost/', pretendToBeVisual: true })
+Object.assign(globalThis, { fetch })
+Object.keys(vw).forEach(key => {
+    if (!key.startsWith('_') && !/^(set|clear)(Timeout|Interval)$/.test(key)) {
+        globalThis[key] = vw[key]
+    }
+})
 
 // execute command
 if (h) {

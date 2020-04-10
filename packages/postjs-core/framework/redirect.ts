@@ -1,29 +1,39 @@
 import hotEmitter from 'webpack/hot/emitter'
-import utils, { isServer } from '../utils'
-import { fetchPage } from './fetch'
+import { fetchPage } from './page'
 import { PageTransition } from './transition'
+import { isServer, utils } from './utils'
 
 let redirectMark: { pagePath: string, asPath?: string } | null = null
 
 export async function redirect(pagePath: string, asPath?: string, replace?: boolean, transition?: PageTransition | string) {
-    if (isServer) {
-        // only in browser
+    // only in browser
+    if (isServer()) {
         return
     }
 
     const {
-        __POST_INITIAL_PAGE: initialPage = {},
-        __POST_PAGES: pages = {},
+        __POST_PAGES: pages,
         __POST_BUILD_MANIFEST: buildManifest
     } = window as any
+    const pathname = asPath || pagePath
 
     if (location.protocol === 'file:') {
-        location.href = location.href.replace(initialPage.path.replace(/^\/+/, '') || 'index', pagePath.replace(/^\/+/, '') || 'index')
+        const dataEl = document.getElementById('ssr-data')
+        if (dataEl) {
+            const ssrData = JSON.parse(dataEl.innerHTML)
+            if (ssrData && 'url' in ssrData) {
+                const { url: { pagePath: initialPagePath } } = ssrData
+                location.href = location.href.replace(
+                    '/' + (initialPagePath.replace(/^\/+/, '') || 'index') + '.html',
+                    '/' + (pathname.replace(/^\/+/, '') || 'index') + '.html'
+                )
+            }
+        }
         return
     }
 
-    if (buildManifest === undefined) {
-        location.href = location.protocol + '//' + location.host + (asPath || pagePath)
+    if (!utils.isObject(buildManifest) || !utils.isObject(pages)) {
+        location.href = location.protocol + '//' + location.host + pathname
         return
     }
 
@@ -32,13 +42,18 @@ export async function redirect(pagePath: string, asPath?: string, replace?: bool
         if (pagePath in pages) {
             delete pages[pagePath]
         }
-        if (replace) {
-            history.replaceState({ transition }, '', asPath || pagePath)
+        if ('/_404' in buildManifest.pages) {
+            asPath = asPath || pagePath
+            pagePath = '/_404'
         } else {
-            history.pushState({ transition }, '', asPath || pagePath)
+            if (replace) {
+                history.replaceState({ transition }, '', pathname)
+            } else {
+                history.pushState({ transition }, '', pathname)
+            }
+            hotEmitter.emit('popstate', { type: 'popstate', state: { transition } })
+            return
         }
-        hotEmitter.emit('popstate', { type: 'popstate', state: { transition } })
-        return
     }
 
     if (pagePath in pages) {
@@ -51,9 +66,9 @@ export async function redirect(pagePath: string, asPath?: string, replace?: bool
                     redirectMark = null
                 }
                 if (replace) {
-                    history.replaceState({ transition }, '', asPath || pagePath)
+                    history.replaceState({ transition }, '', pathname)
                 } else {
-                    history.pushState({ transition }, '', asPath || pagePath)
+                    history.pushState({ transition }, '', pathname)
                 }
                 hotEmitter.emit('popstate', { type: 'popstate', state: { transition } })
             } else {
