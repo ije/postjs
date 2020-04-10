@@ -1,5 +1,5 @@
 {
-    "name": "lazy-component",
+    "name": "postjs-lazy-component",
     "version": "1.0.0",
     "scripts": {
         "dev": "post",

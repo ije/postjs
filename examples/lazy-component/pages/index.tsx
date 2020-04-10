@@ -1,7 +1,7 @@
-import { Component, Head } from '@postjs/core'
+import { Head, LazyComponent } from '@postjs/core'
 import React from 'react'
 
-export default function Home({ style }: any) {
+export default function Home() {
     return (
         <div style={{
             boxSizing: 'border-box',
@@ -18,11 +18,11 @@ export default function Home({ style }: any) {
                 <title>Welcome to use postjs!</title>
             </Head>
             <p>Welcome to use <strong>postjs</strong>!</p>
-            <Component is={'nav'} ssr={false}>
+            <LazyComponent is={'nav'} ssr={false}>
                 ...
                 <br />
                 ...
-            </Component>
+            </LazyComponent>
         </div>
     )
 }
