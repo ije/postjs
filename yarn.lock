@@ -1813,10 +1813,10 @@
     "@types/minimatch" "*"
     "@types/node" "*"
 
-"@types/jsdom@^16.2.0":
-  version "16.2.0"
-  resolved "https://registry.npm.taobao.org/@types/jsdom/download/@types/jsdom-16.2.0.tgz#5a371a2efc1e0feec02c4bd2b3ce689e6ae691a2"
-  integrity sha1-WjcaLvweD+7ALEvSs85onmrmkaI=
+"@types/jsdom@^16.2.1":
+  version "16.2.1"
+  resolved "https://registry.npm.taobao.org/@types/jsdom/download/@types/jsdom-16.2.1.tgz#9e6eee6a578f74eed5997558ab430dbc11aac753"
+  integrity sha1-nm7ualePdO7VmXVYq0MNvBGqx1M=
   dependencies:
     "@types/node" "*"
     "@types/parse5" "*"
@@ -1940,10 +1940,22 @@
     "@types/source-list-map" "*"
     source-map "^0.6.1"
 
-"@types/webpack@*", "@types/webpack@^4.41.10":
+"@types/webpack@*":
   version "4.41.10"
   resolved "https://registry.npm.taobao.org/@types/webpack/download/@types/webpack-4.41.10.tgz?cache=0&sync_timestamp=1585610818206&other_urls=https%3A%2F%2Fregistry.npm.taobao.org%2F%40types%2Fwebpack%2Fdownload%2F%40types%2Fwebpack-4.41.10.tgz#2e1f6b3508a249854efe3dcc7690905ac5ee10be"
   integrity sha1-Lh9rNQiiSYVO/j3MdpCQWsXuEL4=
+  dependencies:
+    "@types/anymatch" "*"
+    "@types/node" "*"
+    "@types/tapable" "*"
+    "@types/uglify-js" "*"
+    "@types/webpack-sources" "*"
+    source-map "^0.6.0"
+
+"@types/webpack@^4.41.11":
+  version "4.41.11"
+  resolved "https://registry.npm.taobao.org/@types/webpack/download/@types/webpack-4.41.11.tgz#7b7f725397d3b630bede05415d34e9ff30d9771f"
+  integrity sha1-e39yU5fTtjC+3gVBXTTp/zDZdx8=
   dependencies:
     "@types/anymatch" "*"
     "@types/node" "*"
@@ -3249,10 +3261,10 @@ core-js-pure@^3.0.0:
   resolved "https://registry.npm.taobao.org/core-js-pure/download/core-js-pure-3.6.4.tgz#4bf1ba866e25814f149d4e9aaa08c36173506e3a"
   integrity sha1-S/G6hm4lgU8UnU6aqgjDYXNQbjo=
 
-core-js@^3.6.4:
-  version "3.6.4"
-  resolved "https://registry.npm.taobao.org/core-js/download/core-js-3.6.4.tgz?cache=0&sync_timestamp=1578957006406&other_urls=https%3A%2F%2Fregistry.npm.taobao.org%2Fcore-js%2Fdownload%2Fcore-js-3.6.4.tgz#440a83536b458114b9cb2ac1580ba377dc470647"
-  integrity sha1-RAqDU2tFgRS5yyrBWAujd9xHBkc=
+core-js@^3.6.5:
+  version "3.6.5"
+  resolved "https://registry.npm.taobao.org/core-js/download/core-js-3.6.5.tgz#7395dc273af37fb2e50e9bd3d9fe841285231d1a"
+  integrity sha1-c5XcJzrzf7LlDpvT2f6EEoUjHRo=
 
 core-util-is@1.0.2, core-util-is@~1.0.0:
   version "1.0.2"
@@ -3328,10 +3340,10 @@ crypto-browserify@^3.11.0:
     randombytes "^2.0.0"
     randomfill "^1.0.3"
 
-css-loader@^3.5.1:
-  version "3.5.1"
-  resolved "https://registry.npm.taobao.org/css-loader/download/css-loader-3.5.1.tgz?cache=0&sync_timestamp=1586254019197&other_urls=https%3A%2F%2Fregistry.npm.taobao.org%2Fcss-loader%2Fdownload%2Fcss-loader-3.5.1.tgz#db2b2336f4169edb68e6a829ad4fd36552647b77"
-  integrity sha1-2ysjNvQWntto5qgprU/TZVJke3c=
+css-loader@^3.5.2:
+  version "3.5.2"
+  resolved "https://registry.npm.taobao.org/css-loader/download/css-loader-3.5.2.tgz?cache=0&sync_timestamp=1586532808015&other_urls=https%3A%2F%2Fregistry.npm.taobao.org%2Fcss-loader%2Fdownload%2Fcss-loader-3.5.2.tgz#6483ae56f48a7f901fbe07dde2fc96b01eafab3c"
+  integrity sha1-ZIOuVvSKf5Afvgfd4vyWsB6vqzw=
   dependencies:
     camelcase "^5.3.1"
     cssesc "^3.0.0"

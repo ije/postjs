@@ -13,7 +13,7 @@
         "typings/"
     ],
     "scripts": {
-        "build": "rm -rf ./dist && rm -rf ./typings && node tsc.js",
+        "build": "rm -rf ./dist && node tsc.js",
         "watch": "rm -rf ./dist && node tsc.js --watch"
     },
     "dependencies": {
