@@ -34,7 +34,7 @@ Options
 // print the version number in package.json
 if (v) {
     const { version } = fs.readJSONSync(path.join(__dirname, '../../package.json'))
-    console.log(`postio v${version}`)
+    console.log(`postjs v${version}`)
     process.exit(0)
 }
 

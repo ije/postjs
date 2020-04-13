@@ -33,7 +33,7 @@ export function AppRouter({ baseUrl, initialUrl }: { baseUrl: string, initialUrl
         }
     }, [])
 
-    console.log('[render] AppRouter')
+    // console.log('[render] AppRouter')
     return createElement(
         RouterContext.Provider,
         { value: new RouterStore(url.current) },
@@ -72,7 +72,7 @@ function HotAPP({ children }: PropsWithChildren<{}>) {
         }
     }, [])
 
-    console.log('[render] HotAPP')
+    // console.log('[render] HotAPP')
     return createElement(
         app.Component || Fragment,
         app.staticProps,
@@ -141,13 +141,11 @@ function Switch({ enterPage, exitPage, sideEffect }: { enterPage: string, exitPa
         }
     }, [enterPage, exitPage, sideEffect])
 
-    console.log('[render] Switch', 'enter:', enterPage, 'exit:', exitPage)
-
+    // console.log('[render] Switch', 'enter:', enterPage, 'exit:', exitPage)
     if (pages.length === 1) {
         const pageProps = pages[0]
         return createElement(HotPage, { ...pageProps, key: pageProps.pagePath })
     }
-
     return createElement(Fragment, null, pages.map(pageProps => createElement(HotPage, { ...pageProps, key: pageProps.pagePath })))
 }
 

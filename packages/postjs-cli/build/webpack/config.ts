@@ -58,8 +58,6 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
         }
     ]
 
-    console.log('--------------------', path.join(process.cwd(), 'packages/postjs-cli/node_modules'))
-
     return {
         context,
         entry,
@@ -190,21 +188,27 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
                 alias[name] = path.join(__dirname, `loaders/${name}.js`)
                 return alias
             }, {}),
-            modules: [path.join(process.cwd(), 'node_modules'), path.join(context, 'node_modules'), 'node_modules']
+            modules: [path.join(context, 'node_modules'), 'node_modules']
         },
         externals,
         optimization: {
             runtimeChunk: !isServer && { name: 'webpack-runtime' },
             splitChunks: !isServer && {
                 cacheGroups: {
-                    vendor: {
+                    common: {
                         priority: 1,
+                        name: 'common',
+                        minChunks: 2,
+                        chunks: 'initial'
+                    },
+                    vendor: {
+                        priority: 2,
                         test: /[\\/](node_modules|packages[\\/]postjs-core)[\\/]/,
                         name: 'vendor',
                         chunks: 'initial'
                     },
                     ployfills: {
-                        priority: 2,
+                        priority: 3,
                         test: /[\\/]node_modules[\\/](@babel[\\/]runtime|core-js|regenerator-runtime|whatwg-fetch)[\\/]/,
                         name: 'ployfills',
                         chunks: 'initial'
