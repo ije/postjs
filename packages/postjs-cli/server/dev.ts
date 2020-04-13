@@ -1,6 +1,8 @@
 import { utils } from '@postjs/core'
 import { EventEmitter } from 'events'
+import fs from 'fs-extra'
 import http from 'http'
+import path from 'path'
 import { parse } from 'url'
 import { server as WebsocketServer } from 'websocket'
 import { getContentType, sendText } from '.'
@@ -42,18 +44,26 @@ export function start(appDir: string, port: number) {
             return
         }
 
-        if (pathname.endsWith('.hot-update.json') || pathname.endsWith('.hot-update.js')) {
-            const content = watcher.getOutputContent(pathname)
+        const ext = path.extname(pathname)
+        if (ext) {
+            let content = watcher.getOutputContent(pathname)
+            if (content === null) {
+                const filepath = path.join(appDir, 'public', pathname)
+                if (fs.existsSync(filepath)) {
+                    content = await fs.readFile(filepath)
+                }
+            }
             if (content !== null) {
-                sendText(req, res, 200, getContentType(pathname), content.toString())
+                const contentType = getContentType(pathname)
+                if (/\.(m?js(\.map)?|json|css|html?|xml|svg|txt)$/i.test(pathname)) {
+                    sendText(req, res, 200, contentType, content.toString())
+                } else {
+                    res.writeHead(200, { 'Content-Type': contentType })
+                    res.end(content)
+                }
                 return
             }
-
-            res.statusCode = 404
-            res.end('file not found')
         }
-
-        // todo: serve the public static files
 
         const [statusCode, html] = await watcher.getPageHtml(pathname.replace(/(index)?\.html?$/i, ''))
         sendText(req, res, statusCode, 'text/html', html)

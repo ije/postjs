@@ -140,6 +140,7 @@ export class App {
         const { hash, chunks, warnings, errors, startTime, endTime } = await compiler.compile()
         const buildManifest = { hash, warnings, errors, startTime, endTime, pages: {} as Record<string, any>, components: {} as Record<string, any> }
         const buildDir = path.join(this.config.rootDir, '.post/builds', hash)
+        const publicDir = path.join(this.config.rootDir, 'public')
 
         for (const chuck of chunks.values()) {
             const jsFile = path.join(buildDir, '_post', `${chuck.name}.js`)
@@ -197,6 +198,9 @@ export class App {
 
         await fs.writeFile(path.join(buildDir, '_post/build-manifest.js'), 'window.__POST_BUILD_MANIFEST = ' + JSON.stringify(buildManifest))
         await fs.remove(this.outputDir)
+        if (fs.existsSync(publicDir)) {
+            await fs.copy(publicDir, buildDir, { recursive: true })
+        }
         await fs.copy(buildDir, this.outputDir, { recursive: true })
 
         return buildManifest
@@ -249,7 +253,6 @@ export class App {
             startTime,
             endTime,
             customApp: null as any,
-            appStaticProps: null as any,
             pages: {} as Record<string, Array<RenderedPage>>,
             lazyComponents: [] as Array<string>
         }
@@ -257,7 +260,7 @@ export class App {
         let App: ComponentType = Fragment
         if ('/_app' in pages) {
             App = pages['/_app'].reqComponent()
-            renderRet.customApp = { appStaticProps: await this._getStaticProps(App) }
+            renderRet.customApp = { staticProps: await this._getStaticProps(App) }
         }
 
         for (const pagePath of Object.keys(pages).filter(pagePath => pagePath !== '/_app')) {
