@@ -52,22 +52,17 @@ export async function redirect(href: string, replace?: boolean, transition?: Pag
 
     if (pagePath in pages) {
         const page = pages[pagePath]
-        if (utils.isObject(page)) {
-            if (page.fetching === true) {
-                redirectMark = href
-                return
-            } else if (page.path === pagePath && utils.isFunction(page.reqComponent)) {
-                if (redirectMark !== null) {
-                    redirectMark = null
-                }
-                if (replace) {
-                    history.replaceState({ transition }, '', href)
-                } else {
-                    history.pushState({ transition }, '', href)
-                }
-                hotEmitter.emit('popstate', { type: 'popstate', state: { transition } })
-                return
+        if (utils.isObject(page) && page.path === pagePath && utils.isFunction(page.reqComponent)) {
+            if (replace) {
+                history.replaceState({ transition }, '', href)
+            } else {
+                history.pushState({ transition }, '', href)
             }
+            hotEmitter.emit('popstate', { type: 'popstate', state: { transition } })
+            if (redirectMark !== null) {
+                redirectMark = null
+            }
+            return
         }
         delete pages[pagePath]
     }
@@ -75,14 +70,13 @@ export async function redirect(href: string, replace?: boolean, transition?: Pag
     redirectMark = href
     return fetchPage(pagePath).then(() => {
         if (redirectMark !== null) {
-            const href = redirectMark
-            redirectMark = null
             if (replace) {
-                history.replaceState({ transition }, '', href)
+                history.replaceState({ transition }, '', redirectMark)
             } else {
-                history.pushState({ transition }, '', href)
+                history.pushState({ transition }, '', redirectMark)
             }
             hotEmitter.emit('popstate', { type: 'popstate', state: { transition } })
+            redirectMark = null
         }
     })
 }
