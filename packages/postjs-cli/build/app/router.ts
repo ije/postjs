@@ -12,7 +12,7 @@ export function AppRouter({ baseUrl, initialUrl }: { baseUrl: string, initialUrl
             const url = route(baseUrl, Object.keys(buildManifest.pages), { fallback: '/_404' })
             setUrl(prevUrl => {
                 const { current } = prevUrl
-                if (url.pagePath === current.pagePath && url.pathname === current.pathname) {
+                if (url.pagePath === current.pagePath && url.asPath === current.asPath) {
                     return prevUrl
                 }
                 return { current: url, prev: current }
@@ -43,8 +43,8 @@ export function AppRouter({ baseUrl, initialUrl }: { baseUrl: string, initialUrl
             createElement(
                 Switch,
                 {
-                    enterPage: url.current.pagePath,
-                    exitPage: url.prev?.pagePath,
+                    enterPage: url.current,
+                    exitPage: url.prev,
                     sideEffect
                 }
             )
@@ -80,13 +80,15 @@ function HotAPP({ children }: PropsWithChildren<{}>) {
     )
 }
 
-function Switch({ enterPage, exitPage, sideEffect }: { enterPage: string, exitPage: string, sideEffect: { transition?: string | PageTransition } }) {
-    type TransitionProps = { className?: string, style?: CSSProperties }
-    const [pages, setPages] = useState<({ pagePath: string } & TransitionProps)[]>(() => [{ pagePath: enterPage }])
+interface TransitionProps { className?: string, style?: CSSProperties }
+function Switch({ enterPage, exitPage, sideEffect }: { enterPage: URL, exitPage?: URL, sideEffect: { transition?: string | PageTransition } }) {
+    const [pages, setPages] = useState<(URL & TransitionProps)[]>(() => {
+        return [{ ...enterPage }]
+    })
     const setTransitionPages = useCallback((enterProps: TransitionProps, exitProps: TransitionProps) => {
         setPages([
-            { pagePath: enterPage, ...enterProps },
-            { pagePath: exitPage, ...exitProps }
+            { ...enterPage, ...enterProps },
+            { ...exitPage!, ...exitProps }
         ])
     }, [enterPage, exitPage])
 
@@ -120,15 +122,15 @@ function Switch({ enterPage, exitPage, sideEffect }: { enterPage: string, exitPa
                 }, 0)
                 timer = setTimeout(() => {
                     timer = null
-                    setPages([{ pagePath: enterPage }])
+                    setPages([{ ...enterPage }])
                 }, Math.max(enterDuration, exitDuration))
             }
         } else {
             setPages(pages => {
-                if (pages.length === 1 && pages[0].pagePath === enterPage) {
+                if (pages.length === 1 && pages[0].pagePath === enterPage.pagePath && pages[0].asPath === enterPage.asPath) {
                     return pages
                 }
-                return [{ pagePath: enterPage }]
+                return [{ ...enterPage }]
             })
         }
 
@@ -136,12 +138,12 @@ function Switch({ enterPage, exitPage, sideEffect }: { enterPage: string, exitPa
             if (timer !== null) {
                 clearTimeout(timer)
                 timer = null
-                setPages([{ pagePath: enterPage }])
+                setPages([{ ...enterPage }])
             }
         }
     }, [enterPage, exitPage, sideEffect])
 
-    // console.log('[render] Switch', 'enter:', enterPage, 'exit:', exitPage)
+    // console.log('[render] Switch', 'enter:', enterPage.asPath, 'exit:', exitPage.asPath)
     if (pages.length === 1) {
         const pageProps = pages[0]
         return createElement(HotPage, { ...pageProps, key: pageProps.pagePath })
@@ -149,7 +151,7 @@ function Switch({ enterPage, exitPage, sideEffect }: { enterPage: string, exitPa
     return createElement(Fragment, null, pages.map(pageProps => createElement(HotPage, { ...pageProps, key: pageProps.pagePath })))
 }
 
-function HotPage({ pagePath, className, style }: { pagePath: string, className?: string, style?: CSSProperties }) {
+function HotPage({ pagePath, asPath, className, style }: URL & TransitionProps) {
     const [hot, setHot] = useState<{ Component: ComponentType<any> | null, staticProps?: Record<string, any> | null }>(() => {
         const {
             __POST_PAGES: pages = {},
@@ -158,7 +160,7 @@ function HotPage({ pagePath, className, style }: { pagePath: string, className?:
         if (pagePath in pages) {
             return {
                 Component: pages[pagePath].reqComponent(),
-                staticProps: ssrData[pagePath]?.staticProps
+                staticProps: ssrData[asPath]?.staticProps
             }
         }
         return { Component: null }
@@ -174,16 +176,16 @@ function HotPage({ pagePath, className, style }: { pagePath: string, className?:
         } = window as any
         const hotUpdate = (Component: ComponentType) => setHot({
             Component,
-            staticProps: ssrData[pagePath]?.staticProps
+            staticProps: ssrData[asPath]?.staticProps
         })
 
         if (!(pagePath in pages)) {
             setIsFetching(true)
             setHot({ Component: null })
-            fetchPage(pagePath).then(() => {
+            fetchPage(pagePath, asPath).then(() => {
                 setHot({
                     Component: pages[pagePath].reqComponent(),
-                    staticProps: ssrData[pagePath]?.staticProps
+                    staticProps: ssrData[asPath]?.staticProps
                 })
             }).catch(error => {
                 setError(error.message)

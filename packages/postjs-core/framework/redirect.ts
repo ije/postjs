@@ -68,7 +68,7 @@ export async function redirect(href: string, replace?: boolean, transition?: Pag
     }
 
     redirectMark = href
-    return fetchPage(pagePath).then(() => {
+    return fetchPage(pagePath, href).then(() => {
         if (redirectMark !== null) {
             if (replace) {
                 history.replaceState({ transition }, '', redirectMark)

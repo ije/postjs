@@ -4,8 +4,8 @@ import { redirect } from './redirect'
 import { utils } from './utils'
 
 export interface URL {
-    pathname: string
     pagePath: string
+    asPath: string
     params: Record<string, string>
     query: ParsedUrlQuery
 }
@@ -17,12 +17,12 @@ export class RouterStore {
         this._url = url
     }
 
-    get pathname() {
-        return this._url.pathname
-    }
-
     get pagePath() {
         return this._url.pagePath
+    }
+
+    get asPath() {
+        return this._url.asPath
     }
 
     get params() {
@@ -43,7 +43,7 @@ export class RouterStore {
 }
 
 export const RouterContext = createContext(
-    new RouterStore({ pathname: '/', pagePath: '/', params: {}, query: {} })
+    new RouterStore({ pagePath: '/', asPath: '/', params: {}, query: {} })
 )
 RouterContext.displayName = 'RouterContext'
 
@@ -56,21 +56,21 @@ export function route(base: string, pagePaths: string[], options?: { location?: 
     const fallback = options?.fallback
 
     let pagePath = ''
-    let pathname = loc.pathname
+    let asPath = loc.pathname
     let params: Record<string, string> = {}
     let query: ParsedUrlQuery = loc.search ? parse(loc.search.replace(/^\?/, '')) : {}
 
     if (base.length > 1 && base.charAt(0) === '/') {
-        pathname = utils.trimPrefix(pathname, base)
-        if (pathname === '' || pathname.charAt(0) !== '/') {
-            pathname = '/' + pathname
+        asPath = utils.trimPrefix(asPath, base)
+        if (asPath === '' || asPath.charAt(0) !== '/') {
+            asPath = '/' + asPath
         }
     }
 
     // todo: sort pagePaths
 
     utils.each(pagePaths, routePath => {
-        const [p, ok] = utils.matchPath(routePath, pathname)
+        const [p, ok] = utils.matchPath(routePath, asPath)
         if (ok) {
             pagePath = routePath
             params = p
@@ -83,6 +83,6 @@ export function route(base: string, pagePaths: string[], options?: { location?: 
         pagePath = fallback
     }
 
-    return { pagePath, pathname, params, query }
+    return { pagePath, asPath, params, query }
 }
 

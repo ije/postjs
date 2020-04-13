@@ -55,7 +55,7 @@ export class App {
                             window['__post_loadScriptBaseUrl'] = preloadEl.getAttribute('href').split('_post/')[0]
                         }
                         { (window['__POST_APP'] =  window['__POST_APP'] || {}).config = ${JSON.stringify(this.config, ['lang', 'baseUrl'])} }
-                        { (window['__POST_SSR_DATA'] =  window['__POST_SSR_DATA'] || {})[url.pagePath] = { staticProps } }
+                        { (window['__POST_SSR_DATA'] =  window['__POST_SSR_DATA'] || {})[url.asPath] = { staticProps } }
 
                         // delete ssr head elements
                         const postEndEl = document.head.querySelector('meta[name="post-head-end"]')
@@ -162,8 +162,8 @@ export class App {
             }
             for (const ssrPage of ssrPages[pagePath]) {
                 const { url, staticProps, html, head } = ssrPage
-                const { pathname } = url
-                const asName = pathname.replace(/^\/+/, '') || 'index'
+                const { asPath } = url
+                const asName = asPath.replace(/^\/+/, '') || 'index'
                 const depth = asName.split('/').length - 1
                 const htmlFile = path.join(buildDir, asName + '.html')
                 await fs.ensureDir(path.dirname(htmlFile))
@@ -185,8 +185,8 @@ export class App {
                     await fs.ensureDir(path.dirname(dataFile))
                     await fs.writeJSON(dataFile, { staticProps })
                 }
-                if (pathname !== pagePath) {
-                    (buildManifest.pages[pagePath].staticPaths = buildManifest.pages[pagePath].staticPaths || []).push(pathname)
+                if (asPath !== pagePath) {
+                    (buildManifest.pages[pagePath].staticPaths = buildManifest.pages[pagePath].staticPaths || []).push(asPath)
                 }
             }
         }
@@ -260,7 +260,7 @@ export class App {
         let App: ComponentType = Fragment
         if ('/_app' in pages) {
             App = pages['/_app'].reqComponent()
-            renderRet.customApp = { staticProps: await this._getStaticProps(App) }
+            renderRet.customApp = { staticProps: await this._getAppStaticProps(App) }
         }
 
         for (const pagePath of Object.keys(pages).filter(pagePath => pagePath !== '/_app')) {
@@ -277,17 +277,16 @@ export class App {
             }
 
             renderRet.pages[pagePath] = []
-            for (const pathname of pagePaths) {
-                const params = {}
-                if (pathname !== pagePath) {
-                    const [r, ok] = utils.matchPath(pagePath, pathname)
+            for (const asPath of pagePaths) {
+                const url = { pagePath, asPath, params: {}, query: {} }
+                if (asPath !== pagePath) {
+                    const [params, ok] = utils.matchPath(pagePath, asPath)
                     if (!ok) {
-                        console.log(`invalid static path '${pathname}' of page '${pageName}'`)
+                        console.log(`invalid static path '${asPath}' of page '${pageName}'`)
                         continue
                     }
-                    Object.assign(params, r)
+                    url.params = params
                 }
-                const url = { pagePath, pathname, params, query: {} }
                 const { staticProps, html } = await this._renderPage(App, renderRet.customApp?.staticProps, PageComponent, url)
                 const head = renderHeadToString()
                 renderRet.pages[pagePath].push({ url, staticProps, html, head })
@@ -324,44 +323,42 @@ export class App {
         const { reqApp, reqComponent } = runJS(js, peerDeps)
 
         const App: ComponentType = reqApp() || Fragment
-        const appStaticProps: any = await this._getStaticProps(App)
+        const appStaticProps: any = await this._getAppStaticProps(App)
 
         const { staticProps, html } = await this._renderPage(App || Fragment, appStaticProps, reqComponent(), url)
         return { staticProps, html, css }
     }
 
-    async getStaticProps() {
+    async getStaticProps(pagePath: string, ...args: any[]) {
         const { chunks } = await new Compiler(this.srcDir, `
             const { utils } = require('@postjs/core')
-            const r = require.context('./pages', false, /\\.\\/_app\\.(jsx?|mjs|tsx?)$/i)
 
-            let getStaticProps = null
-            const rKeys = r.keys()
-            if (rKeys.length === 1) {
-                const mod = r(rKeys[0])
-                if (mod.default && utils.isFunction(mod.default.getStaticProps)) {
-                    getStaticProps = mod.default.getStaticProps
-                } else if (utils.isFunction(mod.getStaticProps)) {
-                    getStaticProps = mod.getStaticProps
-                }
+            exports.reqComponent = () => {
+                const mod = require('./pages${pagePath}')
+                return utils.isComponentModule(mod, 'page', ['getStaticProps'])
             }
-
-            exports.App = {getStaticProps}
         `, {
             isServer: true,
             externals: Object.keys(peerDeps)
         }).compile()
         const { content: js } = chunks.get('main')!
-        const { App } = runJS(js, peerDeps)
+        const { reqComponent } = runJS(js, peerDeps)
 
-        return await this._getStaticProps(App)
+        if (pagePath === '/_app') {
+            return await this._getAppStaticProps(reqComponent())
+        }
+        return await this._getStaticProps(reqComponent(), ...args)
     }
 
-    private async _getStaticProps(App: ComponentType) {
-        const getStaticProps = App['getStaticProps']
+    private async _getAppStaticProps(App: ComponentType) {
+        const { lang, baseUrl } = this.config
+        return await this._getStaticProps(App, { lang, baseUrl })
+    }
+
+    private async _getStaticProps(component: ComponentType, ...args: any[]) {
+        const getStaticProps = component['getStaticProps']
         if (utils.isFunction(getStaticProps)) {
-            const { lang, baseUrl } = this.config
-            const props = await getStaticProps({ lang, baseUrl })
+            const props = await getStaticProps(...args)
             if (utils.isObject(props)) {
                 return props
             }
