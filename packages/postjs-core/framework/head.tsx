@@ -82,7 +82,7 @@ export function Head({ children }: PropsWithChildren<{}>) {
             })
             insertedEls.forEach(el => document.head.removeChild(el))
         }
-    }, [children])
+    }, [])
 
     return null
 }
