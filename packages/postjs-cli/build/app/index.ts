@@ -1,4 +1,4 @@
-import { activatedLazyComponents, renderHeadToString, RouterContext, RouterStore, URL, utils } from '@postjs/core'
+import { activatedLazyComponents, AppContext, renderHeadToString, RouterContext, RouterStore, URL, utils } from '@postjs/core'
 import fs from 'fs-extra'
 import path from 'path'
 import React, { ComponentType, createElement, Fragment } from 'react'
@@ -6,19 +6,13 @@ import { renderToString } from 'react-dom/server'
 import { createHtml, peerDeps, runJS } from '../utils'
 import { Compiler } from '../webpack'
 import { AppConfig, loadAppConfig } from './config'
-import { matchPath } from './router'
+import './router'
 
 export class App {
     config: AppConfig
-    hash: string | null
-    component: ComponentType | null
-    private staticProps: Record<string, any> | null
 
     constructor(appDir: string) {
         this.config = loadAppConfig(appDir)
-        this.hash = null
-        this.component = null
-        this.staticProps = null
     }
 
     get srcDir() {
@@ -31,10 +25,6 @@ export class App {
         return path.join(rootDir, outputDir)
     }
 
-    get isCustom() {
-        return this.component !== null
-    }
-
     get entryJS(): string {
         const {
             baseUrl,
@@ -44,27 +34,28 @@ export class App {
         return (`
             import React from 'react'
             import ReactDom from 'react-dom'
+            import { AppContext } from '@postjs/core'
             import { AppRouter } from '@postjs/cli/dist/build/app/router'
 
             // ployfills
-            ${polyfillsMode === 'entry' ? polyfills.map(name => `import ${JSON.stringify(name)}`).join('\n') : "import 'whatwg-fetch'"}
-            ${polyfillsMode === 'entry' ? "import 'regenerator-runtime/runtime'" : ''}
+            ${polyfillsMode === 'entry' ? polyfills.map(name => `import ${JSON.stringify(name)}`).join('\n') : 'import "whatwg-fetch"'}
+            ${polyfillsMode === 'entry' ? 'import "regenerator-runtime/runtime"' : ''}
 
+            // onload
             window.addEventListener('load', () => {
                 const dataEl = document.getElementById('ssr-data')
                 if (dataEl) {
                     const ssrData = JSON.parse(dataEl.innerHTML)
                     if (ssrData && 'url' in ssrData) {
-                        const { url, staticProps } = ssrData
                         const preloadEl = document.head.querySelector('link[href*="_post/"][rel="preload"][as="script"]');
+                        const { url, staticProps } = ssrData
 
+                        // inject global variables
                         if (preloadEl) {
                             window['__post_loadScriptBaseUrl'] = preloadEl.getAttribute('href').split('_post/')[0]
                         }
-                        if (!window['__POST_SSR_DATA']) {
-                            window['__POST_SSR_DATA'] = {}
-                        }
-                        window['__POST_SSR_DATA'][url.pagePath] = { staticProps }
+                        { (window['__POST_APP'] =  window['__POST_APP'] || {}).config = ${JSON.stringify(this.config, ['lang', 'baseUrl'])} }
+                        { (window['__POST_SSR_DATA'] =  window['__POST_SSR_DATA'] || {})[url.pagePath] = { staticProps } }
 
                         // delete ssr head elements
                         const postEndEl = document.head.querySelector('meta[name="post-head-end"]')
@@ -84,7 +75,12 @@ export class App {
 
                         // hydrate app
                         ReactDom.hydrate((
-                            <AppRouter baseUrl="${baseUrl}" initialUrl={url} />
+                            <AppContext.Provider value={{
+                                config: Object.assign({}, window['__POST_APP'].config),
+                                staticProps: Object.assign({}, window['__POST_APP'].staticProps)
+                            }}>
+                                <AppRouter baseUrl="${baseUrl}" initialUrl={url} />
+                            </AppContext.Provider>
                         ), document.querySelector('main'))
                     }
                 }
@@ -92,30 +88,8 @@ export class App {
         `)
     }
 
-    async update(hash: string | null, component: ComponentType | null) {
-        this.hash = hash
-        this.component = component
-        this.staticProps = null
-        console.log('app updated, hash:', hash)
-    }
-
-    async getStaticProps() {
-        if (this.staticProps === null && this.component) {
-            const getStaticProps = this.component!['getStaticProps']
-            if (typeof getStaticProps === 'function') {
-                const props = await getStaticProps()
-                if (utils.isObject(props)) {
-                    this.staticProps = props
-                } else {
-                    this.staticProps = {}
-                }
-            }
-        }
-        return this.staticProps
-    }
-
     async build() {
-        const { pages: ssrPages, lazyComponents, hash: R } = await this.ssr()
+        const { customApp, pages: ssrPages, lazyComponents, hash: R } = await this.renderAll()
         const compiler = new Compiler(this.srcDir, Object.keys(ssrPages).reduce((entries, pagePath) => {
             const pageName = pagePath.replace(/^\/+/, '') || 'index'
             const fullPath = path.join(this.srcDir, 'pages', pagePath)
@@ -125,7 +99,7 @@ export class App {
                     path: '${pagePath}',
                     reqComponent:() => {
                         const mod = require(${JSON.stringify(fullPath)})
-                        const component = utils.isComponent(mod.default, 'page')
+                        const component = utils.isComponentModule(mod, 'page')
                         component.hasGetStaticPropsMethod = typeof mod['getStaticProps'] === 'function' || typeof component['getStaticProps'] === 'function'
                         return component
                     }
@@ -140,40 +114,38 @@ export class App {
                     name: '${name}',
                     style: '/*COMPONENT-STYLE-${R}*/',
                     reqComponent:() => {
-                        const { default: component } = require(${JSON.stringify(fullPath)})
-                        return utils.isComponent(component)
+                        const mod = require(${JSON.stringify(fullPath)})
+                        return utils.isComponentModule(mod)
                     }
                 }
             `
             return entries
         }, {
-            app: this.isCustom ? `
-            const { utils } = require('@postjs/core')
-            const { default: component } = require('./pages/_app')
+            app: customApp ? `
+                const { utils } = require('@postjs/core')
+                const mod = require('./pages/_app')
 
-            window.__POST_APP = {
-                staticProps: '/*APP-STATIC-PROPS-${R}*/',
-                Component: utils.isComponent(component, 'app')
-            }
-        ` : '',
+                window.__POST_APP = {
+                    staticProps: '/*APP-STATIC-PROPS-${R}*/',
+                    Component: utils.isComponentModule(mod, 'app')
+                }
+            ` : '',
             main: this.entryJS
         })), {
             isProduction: true,
-            splitVendorChunk: true,
             browserslist: this.config.browserslist,
             useBuiltIns: this.config.polyfillsMode
         })
 
         const { hash, chunks, warnings, errors, startTime, endTime } = await compiler.compile()
-        const buildManifest: Record<string, any> = { hash, warnings, errors, startTime, endTime, pages: {}, components: {} }
+        const buildManifest = { hash, warnings, errors, startTime, endTime, pages: {} as Record<string, any>, components: {} as Record<string, any> }
         const buildDir = path.join(this.config.rootDir, '.post/builds', hash)
 
         for (const chuck of chunks.values()) {
             const jsFile = path.join(buildDir, '_post', `${chuck.name}.js`)
             await fs.ensureDir(path.dirname(jsFile))
             if (chuck.name === 'app') {
-                const appStaticProps = await this.getStaticProps()
-                await fs.writeFile(jsFile, chuck.content.replace(`"/*APP-STATIC-PROPS-${R}*/"`, JSON.stringify(appStaticProps)))
+                await fs.writeFile(jsFile, chuck.content.replace(`"/*APP-STATIC-PROPS-${R}*/"`, JSON.stringify(customApp.staticProps)))
             } else if (chuck.name.startsWith('components/')) {
                 await fs.writeFile(jsFile, chuck.content.replace(`"/*COMPONENT-STYLE-${R}*/"`, JSON.stringify(chuck.css?.trim() || '')))
             } else {
@@ -189,8 +161,8 @@ export class App {
             }
             for (const ssrPage of ssrPages[pagePath]) {
                 const { url, staticProps, html, head } = ssrPage
-                const { asPath } = url
-                const asName = asPath.replace(/^\/+/, '') || 'index'
+                const { pathname } = url
+                const asName = pathname.replace(/^\/+/, '') || 'index'
                 const depth = asName.split('/').length - 1
                 const htmlFile = path.join(buildDir, asName + '.html')
                 await fs.ensureDir(path.dirname(htmlFile))
@@ -212,8 +184,8 @@ export class App {
                     await fs.ensureDir(path.dirname(dataFile))
                     await fs.writeJSON(dataFile, { staticProps })
                 }
-                if (asPath !== pagePath) {
-                    (buildManifest.pages[pagePath].staticPaths = buildManifest.pages[pagePath].staticPaths || []).push(asPath)
+                if (pathname !== pagePath) {
+                    (buildManifest.pages[pagePath].staticPaths = buildManifest.pages[pagePath].staticPaths || []).push(pathname)
                 }
             }
         }
@@ -227,14 +199,10 @@ export class App {
         await fs.remove(this.outputDir)
         await fs.copy(buildDir, this.outputDir, { recursive: true })
 
-        if (warnings.length > 0) {
-            warnings.forEach(msg => console.warn(msg))
-        }
-
         return buildManifest
     }
 
-    async ssr() {
+    async renderAll() {
         const hasComponentsDir = fs.existsSync(path.join(this.srcDir, 'components'))
         const compiler = new Compiler(this.srcDir, `
             const { utils } = require('@postjs/core')
@@ -249,15 +217,7 @@ export class App {
                 pages[pagePath] = {
                     rawRequest: './pages/' + key.replace(/^[./]+/, ''),
                     reqComponent: () => {
-                        const mod = r(key)
-                        const component = utils.isComponent(mod.default, 'page')
-                        const staticMethods = ['getStaticProps', 'getStaticPaths']
-                        staticMethods.forEach(name => {
-                            if (typeof mod[name] === 'function' && typeof component[name] !== 'function') {
-                                component[name] = mod[name]
-                            }
-                        })
-                        return component
+                        return utils.isComponentModule(r(key), 'page', ['getStaticProps', 'getStaticPaths'])
                     }
                 }
             })
@@ -268,7 +228,7 @@ export class App {
                 components[name] = {
                     rawRequest: './components/' + key.replace(/^[./]+/, ''),
                     reqComponent: () => {
-                        return utils.isComponent(component)
+                        return utils.isComponentModule(r2(key))
                     }
                 }
             }
@@ -283,17 +243,34 @@ export class App {
         const { pages, components } = runJS(chunks.get('main')!.content, peerDeps)
 
         type RenderedPage = { url: URL, staticProps: any, html: string, head: string[] }
-        const renderRet = { hash, warnings, startTime, endTime, pages: {} as Record<string, Array<RenderedPage>>, lazyComponents: [] as Array<string> }
+        const renderRet = {
+            hash,
+            warnings,
+            startTime,
+            endTime,
+            customApp: null as any,
+            appStaticProps: null as any,
+            pages: {} as Record<string, Array<RenderedPage>>,
+            lazyComponents: [] as Array<string>
+        }
 
+        let App: ComponentType = Fragment
         if ('/_app' in pages) {
-            this.update(hash, pages['/_app'].reqComponent())
+            App = pages['/_app'].reqComponent()
+            renderRet.customApp = { appStaticProps: null }
+            if (utils.isFunction(App['getStaticProps'])) {
+                const staticProps = await App['getStaticProps']()
+                if (utils.isObject(staticProps)) {
+                    renderRet.customApp = { staticProps }
+                }
+            }
         }
 
         for (const pagePath of Object.keys(pages).filter(pagePath => pagePath !== '/_app')) {
             const pageName = pagePath.replace(/^\/+/, '') || 'index'
             const pagePaths = new Set([pagePath])
-            const pageComponent = pages[pagePath].reqComponent()
-            const getStaticPaths = pageComponent['getStaticPaths']
+            const PageComponent = pages[pagePath].reqComponent()
+            const getStaticPaths = PageComponent['getStaticPaths']
 
             if (utils.isFunction(getStaticPaths)) {
                 const v = await getStaticPaths()
@@ -301,20 +278,20 @@ export class App {
                     v.filter(utils.isNEString).forEach(v => pagePaths.add(utils.cleanPath(v)))
                 }
             }
-            renderRet.pages[pagePath] = renderRet.pages[pagePath] || []
 
-            for (const asPath of pagePaths) {
+            renderRet.pages[pagePath] = []
+            for (const pathname of pagePaths) {
                 const params = {}
-                if (asPath !== pagePath) {
-                    const [r, ok] = matchPath(pagePath, asPath)
+                if (pathname !== pagePath) {
+                    const [r, ok] = utils.matchPath(pagePath, pathname)
                     if (!ok) {
-                        console.log(`bad static path '${asPath}' of page '${pageName}'`)
+                        console.log(`invalid static path '${pathname}' of page '${pageName}'`)
                         continue
                     }
                     Object.assign(params, r)
                 }
-                const url = { pagePath, asPath, params, query: {} }
-                const { staticProps, html } = await this.renderPage(url, pageComponent)
+                const url = { pagePath, pathname, params, query: {} }
+                const { staticProps, html } = await this._renderPage(App, renderRet.customApp?.staticProps, PageComponent, url)
                 const head = renderHeadToString()
                 renderRet.pages[pagePath].push({ url, staticProps, html, head })
             }
@@ -326,9 +303,84 @@ export class App {
         return renderRet
     }
 
-    async renderPage(
-        url: URL,
-        PageComponent: React.ComponentType
+    async renderPage(url: URL) {
+        const { chunks } = await new Compiler(this.srcDir, `
+            const { utils } = require('@postjs/core')
+            const r = require.context('./pages', false, /\\.\\/_app\\.(jsx?|mjs|tsx?)$/i)
+
+            exports.reqApp = () => {
+                const rKeys = r.keys()
+                if (rKeys.length === 1) {
+                   return utils.isComponentModule(r(rKeys[0]), 'app', ['getStaticProps'])
+                }
+                return null
+            }
+            exports.reqComponent = () => {
+                const mod = require('./pages${url.pagePath}')
+                return utils.isComponentModule(mod, 'page', ['getStaticProps'])
+            }
+        `, {
+            isServer: true,
+            externals: Object.keys(peerDeps)
+        }).compile()
+        const { content: js, css } = chunks.get('main')!
+        const { reqApp, reqComponent } = runJS(js, peerDeps)
+
+        let App: ComponentType | null = reqApp()
+        let appStaticProps: any = null
+        if (App) {
+            const getStaticProps = App['getStaticProps']
+            if (utils.isFunction(getStaticProps)) {
+                const props = await getStaticProps()
+                if (utils.isObject(props)) {
+                    appStaticProps = props
+                }
+            }
+        }
+
+        const { staticProps, html } = await this._renderPage(App || Fragment, appStaticProps, reqComponent(), url)
+        return { staticProps, html, css }
+    }
+
+    async getStaticProps() {
+        const { chunks } = await new Compiler(this.srcDir, `
+            const { utils } = require('@postjs/core')
+            const r = require.context('./pages', false, /\\.\\/_app\\.(jsx?|mjs|tsx?)$/i)
+
+            let getStaticProps = null
+            const rKeys = r.keys()
+            if (rKeys.length === 1) {
+                const mod = r(rKeys[0])
+                if (mod.default && utils.isFunction(mod.default.getStaticProps)) {
+                    getStaticProps = mod.default.getStaticProps
+                } else if (utils.isFunction(mod.getStaticProps)) {
+                    getStaticProps = mod.getStaticProps
+                }
+            }
+
+            exports.getStaticProps = getStaticProps
+        `, {
+            isServer: true,
+            externals: Object.keys(peerDeps)
+        }).compile()
+        const { content: js } = chunks.get('main')!
+        const { getStaticProps } = runJS(js, peerDeps)
+
+        if (getStaticProps) {
+            const props = await getStaticProps()
+            if (utils.isObject(props)) {
+                return props
+            }
+        }
+
+        return null
+    }
+
+    private async _renderPage(
+        App: React.ComponentType,
+        appStaticProps: any,
+        PageComponent: React.ComponentType,
+        url: URL
     ) {
         let staticProps: any = null
         const getStaticProps = PageComponent['getStaticProps']
@@ -341,15 +393,25 @@ export class App {
             }
         }
 
+        const { lang, baseUrl } = this.config
         const el = createElement(
-            RouterContext.Provider,
-            { value: new RouterStore(url) },
+            AppContext.Provider,
+            {
+                value: {
+                    config: { lang, baseUrl },
+                    staticProps: appStaticProps
+                }
+            },
             createElement(
-                this.component || Fragment,
-                await this.getStaticProps(),
+                RouterContext.Provider,
+                { value: new RouterStore(url) },
                 createElement(
-                    PageComponent,
-                    staticProps
+                    App,
+                    appStaticProps,
+                    createElement(
+                        PageComponent,
+                        staticProps
+                    )
                 )
             )
         )
@@ -358,29 +420,5 @@ export class App {
             html: renderToString(el),
             staticProps
         }
-    }
-
-    async requirePage(pagePath: string) {
-        const { chunks } = await new Compiler(this.srcDir, `
-            const { utils } = require('@postjs/core')
-
-            exports.reqComponent = () => {
-                const mod = require('./pages${pagePath}')
-                const component = utils.isComponent(mod.default, 'page')
-                const staticMethods = ['getStaticProps', 'getStaticPaths']
-                staticMethods.forEach(name => {
-                    if (typeof mod[name] === 'function' && typeof component[name] !== 'function') {
-                        component[name] = mod[name]
-                    }
-                })
-                return component
-            }
-        `, {
-            isServer: true,
-            externals: Object.keys(peerDeps)
-        }).compile()
-        const { content: js, css } = chunks.get('main')!
-        const { reqComponent } = runJS(js, peerDeps)
-        return { reqComponent, css }
     }
 }

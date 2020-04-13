@@ -6,9 +6,9 @@ export const activatedLazyComponents = new Set<string>()
 
 interface LazyComponentProps {
     is: string
+    package?: string
     props?: Record<string, any>
     ssr?: boolean
-    package?: string
 }
 
 export function LazyComponent({ is: name, props, children }: PropsWithChildren<LazyComponentProps>): JSX.Element | null {
@@ -16,14 +16,15 @@ export function LazyComponent({ is: name, props, children }: PropsWithChildren<L
     const [error, setError] = useState<string | null>(null)
 
     if (isServer()) {
-        // todo: ssr?
+        // todo: ssr
         activatedLazyComponents.add(name)
     }
 
     useEffect(() => {
         const {
             __POST_COMPONENTS: components = {},
-            __POST_BUILD_MANIFEST: buildManifest = {}
+            __POST_BUILD_MANIFEST: buildManifest = {},
+            __post_loadScriptBaseUrl: loadScriptBaseUrl = ''
         } = window as any
         const buildInfo = (buildManifest.components || {})[name]
         if (buildInfo !== undefined) {
@@ -31,7 +32,6 @@ export function LazyComponent({ is: name, props, children }: PropsWithChildren<L
                 setIsLoading(false)
             } else {
                 const script = document.createElement('script')
-                const loadScriptBaseUrl = window['__post_loadScriptBaseUrl'] || ''
                 script.src = `${loadScriptBaseUrl}_post/components/${name}.js?v=${buildInfo.hash}`
                 script.async = false
                 script.onload = () => {
@@ -53,7 +53,7 @@ export function LazyComponent({ is: name, props, children }: PropsWithChildren<L
         if (Children.count(children) > 0) {
             return <Fragment>{children}</Fragment>
         }
-        return <Loading />
+        return <Loading text="loading..." />
     }
 
     if (error) {
@@ -80,7 +80,7 @@ function HotComponent({ name, props }: { name: string, props: any }) {
     })
 
     useEffect(() => {
-        const hmr = window['__POST_HMR']
+        const hmr = Boolean(window['__POST_HMR'])
         const hotUpdate = (Component: ComponentType) => setHot({ Component })
 
         if (hmr) {

@@ -32,14 +32,7 @@ export function start(appDir: string, port: number) {
                 const name = utils.trimSuffix(utils.trimPrefix(pathname, '/_post/'), '.js')
                 const chunk = watcher.getChunk(name)
                 if (chunk !== null) {
-                    let { content } = chunk
-                    if (name === 'app') {
-                        const appStaticProps = await watcher.getAppStaticProps()
-                        if (appStaticProps) {
-                            content = '(window.__POST_APP = window.__POST_APP || {}).staticProps = ' + JSON.stringify(appStaticProps) + ';\n' + content
-                        }
-                    }
-                    sendText(req, res, 200, 'application/javascript', content)
+                    sendText(req, res, 200, 'application/javascript', chunk.content)
                     return
                 }
             }

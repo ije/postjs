@@ -35,12 +35,19 @@ export const utils = {
     isFunction(a: any): a is Function {
         return typeof a === 'function'
     },
-    isComponent(component: any, name: string = 'component'): ReactType {
+
+    isComponentModule(mod: any, type: string = 'component', staticMethods?: string[]): ReactType {
+        const { default: component } = mod
         if (component === undefined) {
-            return () => React.createElement('div', null, React.createElement('p', { style: { color: 'red' } }, `bad ${name}: miss default export`))
+            return () => React.createElement('div', null, React.createElement('p', null, `bad ${type}: miss default export`))
         } else if (!isValidElementType(component)) {
-            return () => React.createElement('div', null, React.createElement('p', { style: { color: 'red' } }, `bad ${name}: not a valid component`))
+            return () => React.createElement('div', null, React.createElement('p', null, `bad ${type}: not a valid component`))
         }
+        staticMethods?.forEach(name => {
+            if (this.isFunction(mod[name]) && !this.isFunction(component[name])) {
+                component[name] = mod[name]
+            }
+        })
         return component
     },
 
@@ -84,5 +91,39 @@ export const utils = {
             .map(p => p.trim())
             .filter(Boolean)
             .join('/')
+    },
+
+    matchPath(routePath: string, locPath: string): [Record<string, string>, boolean] {
+        const routeSegments = utils.cleanPath(routePath).replace(/^\//, '').split('/')
+        const locSegments = utils.cleanPath(locPath).replace(/^\//, '').split('/')
+        const isRoot = locSegments[0] === ''
+        const max = Math.max(routeSegments.length, locSegments.length)
+        const params: Record<string, string> = {}
+
+        let ok = true
+
+        for (let i = 0; i < max; i++) {
+            const routeSeg = routeSegments[i]
+            const locSeg = locSegments[i]
+
+            if (locSeg === undefined || routeSeg === undefined) {
+                ok = false
+                break
+            }
+
+            if (routeSeg === '*') {
+                params['*'] = locSegments.slice(i).map(decodeURIComponent).join('/')
+                break
+            }
+
+            if (!isRoot && routeSeg.startsWith('$')) {
+                params[routeSeg.slice(1)] = decodeURIComponent(locSeg)
+            } else if (routeSeg !== locSeg) {
+                ok = false
+                break
+            }
+        }
+
+        return [params, ok]
     }
 }

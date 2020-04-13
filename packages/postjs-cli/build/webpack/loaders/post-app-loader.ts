@@ -9,11 +9,11 @@ const template = (rawRequest: string) => `
     if (module.hot) {
         module.hot.accept(${rawRequest}, () => {
             const mod = require(${rawRequest})
-            hotEmitter.emit('postAppHotUpdate', utils.isComponent(mod.default, 'app'))
+            hotEmitter.emit('postAppHotUpdate', utils.isComponentModule(mod, 'app'))
         })
     }
 
-    (window.__POST_APP = window.__POST_APP || {}).Component = utils.isComponent(mod.default, 'app')
+    (window.__POST_APP = window.__POST_APP || {}).Component = utils.isComponentModule(mod, 'app')
 `
 
 const loader: webpack.loader.Loader = function () {

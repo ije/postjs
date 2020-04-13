@@ -7,16 +7,16 @@ const template = (name: string, rawRequest: string) => `
 
     if (module.hot) {
         module.hot.accept(${rawRequest}, () => {
-            const { default: component } = require(${rawRequest})
-            hotEmitter.emit('postComponentHotUpdate:' + ${name}, utils.isComponent(component))
+            const mod = require(${rawRequest})
+            hotEmitter.emit('postComponentHotUpdate:' + ${name}, utils.isComponentModule(mod))
         })
     }
 
     (window.__POST_COMPONENTS = window.__POST_COMPONENTS || {})[${name}] = {
         name: ${name},
         reqComponent:() => {
-            const { default: component } = require(${rawRequest})
-            return utils.isComponent(component)
+            const mod = require(${rawRequest})
+            return utils.isComponentModule(mod)
         }
     }
 `

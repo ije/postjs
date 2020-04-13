@@ -7,8 +7,8 @@ export interface AppConfig {
     readonly rootDir: string
     readonly srcDir: string
     readonly outputDir: string
-    readonly baseUrl: string
     readonly lang: string
+    readonly baseUrl: string
     readonly browserslist?: string | string[] | Record<string, any>
     readonly polyfillsMode?: 'usage' | 'entry'
     readonly polyfills?: string[]
@@ -22,8 +22,8 @@ export function loadAppConfig(appDir: string) {
         rootDir: path.resolve(appDir),
         srcDir: '/',
         outputDir: '/dist',
-        baseUrl: '/',
-        lang: 'en'
+        lang: 'en',
+        baseUrl: '/'
     }
     let settings: any = {}
 
@@ -40,8 +40,8 @@ export function loadAppConfig(appDir: string) {
     const {
         srcDir,
         ouputDir,
-        baseUrl,
         lang,
+        baseUrl,
         browserslist,
         polyfillsMode,
         polyfills
@@ -52,11 +52,11 @@ export function loadAppConfig(appDir: string) {
     if (utils.isNEString(ouputDir)) {
         Object.assign(appConfig, { ouputDir: utils.cleanPath(ouputDir) })
     }
-    if (utils.isNEString(baseUrl)) {
-        Object.assign(appConfig, { baseUrl: utils.cleanPath(encodeURI(baseUrl)) })
-    }
     if (/^[a-z]{2}(-[a-z0-9]+)?$/i.test(lang)) {
         Object.assign(appConfig, { lang })
+    }
+    if (utils.isNEString(baseUrl)) {
+        Object.assign(appConfig, { baseUrl: utils.cleanPath(encodeURI(baseUrl)) })
     }
     if (utils.isNEString(browserslist) || utils.isNEArray(browserslist) || utils.isObject(browserslist)) {
         Object.assign(appConfig, { browserslist })

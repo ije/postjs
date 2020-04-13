@@ -14,7 +14,6 @@ import './loaders/post-page-loader'
 export type Config = Pick<webpack.Configuration, 'externals' | 'plugins'> & {
     isServer?: boolean
     isProduction?: boolean
-    splitVendorChunk?: boolean
     terserOptions?: MinifyOptions
     useSass?: boolean
     postcssPlugins?: postcss.AcceptedPlugin[]
@@ -29,7 +28,6 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
         plugins,
         isServer,
         isProduction,
-        splitVendorChunk,
         terserOptions,
         useSass,
         postcssPlugins,
@@ -59,6 +57,8 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
             }
         }
     ]
+
+    console.log('--------------------', path.join(process.cwd(), 'packages/postjs-cli/node_modules'))
 
     return {
         context,
@@ -190,27 +190,21 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
                 alias[name] = path.join(__dirname, `loaders/${name}.js`)
                 return alias
             }, {}),
-            modules: [path.join(context, 'node_modules'), 'node_modules']
+            modules: [path.join(process.cwd(), 'node_modules'), path.join(context, 'node_modules'), 'node_modules']
         },
         externals,
         optimization: {
             runtimeChunk: !isServer && { name: 'webpack-runtime' },
-            splitChunks: splitVendorChunk && {
+            splitChunks: !isServer && {
                 cacheGroups: {
-                    commons: {
-                        priority: 1,
-                        name: 'commons',
-                        chunks: 'initial',
-                        minChunks: 2
-                    },
                     vendor: {
-                        priority: 2,
+                        priority: 1,
                         test: /[\\/](node_modules|packages[\\/]postjs-core)[\\/]/,
                         name: 'vendor',
                         chunks: 'initial'
                     },
                     ployfills: {
-                        priority: 3,
+                        priority: 2,
                         test: /[\\/]node_modules[\\/](@babel[\\/]runtime|core-js|regenerator-runtime|whatwg-fetch)[\\/]/,
                         name: 'ployfills',
                         chunks: 'initial'
@@ -232,7 +226,7 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
         },
         performance: {
             maxEntrypointSize: 1 << 20, // 1mb
-            maxAssetSize: 1 << 20 // 1mb
+            maxAssetSize: 1 << 20
         },
         devtool: !isProduction && !isServer ? 'inline-source-map' : false
     }

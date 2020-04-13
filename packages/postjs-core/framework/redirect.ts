@@ -1,22 +1,23 @@
 import hotEmitter from 'webpack/hot/emitter'
 import { fetchPage } from './page'
+import { route } from './router'
 import { PageTransition } from './transition'
 import { isServer, utils } from './utils'
 
-let redirectMark: { pagePath: string, asPath?: string } | null = null
+let redirectMark: string | null = null
 
-export async function redirect(pagePath: string, asPath?: string, replace?: boolean, transition?: PageTransition | string) {
+export async function redirect(href: string, replace?: boolean, transition?: PageTransition | string) {
     // only in browser
     if (isServer()) {
+        return Promise.reject(new Error('can\'t redirect on server'))
+    }
+
+    if (/^(https?|file):/.test(href)) {
+        location.href = href
         return
     }
 
-    const {
-        __POST_PAGES: pages,
-        __POST_BUILD_MANIFEST: buildManifest
-    } = window as any
-    const pathname = asPath || pagePath
-
+    href = utils.cleanPath(href)
     if (location.protocol === 'file:') {
         const dataEl = document.getElementById('ssr-data')
         if (dataEl) {
@@ -25,70 +26,63 @@ export async function redirect(pagePath: string, asPath?: string, replace?: bool
                 const { url: { pagePath: initialPagePath } } = ssrData
                 location.href = location.href.replace(
                     '/' + (initialPagePath.replace(/^\/+/, '') || 'index') + '.html',
-                    '/' + (pathname.replace(/^\/+/, '') || 'index') + '.html'
+                    '/' + (href.replace(/^\/+/, '') || 'index') + '.html'
                 )
             }
         }
         return
     }
 
-    if (!utils.isObject(buildManifest) || !utils.isObject(pages)) {
-        location.href = location.protocol + '//' + location.host + pathname
-        return
-    }
+    const {
+        __POST_APP: app = {},
+        __POST_BUILD_MANIFEST: buildManifest = {},
+        __POST_PAGES: pages = {}
+    } = window as any
 
-    const buildInfo = buildManifest.pages[pagePath]
-    if (buildInfo === undefined) {
-        if (pagePath in pages) {
-            delete pages[pagePath]
-        }
-        if ('/_404' in buildManifest.pages) {
-            asPath = asPath || pagePath
-            pagePath = '/_404'
+    const { pagePath } = route(app.config?.baseUrl || '/', Object.keys(buildManifest.pages), { fallback: '/_404', location: { pathname: href } })
+    if (pagePath === '/_404' && !(pagePath in (buildManifest.pages || {}))) {
+        if (replace) {
+            history.replaceState({ transition }, '', href)
         } else {
-            if (replace) {
-                history.replaceState({ transition }, '', pathname)
-            } else {
-                history.pushState({ transition }, '', pathname)
-            }
-            hotEmitter.emit('popstate', { type: 'popstate', state: { transition } })
-            return
+            history.pushState({ transition }, '', href)
         }
+        hotEmitter.emit('popstate', { type: 'popstate', state: { transition } })
+        return
     }
 
     if (pagePath in pages) {
         const page = pages[pagePath]
         if (utils.isObject(page)) {
             if (page.fetching === true) {
-                redirectMark = { pagePath, asPath }
+                redirectMark = href
+                return
             } else if (page.path === pagePath && utils.isFunction(page.reqComponent)) {
                 if (redirectMark !== null) {
                     redirectMark = null
                 }
                 if (replace) {
-                    history.replaceState({ transition }, '', pathname)
+                    history.replaceState({ transition }, '', href)
                 } else {
-                    history.pushState({ transition }, '', pathname)
+                    history.pushState({ transition }, '', href)
                 }
                 hotEmitter.emit('popstate', { type: 'popstate', state: { transition } })
-            } else {
-                delete pages[pagePath]
+                return
             }
-        } else {
-            delete pages[pagePath]
         }
-    } else {
-        redirectMark = { pagePath, asPath }
-        return fetchPage(pagePath).then(() => {
-            if (redirectMark !== null && redirectMark.pagePath === pagePath) {
-                const path = redirectMark.asPath || redirectMark.pagePath
-                if (replace) {
-                    history.replaceState({ transition }, '', path)
-                } else {
-                    history.pushState({ transition }, '', path)
-                }
-                hotEmitter.emit('popstate', { type: 'popstate', state: { transition } })
-            }
-        })
+        delete pages[pagePath]
     }
+
+    redirectMark = href
+    return fetchPage(pagePath).then(() => {
+        if (redirectMark !== null) {
+            const href = redirectMark
+            redirectMark = null
+            if (replace) {
+                history.replaceState({ transition }, '', href)
+            } else {
+                history.pushState({ transition }, '', href)
+            }
+            hotEmitter.emit('popstate', { type: 'popstate', state: { transition } })
+        }
+    })
 }

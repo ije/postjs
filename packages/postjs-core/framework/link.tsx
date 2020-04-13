@@ -1,48 +1,51 @@
 import React, { Children, cloneElement, CSSProperties, isValidElement, PropsWithChildren, useCallback, useEffect, useMemo } from 'react'
 import { fetchPage } from './page'
 import { redirect } from './redirect'
-import { useRouter } from './router'
+import { route, useRouter } from './router'
 import { PageTransition } from './transition'
 import { utils } from './utils'
 
 interface LinkProps {
     to: string
-    as?: string
-    className?: string
-    style?: CSSProperties
     replace?: boolean
     prefetch?: boolean
+    className?: string
+    style?: CSSProperties
     transition?: string | PageTransition
 }
 
 export function Link({
-    to: toProp,
-    as: asProp,
-    className,
-    style,
+    to,
     replace,
     prefetch,
+    className,
+    style,
     transition,
     children
 }: PropsWithChildren<LinkProps>) {
     const router = useRouter()
-    const pagePath = useMemo(() => utils.cleanPath(toProp), [toProp])
-    const asPath = useMemo(() => utils.isNEString(asProp) ? utils.cleanPath(asProp) : undefined, [asProp])
+    const href = useMemo(() => utils.cleanPath(to), [to])
+    const pagePath = useMemo(() => {
+        const { baseUrl = '/' } = window['__POST_APP']?.config || {}
+        const { pages = {} } = window['__POST_BUILD_MANIFEST'] || {}
+        const { pagePath } = route(baseUrl, Object.keys(pages), { fallback: '/_404', location: { pathname: href } })
+        return pagePath
+    }, [href])
     const onClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
         e.preventDefault()
-        if (router.pagePath !== pagePath) {
-            redirect(pagePath, asPath, replace, transition).catch(err => {
-                alert(`can't load page '${pagePath}': ${err.message || err}`)
+        if (router.pathname !== href) {
+            redirect(href, replace, transition).catch(err => {
+                alert(`Error: ${err.message}`)
             })
         }
-    }, [pagePath, asPath, replace, router])
+    }, [href, replace, router, transition])
     const onMouseEnter = useCallback(() => {
-        fetchPage(pagePath)
+        prefetchPage(pagePath)
     }, [pagePath])
 
     useEffect(() => {
         if (prefetch) {
-            fetchPage(pagePath)
+            prefetchPage(pagePath)
         }
     }, [prefetch, pagePath])
 
@@ -54,7 +57,7 @@ export function Link({
                 ...props,
                 className: [className, props.className].filter(utils.isNEString).join(' ') || undefined,
                 style: Object.assign({}, style, props.style),
-                href: asPath || pagePath,
+                href,
                 'aria-current': props['aria-current'] || 'page',
                 onClick: (e: React.MouseEvent<HTMLAnchorElement>) => {
                     if (utils.isFunction(props.onClick)) {
@@ -80,7 +83,7 @@ export function Link({
         <a
             className={className}
             style={style}
-            href={asPath || pagePath}
+            href={href}
             onClick={onClick}
             onMouseEnter={onMouseEnter}
             aria-current="page"
@@ -99,7 +102,7 @@ export function NavLink({
     ...rest
 }: PropsWithChildren<NavLinkProps>) {
     const router = useRouter()
-    if (router.pagePath === rest.to) {
+    if (router.pathname === rest.to) {
         return (
             <Link
                 {...rest}
@@ -112,4 +115,20 @@ export function NavLink({
     return (
         <Link {...rest} />
     )
+}
+
+function prefetchPage(pagePath: string) {
+    // not a file
+    if (location.protocol === 'file:') {
+        return
+    }
+
+    const {
+        __POST_PAGES: pages = {},
+        __POST_BUILD_MANIFEST: buildManifest = {}
+    } = window as any
+
+    if (pagePath in (buildManifest.pages || {}) && !(pagePath in pages)) {
+        fetchPage(pagePath)
+    }
 }

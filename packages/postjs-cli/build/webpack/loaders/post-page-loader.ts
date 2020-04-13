@@ -7,8 +7,8 @@ const template = (pagePath: string, rawRequest: string) => `
 
     if (module.hot) {
         module.hot.accept(${rawRequest}, () => {
-            const { default: component } = require(${rawRequest})
-            hotEmitter.emit('postPageHotUpdate:' + ${pagePath}, utils.isComponent(component, 'page'))
+            const mod = require(${rawRequest})
+            hotEmitter.emit('postPageHotUpdate:' + ${pagePath}, utils.isComponentModule(mod, 'page'))
         })
     }
 
@@ -16,7 +16,7 @@ const template = (pagePath: string, rawRequest: string) => `
         path: ${pagePath},
         reqComponent:() => {
             const mod = require(${rawRequest})
-            const component = utils.isComponent(mod.default, 'page')
+            const component = utils.isComponentModule(mod, 'page')
             component.hasGetStaticPropsMethod = typeof mod['getStaticProps'] === 'function' || typeof component['getStaticProps'] === 'function'
             return component
         }

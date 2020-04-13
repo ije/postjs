@@ -1,11 +1,10 @@
-import { renderHeadToString, URL, utils } from '@postjs/core'
+import { renderHeadToString, route, URL, utils } from '@postjs/core'
 import { EventEmitter } from 'events'
 import fs from 'fs-extra'
 import path from 'path'
 import { Watching } from 'webpack'
 import { App } from './app'
-import { route } from './app/router'
-import { addEntry, createHtml, getJSXFiles } from './utils'
+import { addEntry, createHtml, getJSFiles } from './utils'
 import { ChunkWithContent, Compiler } from './webpack'
 
 export class DevWatcher {
@@ -23,8 +22,8 @@ export class DevWatcher {
         const app = new App(appDir)
         this._app = app
         this._jsxFiles = [
-            ...getJSXFiles('components/', app.srcDir),
-            ...getJSXFiles('pages/', app.srcDir)
+            ...getJSFiles('components/', app.srcDir),
+            ...getJSFiles('pages/', app.srcDir)
         ]
         this._pageChunks = new Map()
         this._componentChunks = new Map()
@@ -32,7 +31,6 @@ export class DevWatcher {
         this._buildManifest = null
         this._compiler = new Compiler(app.srcDir, app.entryJS, {
             enableHMR: true,
-            splitVendorChunk: true,
             browserslist: app.config.browserslist,
             useBuiltIns: app.config.polyfillsMode
         })
@@ -112,10 +110,6 @@ export class DevWatcher {
         return null
     }
 
-    async getAppStaticProps() {
-        return await this._app.getStaticProps()
-    }
-
     async getPageStaticProps(pathname: string) {
         if (!this.isInitiated) {
             return undefined
@@ -157,7 +151,7 @@ export class DevWatcher {
         if (this._pageChunks.has('/_404')) {
             const pageChunk = this._pageChunks.get('/_404')!
             if (pageChunk.html === undefined) {
-                await this._renderPage({ ...url, pagePath: '/_404' })
+                await this._renderPage({ pathname: url.pathname, pagePath: '/_404', params: {}, query: {} })
             }
             if (pageChunk.html) {
                 return [404, pageChunk.html]
@@ -172,19 +166,11 @@ export class DevWatcher {
     }
 
     private async _renderPage(url: URL) {
-        if (this._commonChunks.has('app')) {
-            const { hash } = this._commonChunks.get('app')!
-            if (this._app.hash !== hash) {
-                const { reqComponent } = await this._app.requirePage('/_app')
-                this._app.update(hash, reqComponent())
-            }
-        }
         if (this._pageChunks.has(url.pagePath)) {
             const app = this._app
             const baseUrl = app.config.baseUrl.replace(/\/+$/, '')
             const pageChunk = this._pageChunks.get(url.pagePath)!
-            const { reqComponent, css } = await app.requirePage(url.pagePath)
-            const { staticProps, html } = await app.renderPage(url, reqComponent())
+            const { staticProps, html, css } = await app.renderPage(url)
             const head = renderHeadToString()
 
             pageChunk.staticProps = staticProps
@@ -236,7 +222,7 @@ export class DevWatcher {
                 compilation.namedChunks.forEach(({ name, hash }) => {
                     const chunkFileName = '/' + name + '.js'
                     if (memfs.existsSync(chunkFileName)) {
-                        const content = memfs.readFileSync(chunkFileName).toString()
+                        let content = memfs.readFileSync(chunkFileName).toString()
                         if (name.startsWith('pages/')) {
                             const pageName = utils.trimPrefix(name, 'pages/')
                             const pagePath = ('/' + pageName).replace(/\/index$/i, '') || '/'
@@ -256,6 +242,16 @@ export class DevWatcher {
                             this._buildManifest!.components[name] = { hash }
                         } else if (!this._commonChunks.has(name) || this._commonChunks.get(name)!.hash !== hash) {
                             this._commonChunks.set(name, { name, hash, content })
+                            if (name === 'app') {
+                                this._app.getStaticProps().then(appStaticProps => {
+                                    const chunk = this._commonChunks.get('app')!
+                                    if (chunk?.hash === hash) {
+                                        Object.assign(chunk, {
+                                            content: `(window.__POST_APP = window.__POST_APP || {}).staticProps = ${JSON.stringify(appStaticProps)};\n${chunk.content}`
+                                        })
+                                    }
+                                })
+                            }
                         }
                     }
                 })
@@ -263,7 +259,6 @@ export class DevWatcher {
                 // cleanup
                 if (this._commonChunks.has('app') && !compilation.namedChunks.has('app')) {
                     this._commonChunks.delete('app')
-                    this._app.update(null, null)
                 }
                 Array.from(this._pageChunks.keys()).filter(pagePath => !Object.keys(this._buildManifest!.pages).includes(pagePath)).forEach(pagePath => {
                     this._pageChunks.delete(pagePath)
