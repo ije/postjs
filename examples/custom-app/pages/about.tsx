@@ -1,7 +1,8 @@
-import { Head } from '@postjs/core'
+import { Head, useAppStaticProps } from '@postjs/core'
 import React from 'react'
 
-export default function About({ description }: { description: string }) {
+export default function About() {
+    const { description } = useAppStaticProps()
     return (
         <div className="about">
             <Head>

@@ -10,6 +10,7 @@ export function getStaticPaths() {
 
 export default function Story() {
     const { params } = useRouter()
+
     return (
         <div style={{
             boxSizing: 'border-box',

@@ -1,7 +1,8 @@
-import { Head, Viewport } from '@postjs/core'
+import { Head, useAppStaticProps, Viewport } from '@postjs/core'
 import React from 'react'
 
-export default function Home({ name }: { name: string }) {
+export default function Home() {
+    const { name } = useAppStaticProps()
     return (
         <div className="home">
             <Head>

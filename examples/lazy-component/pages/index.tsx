@@ -18,7 +18,7 @@ export default function Home() {
                 <title>Welcome to use postjs!</title>
             </Head>
             <p>Welcome to use <strong>postjs</strong>!</p>
-            <LazyComponent is={'nav'} ssr={false}>
+            <LazyComponent is="nav">
                 ...
                 <br />
                 ...

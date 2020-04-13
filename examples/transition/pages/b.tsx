@@ -4,7 +4,7 @@ import Nav from '../components/nav'
 
 export default function B({ style }: any) {
     return (
-        <div style={{
+        <div className="b" style={{
             position: 'absolute',
             top: 0,
             left: 0,

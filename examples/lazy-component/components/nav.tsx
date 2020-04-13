@@ -5,9 +5,9 @@ import '../style/nav.less'
 export default function Nav() {
     return (
         <nav>
-            <Link className="rocket" to="/story/$name" as="/story/rocket">🚀Rock&middot;et</Link>
+            <Link to="/story/rocket" className="rocket" >🚀Rock&middot;et</Link>
             <br />
-            <Link className="dinosaur" to="/story/$name" as="/story/dinosaur">🦕Dino&middot;saur</Link>
+            <Link to="/story/dinosaur" className="dinosaur">🦕Dino&middot;saur</Link>
         </nav>
     )
 }
