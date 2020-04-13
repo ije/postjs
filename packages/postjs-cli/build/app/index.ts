@@ -257,13 +257,7 @@ export class App {
         let App: ComponentType = Fragment
         if ('/_app' in pages) {
             App = pages['/_app'].reqComponent()
-            renderRet.customApp = { appStaticProps: null }
-            if (utils.isFunction(App['getStaticProps'])) {
-                const staticProps = await App['getStaticProps']()
-                if (utils.isObject(staticProps)) {
-                    renderRet.customApp = { staticProps }
-                }
-            }
+            renderRet.customApp = { appStaticProps: await this._getStaticProps(App) }
         }
 
         for (const pagePath of Object.keys(pages).filter(pagePath => pagePath !== '/_app')) {
@@ -326,17 +320,8 @@ export class App {
         const { content: js, css } = chunks.get('main')!
         const { reqApp, reqComponent } = runJS(js, peerDeps)
 
-        let App: ComponentType | null = reqApp()
-        let appStaticProps: any = null
-        if (App) {
-            const getStaticProps = App['getStaticProps']
-            if (utils.isFunction(getStaticProps)) {
-                const props = await getStaticProps()
-                if (utils.isObject(props)) {
-                    appStaticProps = props
-                }
-            }
-        }
+        const App: ComponentType = reqApp() || Fragment
+        const appStaticProps: any = await this._getStaticProps(App)
 
         const { staticProps, html } = await this._renderPage(App || Fragment, appStaticProps, reqComponent(), url)
         return { staticProps, html, css }
@@ -358,21 +343,26 @@ export class App {
                 }
             }
 
-            exports.getStaticProps = getStaticProps
+            exports.App = {getStaticProps}
         `, {
             isServer: true,
             externals: Object.keys(peerDeps)
         }).compile()
         const { content: js } = chunks.get('main')!
-        const { getStaticProps } = runJS(js, peerDeps)
+        const { App } = runJS(js, peerDeps)
 
-        if (getStaticProps) {
-            const props = await getStaticProps()
+        return await this._getStaticProps(App)
+    }
+
+    private async _getStaticProps(App: ComponentType) {
+        const getStaticProps = App['getStaticProps']
+        if (utils.isFunction(getStaticProps)) {
+            const { lang, baseUrl } = this.config
+            const props = await getStaticProps({ lang, baseUrl })
             if (utils.isObject(props)) {
                 return props
             }
         }
-
         return null
     }
 
