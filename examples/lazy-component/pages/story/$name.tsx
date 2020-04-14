@@ -1,4 +1,4 @@
-import { Head, useRouter } from '@postjs/core'
+import { Head, URL } from '@postjs/core'
 import React from 'react'
 
 export function getStaticPaths() {
@@ -8,9 +8,17 @@ export function getStaticPaths() {
     ]
 }
 
-export default function Story() {
-    const { params } = useRouter()
+export function getStaticProps({ params }: URL) {
+    if (params.name === 'rocket') {
+        return { name: 'Rock·et' }
+    }
+    if (params.name === 'dinosaur') {
+        return { name: 'Dino·saur' }
+    }
+    return { name: '???' }
+}
 
+export default function Story({ name }: { name: string }) {
     return (
         <div style={{
             boxSizing: 'border-box',
@@ -24,9 +32,9 @@ export default function Story() {
             background: 'wheat'
         }}>
             <Head>
-                <title>Hello {params.name}</title>
+                <title>Hello {name}</title>
             </Head>
-            <p>There is a <strong>{params.name}</strong>!</p>
+            <p>There is a <strong>{name}</strong>!</p>
         </div>
     )
 }
