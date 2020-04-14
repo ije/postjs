@@ -1,48 +1,48 @@
 import { renderHeadToString, route, URL, utils } from '@postjs/core'
+import chokidar from 'chokidar'
 import { EventEmitter } from 'events'
-import fs from 'fs-extra'
+import glob from 'glob'
 import path from 'path'
-import webpack, { Watching } from 'webpack'
+import { Watching } from 'webpack'
+import DynamicEntryPlugin from 'webpack/lib/DynamicEntryPlugin'
 import { App } from './app'
-import { addEntry, createHtml, getJSFiles } from './utils'
+import { createHtml } from './utils'
 import { ChunkWithContent, Compiler } from './webpack'
 
 export class DevWatcher {
     private _app: App
-    private _jsFiles: string[]
-    private _pageChunks: Map<string, ChunkWithContent & { htmls: Record<string, string>, datas: Record<string, Record<string, any> | null> }>
-    private _componentChunks: Map<string, ChunkWithContent>
-    private _commonChunks: Map<string, ChunkWithContent>
+    private _entryFiles: string[]
     private _buildManifest: Record<string, any> | null
+    private _commonChunks: Map<string, ChunkWithContent>
+    private _componentChunks: Map<string, ChunkWithContent>
+    private _pageChunks: Map<string, ChunkWithContent & { htmls: Record<string, string>, datas: Record<string, Record<string, any> | null> }>
     private _compiler: Compiler
     private _watching: Watching
-    private _hotUpdateEmitter: EventEmitter
+    private _fsWatcher: chokidar.FSWatcher
 
     constructor(appDir: string) {
         const app = new App(appDir)
         this._app = app
-        this._jsFiles = [
-            ...getJSFiles('components/', app.srcDir),
-            ...getJSFiles('pages/', app.srcDir)
-        ]
-        this._pageChunks = new Map()
-        this._componentChunks = new Map()
-        this._commonChunks = new Map()
+        this._entryFiles = []
         this._buildManifest = null
-        this._compiler = new Compiler(app.srcDir, app.entryJS, {
-            enableHMR: true,
-            browserslist: app.config.browserslist,
-            useBuiltIns: app.config.polyfillsMode
-        })
+        this._commonChunks = new Map()
+        this._componentChunks = new Map()
+        this._pageChunks = new Map()
+        this._compiler = new Compiler(
+            app.srcDir,
+            app.entryJS,
+            {
+                enableHMR: true,
+                browserslist: app.config.browserslist,
+                useBuiltIns: app.config.polyfillsMode
+            }
+        )
         this._compiler.hooks.make.tapPromise(
             'add page/component entries',
             async compilation => {
-                this._jsFiles = this._jsFiles.filter(jsFile => {
-                    return fs.existsSync(path.join(this._app.srcDir, jsFile))
-                })
-                return Promise.all(this._jsFiles.map(jsFile => {
-                    let loader = { type: '', options: { rawRequest: './' + jsFile } }
-                    let chunkName = jsFile.replace(/\.(jsx?|mjs|tsx?)$/i, '').replace(/ /g, '-')
+                return Promise.all(this._entryFiles.map(entryFile => {
+                    let loader = { type: '', options: { rawRequest: './' + entryFile } }
+                    let chunkName = entryFile.replace(/\.(jsx?|mjs|tsx?)$/i, '').replace(/ /g, '-')
                     if (chunkName === 'pages/_app') {
                         loader.type = 'app'
                         chunkName = 'app'
@@ -57,27 +57,31 @@ export class DevWatcher {
                     } else {
                         return Promise.resolve()
                     }
-                    return addEntry(
-                        compilation,
-                        this._app.srcDir,
-                        chunkName,
-                        [`post-${loader.type}-loader?${JSON.stringify(loader.options)}!`]
-                    )
-                })).catch(err => console.error('add entries:', err))
+                    return new Promise((resolve, reject) => {
+                        // based on https://github.com/webpack/webpack/blob/master/lib/DynamicEntryPlugin.js
+                        const dep = DynamicEntryPlugin.createDependency(
+                            [`post-${loader.type}-loader?${JSON.stringify(loader.options)}!`],
+                            chunkName
+                        )
+                        compilation.addEntry(this._app.srcDir, dep, chunkName, (err: any) => err ? reject(err) : resolve())
+                    })
+                })).catch(err => {
+                    console.error('add page/component entries:', err)
+                })
             }
         )
     }
 
-    get isInitiated() {
+    get isWatched() {
         return this._buildManifest !== null
     }
 
     // buildManifest returns the buildManifest as copy
     get buildManifest() {
-        if (!this.isInitiated) {
-            return null
+        if (this._buildManifest !== null) {
+            return { ...this._buildManifest }
         }
-        return { ...this._buildManifest }
+        return null
     }
 
     getChunk(name: string): ChunkWithContent | null {
@@ -86,13 +90,11 @@ export class DevWatcher {
             if (this._pageChunks.has(pagePath)) {
                 return this._pageChunks.get(pagePath)!
             }
-            // todo: ensure page/component
         } if (name.startsWith('components/')) {
             name = utils.trimPrefix(name, 'components/')
             if (this._componentChunks.has(name)) {
                 return this._componentChunks.get(name)!
             }
-            // todo: ensure page/component
         } else if (this._commonChunks.has(name)) {
             return this._commonChunks.get(name)!
         }
@@ -100,7 +102,7 @@ export class DevWatcher {
     }
 
     getOutputContent(filename: string) {
-        if (!this.isInitiated) {
+        if (!this.isWatched) {
             return null
         }
 
@@ -113,7 +115,7 @@ export class DevWatcher {
     }
 
     async getPageStaticProps(pathname: string) {
-        if (!this.isInitiated) {
+        if (!this.isWatched) {
             return undefined
         }
 
@@ -132,7 +134,7 @@ export class DevWatcher {
     }
 
     async getPageHtml(pathname: string): Promise<[number, string]> {
-        if (!this.isInitiated) {
+        if (!this.isWatched) {
             return [501, createHtml({
                 lang: this._app.config.lang,
                 head: ['<title>501 - First compilation not ready</title>'],
@@ -192,15 +194,38 @@ export class DevWatcher {
             })
 
             if (url.asPath !== url.pagePath) {
-                console.log(`page '${url.pagePath}' as '${url.asPath}' rendered.`)
+                console.log(`Page '${url.pagePath}' as '${url.asPath}' rendered.`)
             } else {
-                console.log(`page '${url.pagePath}' rendered.`)
+                console.log(`Page '${url.pagePath}' rendered.`)
             }
         }
     }
 
-    watch(emitter: EventEmitter, compiled?: (stat: webpack.Stats.ToJsonOutput) => void) {
-        this._hotUpdateEmitter = emitter
+    // tell webpack watcher the entries changed
+    private _emitChange() {
+        this._compiler.writeVirtualModule('./_main.js', this._app.entryJS)
+    }
+
+    watch(emitter: EventEmitter) {
+        const pattern = '{pages,components}/**/*.{js,jsx,mjs,ts,tsx}'
+        const isValidName = (s: string) => /^[a-z0-9/.$*_~ -]+$/i.test(s)
+        const { srcDir } = this._app
+
+        this._entryFiles = glob.sync(pattern, { cwd: srcDir }).filter(isValidName)
+        this._fsWatcher = chokidar.watch(pattern, { cwd: srcDir, ignoreInitial: true }).on('add', path => {
+            if (isValidName(path)) {
+                this._entryFiles.push(path)
+                this._emitChange()
+            }
+        }).on('unlink', path => {
+            if (isValidName(path)) {
+                const index = this._entryFiles.indexOf(path)
+                if (index >= 0) {
+                    this._entryFiles.splice(index, 1)
+                    this._emitChange()
+                }
+            }
+        })
         this._watching = this._compiler.watch({
             aggregateTimeout: 150,
             ignored: /[\\/]node_modules[\\/]/
@@ -212,7 +237,7 @@ export class DevWatcher {
 
             const memfs = this._compiler!.memfs
             const { hash, startTime, endTime, compilation } = stats
-            const { isInitiated } = this
+            const { isWatched } = this
             const errorsWarnings = stats.toJson('errors-warnings')
 
             // reset build manifest
@@ -265,35 +290,43 @@ export class DevWatcher {
                 })
 
                 // cleanup
-                if (this._commonChunks.has('app') && !compilation.namedChunks.has('app')) {
-                    this._commonChunks.delete('app')
-                }
                 Array.from(this._pageChunks.keys()).filter(pagePath => !Object.keys(this._buildManifest!.pages).includes(pagePath)).forEach(pagePath => {
                     this._pageChunks.delete(pagePath)
+                    console.log(`Page '${pagePath}' removed.`)
                 })
                 Array.from(this._componentChunks.keys()).filter(name => !Object.keys(this._buildManifest!.components).includes(name)).forEach(name => {
                     this._componentChunks.delete(name)
+                    console.log(`Component '${name}' removed.`)
                 })
+                if (this._commonChunks.has('app') && !compilation.namedChunks.has('app')) {
+                    this._commonChunks.delete('app')
+                    console.log('Custom App removed.')
+                }
             }
 
-            if (isInitiated) {
-                emitter.emit('webpackHotUpdate', this._buildManifest)
-            }
-
-            [errorsWarnings.errors, errorsWarnings.warnings].flat().forEach(msg => {
+            errorsWarnings.errors.forEach(msg => {
                 console.error(msg)
             })
+            errorsWarnings.warnings.forEach(msg => {
+                console.warn(msg)
+            })
 
-            if (compiled) {
-                compiled(errorsWarnings)
+            if (isWatched) {
+                emitter.emit('webpackHotUpdate', this._buildManifest)
             }
         })
     }
 
-    reload() {
+    unwatch() {
+        if (this._fsWatcher) {
+            this._fsWatcher.close()
+        }
         if (this._watching) {
             this._watching.close(() => {
-                this.watch(this._hotUpdateEmitter)
+                this._buildManifest = null
+                this._commonChunks.clear()
+                this._componentChunks.clear()
+                this._pageChunks.clear()
             })
         }
     }

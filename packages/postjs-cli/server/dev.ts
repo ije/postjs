@@ -65,7 +65,7 @@ export function start(appDir: string, port: number) {
             }
         }
 
-        const [statusCode, html] = await watcher.getPageHtml(pathname.replace(/(index)?\.html?$/i, ''))
+        const [statusCode, html] = await watcher.getPageHtml(pathname)
         sendText(req, res, statusCode, 'text/html', html)
     })
     const wsServer = new WebsocketServer({ httpServer })

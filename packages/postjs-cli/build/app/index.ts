@@ -90,52 +90,56 @@ export class App {
 
     async build() {
         const { customApp, pages: ssrPages, lazyComponents, hash: R } = await this.renderAll()
-        const compiler = new Compiler(this.srcDir, Object.keys(ssrPages).reduce((entries, pagePath) => {
-            const pageName = pagePath.replace(/^\/+/, '') || 'index'
-            const fullPath = path.join(this.srcDir, 'pages', pagePath)
-            entries[`pages/${pageName}`] = `
-                const { utils } = require('@postjs/core');
-                (window.__POST_PAGES = window.__POST_PAGES || {})['${pagePath}'] = {
-                    path: '${pagePath}',
-                    reqComponent:() => {
-                        const mod = require(${JSON.stringify(fullPath)})
-                        const component = utils.isComponentModule(mod, 'page')
-                        component.hasGetStaticPropsMethod = typeof mod['getStaticProps'] === 'function' || typeof component['getStaticProps'] === 'function'
-                        return component
+        const compiler = new Compiler(
+            this.srcDir,
+            Object.keys(ssrPages).reduce((entries, pagePath) => {
+                const pageName = pagePath.replace(/^\/+/, '') || 'index'
+                const fullPath = path.join(this.srcDir, 'pages', pagePath)
+                entries[`pages/${pageName}`] = `
+                    const { utils } = require('@postjs/core');
+                    (window.__POST_PAGES = window.__POST_PAGES || {})['${pagePath}'] = {
+                        path: '${pagePath}',
+                        reqComponent:() => {
+                            const mod = require(${JSON.stringify(fullPath)})
+                            const component = utils.isComponentModule(mod, 'page')
+                            component.hasGetStaticPropsMethod = typeof mod['getStaticProps'] === 'function' || typeof component['getStaticProps'] === 'function'
+                            return component
+                        }
                     }
-                }
-            `
-            return entries
-        }, lazyComponents.reduce((entries, name) => {
-            const fullPath = path.join(this.srcDir, 'components', name)
-            entries[`components/${name}`] = `
-                const { utils } = require('@postjs/core');
-                (window.__POST_COMPONENTS = window.__POST_COMPONENTS || {})['${name}'] = {
-                    name: '${name}',
-                    style: '/*COMPONENT-STYLE-${R}*/',
-                    reqComponent:() => {
-                        const mod = require(${JSON.stringify(fullPath)})
-                        return utils.isComponentModule(mod)
+                `
+                return entries
+            }, lazyComponents.reduce((entries, name) => {
+                const fullPath = path.join(this.srcDir, 'components', name)
+                entries[`components/${name}`] = `
+                    const { utils } = require('@postjs/core');
+                    (window.__POST_COMPONENTS = window.__POST_COMPONENTS || {})['${name}'] = {
+                        name: '${name}',
+                        style: '/*COMPONENT-STYLE-${R}*/',
+                        reqComponent:() => {
+                            const mod = require(${JSON.stringify(fullPath)})
+                            return utils.isComponentModule(mod)
+                        }
                     }
-                }
-            `
-            return entries
-        }, {
-            app: customApp ? `
-                const { utils } = require('@postjs/core')
-                const mod = require('./pages/_app')
+                `
+                return entries
+            }, {
+                app: customApp ? `
+                    const { utils } = require('@postjs/core')
+                    const mod = require('./pages/_app')
 
-                window.__POST_APP = {
-                    staticProps: '/*APP-STATIC-PROPS-${R}*/',
-                    Component: utils.isComponentModule(mod, 'app')
-                }
-            ` : '',
-            main: this.entryJS
-        })), {
-            isProduction: true,
-            browserslist: this.config.browserslist,
-            useBuiltIns: this.config.polyfillsMode
-        })
+                    window.__POST_APP = {
+                        staticProps: '/*APP-STATIC-PROPS-${R}*/',
+                        Component: utils.isComponentModule(mod, 'app')
+                    }
+                ` : '',
+                main: this.entryJS
+            })),
+            {
+                isProduction: true,
+                browserslist: this.config.browserslist,
+                useBuiltIns: this.config.polyfillsMode
+            }
+        )
 
         const { hash, chunks, warnings, errors, startTime, endTime } = await compiler.compile()
         const buildManifest = { hash, warnings, errors, startTime, endTime, pages: {} as Record<string, any>, components: {} as Record<string, any> }
@@ -208,41 +212,45 @@ export class App {
 
     async renderAll() {
         const hasComponentsDir = fs.existsSync(path.join(this.srcDir, 'components'))
-        const compiler = new Compiler(this.srcDir, `
-            const { utils } = require('@postjs/core')
-            const r = require.context('./pages', true, /\\.(jsx?|mjs|tsx?)$/i)
-            ${hasComponentsDir ? "const r2 = require.context('./components', true, /\\.(jsx?|mjs|tsx?)$/i)" : ''}
-            const isValidName = key => /^[a-z0-9/.$*_~ -]+$/i.test(key)
-            const pages = {}
-            const components = {}
+        const compiler = new Compiler(
+            this.srcDir,
+            `
+                const { utils } = require('@postjs/core')
+                const r = require.context('./pages', true, /\\.(jsx?|mjs|tsx?)$/i)
+                ${hasComponentsDir ? "const r2 = require.context('./components', true, /\\.(jsx?|mjs|tsx?)$/i)" : ''}
+                const isValidName = key => /^[a-z0-9/.$*_~ -]+$/i.test(key)
+                const pages = {}
+                const components = {}
 
-            r.keys().filter(isValidName).forEach(key => {
-                const pagePath = key.replace(/^[.]+/, '').replace(/(\\/index)?\\.(jsx?|mjs|tsx?)$/i, '').replace(/ /g, '-') || '/'
-                pages[pagePath] = {
-                    rawRequest: './pages/' + key.replace(/^[./]+/, ''),
-                    reqComponent: () => {
-                        return utils.isComponentModule(r(key), 'page', ['getStaticProps', 'getStaticPaths'])
+                r.keys().filter(isValidName).forEach(key => {
+                    const pagePath = key.replace(/^[.]+/, '').replace(/(\\/index)?\\.(jsx?|mjs|tsx?)$/i, '').replace(/ /g, '-') || '/'
+                    pages[pagePath] = {
+                        rawRequest: './pages/' + key.replace(/^[./]+/, ''),
+                        reqComponent: () => {
+                            return utils.isComponentModule(r(key), 'page', ['getStaticProps', 'getStaticPaths'])
+                        }
+                    }
+                })
+
+                ${hasComponentsDir ? 'r2.keys().filter(isValidName).forEach(each)' : ''}
+                function each(key) {
+                    const name = key.replace(/^[.]+\\//, '').replace(/\\.(jsx?|mjs|tsx?)$/i, '').replace(/ /g, '-')
+                    components[name] = {
+                        rawRequest: './components/' + key.replace(/^[./]+/, ''),
+                        reqComponent: () => {
+                            return utils.isComponentModule(r2(key))
+                        }
                     }
                 }
-            })
 
-            ${hasComponentsDir ? 'r2.keys().filter(isValidName).forEach(each)' : ''}
-            function each(key) {
-                const name = key.replace(/^[.]+\\//, '').replace(/\\.(jsx?|mjs|tsx?)$/i, '').replace(/ /g, '-')
-                components[name] = {
-                    rawRequest: './components/' + key.replace(/^[./]+/, ''),
-                    reqComponent: () => {
-                        return utils.isComponentModule(r2(key))
-                    }
-                }
+                exports.pages = pages
+                exports.components = components
+            `,
+            {
+                isServer: true,
+                externals: Object.keys(peerDeps)
             }
-
-            exports.pages = pages
-            exports.components = components
-        `, {
-            isServer: true,
-            externals: Object.keys(peerDeps)
-        })
+        )
         const { chunks, hash, warnings, startTime, endTime } = await compiler.compile()
         const { pages, components } = runJS(chunks.get('main')!.content, peerDeps)
 
@@ -300,25 +308,29 @@ export class App {
     }
 
     async renderPage(url: URL) {
-        const { chunks } = await new Compiler(this.srcDir, `
-            const { utils } = require('@postjs/core')
-            const r = require.context('./pages', false, /\\.\\/_app\\.(jsx?|mjs|tsx?)$/i)
+        const { chunks } = await new Compiler(
+            this.srcDir,
+            `
+                const { utils } = require('@postjs/core')
+                const r = require.context('./pages', false, /\\.\\/_app\\.(jsx?|mjs|tsx?)$/i)
 
-            exports.reqApp = () => {
-                const rKeys = r.keys()
-                if (rKeys.length === 1) {
-                   return utils.isComponentModule(r(rKeys[0]), 'app', ['getStaticProps'])
+                exports.reqApp = () => {
+                    const rKeys = r.keys()
+                    if (rKeys.length === 1) {
+                    return utils.isComponentModule(r(rKeys[0]), 'app', ['getStaticProps'])
+                    }
+                    return null
                 }
-                return null
+                exports.reqComponent = () => {
+                    const mod = require('./pages${url.pagePath}')
+                    return utils.isComponentModule(mod, 'page', ['getStaticProps'])
+                }
+            `,
+            {
+                isServer: true,
+                externals: Object.keys(peerDeps)
             }
-            exports.reqComponent = () => {
-                const mod = require('./pages${url.pagePath}')
-                return utils.isComponentModule(mod, 'page', ['getStaticProps'])
-            }
-        `, {
-            isServer: true,
-            externals: Object.keys(peerDeps)
-        }).compile()
+        ).compile()
         const { content: js, css } = chunks.get('main')!
         const { reqApp, reqComponent } = runJS(js, peerDeps)
 
@@ -330,17 +342,21 @@ export class App {
     }
 
     async getStaticProps(pagePath: string, ...args: any[]) {
-        const { chunks } = await new Compiler(this.srcDir, `
-            const { utils } = require('@postjs/core')
+        const { chunks } = await new Compiler(
+            this.srcDir,
+            `
+                const { utils } = require('@postjs/core')
 
-            exports.reqComponent = () => {
-                const mod = require('./pages${pagePath}')
-                return utils.isComponentModule(mod, 'page', ['getStaticProps'])
+                exports.reqComponent = () => {
+                    const mod = require('./pages${pagePath}')
+                    return utils.isComponentModule(mod, 'page', ['getStaticProps'])
+                }
+            `,
+            {
+                isServer: true,
+                externals: Object.keys(peerDeps)
             }
-        `, {
-            isServer: true,
-            externals: Object.keys(peerDeps)
-        }).compile()
+        ).compile()
         const { content: js } = chunks.get('main')!
         const { reqComponent } = runJS(js, peerDeps)
 

@@ -1,11 +1,8 @@
 import * as postjs from '@postjs/core'
 import { utils } from '@postjs/core'
 import { createHash } from 'crypto'
-import glob from 'glob'
 import * as React from 'react'
 import * as ReactDom from 'react-dom'
-import webpack from 'webpack'
-import DynamicEntryPlugin from 'webpack/lib/DynamicEntryPlugin'
 
 export const peerDeps = {
     'react': React,
@@ -18,32 +15,6 @@ export function runJS(code: string, peerDeps: Record<string, any>) {
     const fn = new Function('require', 'exports', 'module', code)
     fn((name: string) => peerDeps[name], exports, undefined)
     return exports
-}
-
-export function getJSFiles(dir: string, root: string) {
-    return glob.sync(
-        dir + '**/*.{js,jsx,mjs,ts,tsx}',
-        { cwd: root }
-    ).filter(p => /^[a-z0-9/.$*_~ -]+$/i.test(p))
-}
-
-// Based on https://github.com/webpack/webpack/blob/master/lib/DynamicEntryPlugin.js
-export function addEntry(
-    compilation: webpack.compilation.Compilation,
-    context: string,
-    name: string,
-    entry: string[]
-) {
-    return new Promise((resolve, reject) => {
-        const dep = DynamicEntryPlugin.createDependency(entry, name)
-        compilation.addEntry(context, dep, name, (err: Error | null) => {
-            if (err) {
-                reject(err)
-                return
-            }
-            resolve()
-        })
-    })
 }
 
 export function createHtml({

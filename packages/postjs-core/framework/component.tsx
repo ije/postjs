@@ -51,16 +51,24 @@ export function LazyComponent({ is: name, props, children }: PropsWithChildren<L
 
     if (isLoading) {
         if (Children.count(children) > 0) {
-            return <Fragment>{children}</Fragment>
+            return (
+                <Fragment>{children}</Fragment>
+            )
         }
-        return <Loading text="loading..." />
+        return (
+            <Loading text="Loading..." />
+        )
     }
 
     if (error) {
-        return <Loading error={error} />
+        return (
+            <Loading error={error} />
+        )
     }
 
-    return <HotComponent name={name} props={props} />
+    return (
+        <HotComponent name={name} props={props} />
+    )
 }
 
 function HotComponent({ name, props }: { name: string, props: any }) {
@@ -95,20 +103,25 @@ function HotComponent({ name, props }: { name: string, props: any }) {
     }, [name])
 
     if (hot.Component === null) {
-        return <Loading error={`component '${name}' not found`} />
+        return (
+            <Loading error={`component '${name}' not found`} />
+        )
     }
 
-    return <hot.Component {...props} />
+    return (
+        <hot.Component {...props} />
+    )
 }
 
 export function Loading({ text, error }: { text?: string, error?: string }) {
     if (error) {
         return (
-            <div className="post-error">
-                <p style={{ padding: 50 }}>{'Error: ' + error}</p>
+            <div className="post-loading-error">
+                <p>{'Error: ' + error}</p>
             </div>
         )
     }
-
-    return <div className="post-loading">{text}</div>
+    return (
+        <div className="post-loading">{text}</div>
+    )
 }

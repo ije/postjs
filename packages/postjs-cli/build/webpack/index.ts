@@ -23,47 +23,35 @@ export interface ChunkWithContent {
 
 export class Compiler {
     private _memfs: MemoryFS
+    private _vmp: VirtualModulesPlugin
     private _config: webpack.Configuration
     private _compiler: webpack.Compiler
 
     constructor(context: string, entry: string | Record<string, string>, config?: Config & { enableHMR?: true }) {
-        const vmp = new VirtualModulesPlugin()
         const webpackEntry: webpack.Entry = {}
+        const modules: Record<string, string> = {}
         if (utils.isNEString(entry)) {
-            webpackEntry['main'] = ['./_main.js']
+            const filename = './_main.js'
+            webpackEntry['main'] = [filename]
+            modules[filename] = entry
         } else if (utils.isObject(entry)) {
             Object.keys(entry).forEach(name => {
                 if (utils.isNEString(entry[name])) {
-                    webpackEntry[name] = [`./_${name}.js`]
+                    const filename = `./_${name}.js`
+                    webpackEntry[name] = [filename]
+                    modules[filename] = entry[name]
                 }
             })
         }
         if (config?.enableHMR) {
+            const filename = './_hmr_client.js'
             Object.keys(webpackEntry).forEach(key => {
                 webpackEntry[key] = [
                     require.resolve('webpack/hot/dev-server'),
-                    './_hmr_client.js'
+                    filename
                 ].concat(webpackEntry[key])
             })
-        }
-        this._memfs = new MemoryFS()
-        this._config = createConfig(context, webpackEntry, {
-            ...config,
-            plugins: ([vmp] as webpack.Plugin[]).concat(config?.enableHMR ? [new webpack.HotModuleReplacementPlugin()] : [], config?.plugins || [])
-        })
-        this._compiler = webpack(this._config)
-        this._compiler.outputFileSystem = this._memfs
-        if (utils.isNEString(entry)) {
-            vmp.writeModule('./_main.js', entry)
-        } else if (utils.isObject(entry)) {
-            Object.keys(entry).forEach(name => {
-                if (utils.isNEString(entry[name])) {
-                    vmp.writeModule(`./_${name}.js`, entry[name])
-                }
-            })
-        }
-        if (config?.enableHMR) {
-            vmp.writeModule('./_hmr_client.js', `
+            modules[filename] = `
                 window['__POST_HMR'] = true
                 window.addEventListener('load', () => {
                     const hotEmitter = require('webpack/hot/emitter')
@@ -79,16 +67,20 @@ export class Compiler {
                         }
                     }
                 })
-            `)
+            `
         }
+        this._memfs = new MemoryFS()
+        this._vmp = new VirtualModulesPlugin(modules)
+        this._config = createConfig(context, webpackEntry, {
+            ...config,
+            plugins: ([this._vmp] as webpack.Plugin[]).concat(config?.enableHMR ? [new webpack.HotModuleReplacementPlugin()] : [], config?.plugins || [])
+        })
+        this._compiler = webpack(this._config)
+        this._compiler.outputFileSystem = this._memfs
     }
 
     get memfs() {
         return this._memfs
-    }
-
-    get context() {
-        return this._compiler.context
     }
 
     get hooks() {
@@ -138,5 +130,9 @@ export class Compiler {
 
     watch(watchOptions: webpack.Compiler.WatchOptions, handler: webpack.Compiler.Handler) {
         return this._compiler.watch(watchOptions, handler)
+    }
+
+    writeVirtualModule(filePath: string, content: string) {
+        this._vmp.writeModule(filePath, content)
     }
 }
