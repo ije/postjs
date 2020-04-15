@@ -317,7 +317,7 @@ export class App {
                 exports.reqApp = () => {
                     const rKeys = r.keys()
                     if (rKeys.length === 1) {
-                    return utils.isComponentModule(r(rKeys[0]), 'app', ['getStaticProps'])
+                        return utils.isComponentModule(r(rKeys[0]), 'app', ['getStaticProps'])
                     }
                     return null
                 }

@@ -53,7 +53,7 @@ export const utils = {
 
     /**
      * Perform the specified action for each element in an array or object,
-     * break loop when the stepCallback return false.
+     * break loop when the stepCallback returns false.
      */
     each(a: any, stepCallback: (value: any, key: string | number) => void | boolean) {
         if (this.isArray(a)) {

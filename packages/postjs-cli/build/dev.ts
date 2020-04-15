@@ -201,18 +201,20 @@ export class DevWatcher {
         }
     }
 
-    // tell webpack watcher the entries changed
+    // tell webpack watcher the page/component entries changed
     private _emitChange() {
         this._compiler.writeVirtualModule('./_main.js', this._app.entryJS)
     }
 
     watch(emitter: EventEmitter) {
-        const pattern = '{pages,components}/**/*.{js,jsx,mjs,ts,tsx}'
+        const jsPattern = '{pages,components}/**/*.{js,jsx,mjs,ts,tsx}'
         const isValidName = (s: string) => /^[a-z0-9/.$*_~ -]+$/i.test(s)
-        const { srcDir } = this._app
 
-        this._entryFiles = glob.sync(pattern, { cwd: srcDir }).filter(isValidName)
-        this._fsWatcher = chokidar.watch(pattern, { cwd: srcDir, ignoreInitial: true }).on('add', path => {
+        this._entryFiles = glob.sync(jsPattern, { cwd: this._app.srcDir }).filter(isValidName)
+        this._fsWatcher = chokidar.watch(jsPattern, {
+            cwd: this._app.srcDir,
+            ignoreInitial: true
+        }).on('add', path => {
             if (isValidName(path)) {
                 this._entryFiles.push(path)
                 this._emitChange()
@@ -231,7 +233,7 @@ export class DevWatcher {
             ignored: /[\\/]node_modules[\\/]/
         }, (err, stats) => {
             if (err) {
-                console.error('watch error:', err)
+                console.error('Watch error:', err)
                 return
             }
 
@@ -240,7 +242,6 @@ export class DevWatcher {
             const { isWatched } = this
             const errorsWarnings = stats.toJson('errors-warnings')
 
-            // reset build manifest
             this._buildManifest = {
                 hash,
                 startTime,
