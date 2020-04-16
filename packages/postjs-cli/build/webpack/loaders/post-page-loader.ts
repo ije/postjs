@@ -7,25 +7,28 @@ const template = (pagePath: string, rawRequest: string) => `
 
     if (module.hot) {
         module.hot.accept(${rawRequest}, () => {
-            const mod = require(${rawRequest})
-            hotEmitter.emit('postPageHotUpdate:' + ${pagePath}, utils.isComponentModule(mod, 'page'))
+            const { Component } = req()
+            setTimeout(() => {
+                hotEmitter.emit('postPageHotUpdate:' + ${pagePath}, Component)
+            }, 0)
         })
     }
 
-    (window.__POST_PAGES = window.__POST_PAGES || {})[${pagePath}] = {
-        path: ${pagePath},
-        reqComponent:() => {
-            const mod = require(${rawRequest})
-            const component = utils.isComponentModule(mod, 'page')
-            component.hasGetStaticPropsMethod = typeof mod['getStaticProps'] === 'function' || typeof component['getStaticProps'] === 'function'
-            return component
+    function req() {
+        const mod = require(${rawRequest})
+        const component = utils.isComponentModule(mod, 'page')
+        component.hasGetStaticPropsMethod = typeof mod['getStaticProps'] === 'function' || typeof component['getStaticProps'] === 'function'
+        return (window.__POST_PAGES = window.__POST_PAGES || {})[${pagePath}] = {
+            path: ${pagePath},
+            Component: component
         }
     }
+    req()
 `
 
-const loader: webpack.loader.Loader = function () {
+const transform: webpack.loader.Loader = function () {
     const { pagePath, rawRequest } = loaderUtils.getOptions(this)
     return template(JSON.stringify(pagePath), JSON.stringify(rawRequest))
 }
 
-export default loader
+export default transform

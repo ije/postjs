@@ -16,9 +16,10 @@ export type Config = Pick<webpack.Configuration, 'externals' | 'plugins'> & {
     isProduction?: boolean
     terserOptions?: MinifyOptions
     useSass?: boolean
+    useStyledComponents?: boolean
     postcssPlugins?: postcss.AcceptedPlugin[]
     browserslist?: string | Record<string, any>
-    useBuiltIns?: 'usage' | 'entry'
+    polyfillsMode?: 'usage' | 'entry'
 }
 
 // https://webpack.js.org/configuration/
@@ -30,9 +31,10 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
         isProduction,
         terserOptions,
         useSass,
+        useStyledComponents,
         postcssPlugins,
         browserslist = '> 1%, last 2 versions, Firefox ESR',
-        useBuiltIns = 'usage'
+        polyfillsMode = 'usage'
     } = config || {}
     const cssLoader: webpack.RuleSetUse = [
         isProduction || isServer ? MiniCssExtractPlugin.loader : 'style-loader',
@@ -66,65 +68,69 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
         output: {
             libraryTarget: isServer ? 'umd' : 'var',
             filename: '[name].js',
-            path: '/'
+            path: '/',
+            publicPath: '/'
         },
         module: {
             rules: [
                 {
                     test: /\.(jsx?|mjs|tsx?)$/,
-                    use: {
-                        loader: 'babel-loader',
-                        options: {
-                            babelrc: false,
-                            cacheDirectory: true,
-                            exclude: [/[\\/]@babel[\\/]runtime[\\/]/, /[\\/]core-js[\\/]/],
-                            sourceType: 'unambiguous',
-                            presets: [
-                                ['@babel/preset-env', isServer ? { targets: { node: 'current' } } : {
-                                    targets: browserslist,
-                                    useBuiltIns,
-                                    corejs: 3,
-                                    modules: false
-                                }],
-                                ['@babel/preset-react', { development: !isProduction }],
-                                ['@babel/preset-typescript', { allowNamespaces: true }]
-                            ],
-                            plugins: [
-                                ['babel-plugin-module-resolver', {
-                                    root: [context],
-                                    alias: (() => {
-                                        const alias = {}
-                                        const items = fs.readdirSync(context)
-                                        items.forEach(name => {
-                                            const fullPath = path.join(context, name)
-                                            const stat = fs.statSync(fullPath)
-                                            if (
-                                                stat.isDirectory() &&
-                                                !name.startsWith('.') &&
-                                                !(/^dist|node_modules$/.test(name)) &&
-                                                !fs.existsSync(path.join(context, 'node_modules', name))
-                                            ) {
-                                                alias[name] = fullPath
-                                            }
-                                        })
-                                        return alias
-                                    })()
-                                }],
-                                ['@babel/plugin-transform-runtime', {
-                                    corejs: false, // use preset-env
-                                    regenerator: useBuiltIns !== 'usage',
-                                    helpers: useBuiltIns === 'usage'
-                                }],
-                                ['@babel/plugin-proposal-class-properties', { loose: true }],
-                                ['@babel/plugin-proposal-object-rest-spread', { useBuiltIns: true }],
-                                '@babel/plugin-proposal-optional-chaining',
-                                '@babel/plugin-proposal-nullish-coalescing-operator',
-                                '@babel/plugin-proposal-numeric-separator',
-                                isServer && '@babel/plugin-syntax-bigint',
-                                !isProduction && ['babel-plugin-transform-react-remove-prop-types', { removeImport: true }]
-                            ].filter(Boolean)
+                    use: [
+                        {
+                            loader: 'babel-loader',
+                            options: {
+                                babelrc: false,
+                                cacheDirectory: true,
+                                exclude: [/[\\/]@babel[\\/]runtime[\\/]/, /[\\/]core-js[\\/]/],
+                                sourceType: 'unambiguous',
+                                presets: [
+                                    ['@babel/preset-env', isServer ? { targets: { node: 'current' } } : {
+                                        targets: browserslist,
+                                        useBuiltIns: polyfillsMode,
+                                        corejs: 3,
+                                        modules: false
+                                    }],
+                                    ['@babel/preset-react', { development: !isProduction }],
+                                    ['@babel/preset-typescript', { allowNamespaces: true }]
+                                ],
+                                plugins: [
+                                    ['babel-plugin-module-resolver', {
+                                        root: [context],
+                                        alias: (() => {
+                                            const alias = {}
+                                            const items = fs.readdirSync(context)
+                                            items.forEach(name => {
+                                                const fullPath = path.join(context, name)
+                                                const stat = fs.statSync(fullPath)
+                                                if (
+                                                    stat.isDirectory() &&
+                                                    !name.startsWith('.') &&
+                                                    !(/^dist|node_modules$/.test(name)) &&
+                                                    !fs.existsSync(path.join(context, 'node_modules', name))
+                                                ) {
+                                                    alias[name] = fullPath
+                                                }
+                                            })
+                                            return alias
+                                        })()
+                                    }],
+                                    ['@babel/plugin-transform-runtime', {
+                                        corejs: false, // use preset-env
+                                        regenerator: polyfillsMode !== 'usage',
+                                        helpers: polyfillsMode === 'usage'
+                                    }],
+                                    ['@babel/plugin-proposal-class-properties', { loose: true }],
+                                    ['@babel/plugin-proposal-object-rest-spread', { useBuiltIns: true }],
+                                    '@babel/plugin-proposal-optional-chaining',
+                                    '@babel/plugin-proposal-nullish-coalescing-operator',
+                                    '@babel/plugin-proposal-numeric-separator',
+                                    !isProduction && ['babel-plugin-transform-react-remove-prop-types', { removeImport: true }],
+                                    isServer && '@babel/plugin-syntax-bigint',
+                                    useStyledComponents && ['babel-plugin-styled-components', { ssr: isServer }]
+                                ].filter(Boolean)
+                            }
                         }
-                    }
+                    ]
                 },
                 {
                     test: /\.(less|css)$/i,
@@ -195,20 +201,14 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
             runtimeChunk: !isServer && { name: 'webpack-runtime' },
             splitChunks: !isServer && {
                 cacheGroups: {
-                    common: {
-                        priority: 1,
-                        name: 'common',
-                        minChunks: 2,
-                        chunks: 'initial'
-                    },
                     vendor: {
-                        priority: 2,
+                        priority: 1,
                         test: /[\\/](node_modules|packages[\\/]postjs-core)[\\/]/,
                         name: 'vendor',
                         chunks: 'initial'
                     },
                     ployfills: {
-                        priority: 3,
+                        priority: 2,
                         test: /[\\/]node_modules[\\/](@babel[\\/]runtime|core-js|regenerator-runtime|whatwg-fetch)[\\/]/,
                         name: 'ployfills',
                         chunks: 'initial'

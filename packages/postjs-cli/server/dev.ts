@@ -46,21 +46,28 @@ export function start(appDir: string, port: number) {
 
         const ext = path.extname(pathname)
         if (ext) {
-            let content = watcher.getOutputContent(pathname)
-            if (content === null) {
-                const filepath = path.join(appDir, 'public', pathname)
-                if (fs.existsSync(filepath)) {
-                    content = await fs.readFile(filepath)
+            try {
+                let content = await watcher.readOutputFile(pathname)
+                if (content === null) {
+                    const filepath = path.join(appDir, 'public', pathname)
+                    if (fs.existsSync(filepath)) {
+                        content = await fs.readFile(filepath)
+                    }
                 }
-            }
-            if (content !== null) {
-                const contentType = getContentType(pathname)
-                if (/\.(m?js(\.map)?|json|css|html?|xml|svg|txt)$/i.test(pathname)) {
-                    sendText(req, res, 200, contentType, content.toString())
-                } else {
-                    res.writeHead(200, { 'Content-Type': contentType })
-                    res.end(content)
+                if (content !== null) {
+                    const contentType = getContentType(pathname)
+                    if (/\.(m?js(\.map)?|json|css|html?|xml|svg|txt)$/i.test(pathname)) {
+                        sendText(req, res, 200, contentType, content.toString())
+                    } else {
+                        res.writeHead(200, { 'Content-Type': contentType })
+                        res.end(content)
+                    }
+                    return
                 }
+            } catch (error) {
+                res.writeHead(500)
+                res.end('server internal error')
+                console.error('[error] serve file:', error)
                 return
             }
         }

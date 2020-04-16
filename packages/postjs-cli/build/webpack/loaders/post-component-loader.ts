@@ -7,23 +7,25 @@ const template = (name: string, rawRequest: string) => `
 
     if (module.hot) {
         module.hot.accept(${rawRequest}, () => {
-            const mod = require(${rawRequest})
-            hotEmitter.emit('postComponentHotUpdate:' + ${name}, utils.isComponentModule(mod))
+            const { Component } = req()
+            setTimeout(() => {
+                hotEmitter.emit('postComponentHotUpdate:' + ${name}, Component)
+            }, 0)
         })
     }
 
-    (window.__POST_COMPONENTS = window.__POST_COMPONENTS || {})[${name}] = {
-        name: ${name},
-        reqComponent:() => {
-            const mod = require(${rawRequest})
-            return utils.isComponentModule(mod)
+    function req() {
+        return (window.__POST_COMPONENTS = window.__POST_COMPONENTS || {})[${name}] = {
+            name: ${name},
+            Component: utils.isComponentModule(require(${rawRequest}))
         }
     }
+    req()
 `
 
-const loader: webpack.loader.Loader = function () {
+const transform: webpack.loader.Loader = function () {
     const { name, rawRequest } = loaderUtils.getOptions(this)
     return template(JSON.stringify(name), JSON.stringify(rawRequest))
 }
 
-export default loader
+export default transform

@@ -1,3 +1,4 @@
+import { isValidElementType } from 'react-is'
 import hotEmitter from 'webpack/hot/emitter'
 import { fetchPage } from './page'
 import { route } from './router'
@@ -52,7 +53,7 @@ export async function redirect(href: string, replace?: boolean, transition?: Pag
 
     if (pagePath in pages) {
         const page = pages[pagePath]
-        if (utils.isObject(page) && page.path === pagePath && utils.isFunction(page.reqComponent)) {
+        if (utils.isObject(page) && page.path === pagePath && isValidElementType(page.Component)) {
             if (replace) {
                 history.replaceState({ transition }, '', href)
             } else {

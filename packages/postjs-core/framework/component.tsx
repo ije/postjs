@@ -1,6 +1,6 @@
 import React, { Children, ComponentType, Fragment, PropsWithChildren, useEffect, useState } from 'react'
 import hotEmitter from 'webpack/hot/emitter'
-import { isServer, utils } from './utils'
+import { isServer } from './utils'
 
 export const activatedLazyComponents = new Set<string>()
 
@@ -75,14 +75,8 @@ function HotComponent({ name, props }: { name: string, props: any }) {
     const [hot, setHot] = useState<{ Component: ComponentType | null }>(() => {
         const { __POST_COMPONENTS: components = {} } = window as any
         if (name in components) {
-            const component = components[name]
-            if (utils.isNEString(component.style) && document.head.querySelector(`style[data-post-component-styl=${JSON.stringify(name)}]`) === null) {
-                const styleEl = document.createElement('style')
-                styleEl.setAttribute('data-post-component-style', name)
-                styleEl.innerText = component.style
-                document.head.appendChild(styleEl)
-            }
-            return { Component: component.reqComponent() }
+            const { Component } = components[name]
+            return { Component }
         }
         return { Component: null }
     })

@@ -47,7 +47,7 @@ export class Compiler {
             const filename = './_hmr_client.js'
             Object.keys(webpackEntry).forEach(key => {
                 webpackEntry[key] = [
-                    require.resolve('webpack/hot/dev-server'),
+                    require.resolve('webpack/hot/only-dev-server'),
                     filename
                 ].concat(webpackEntry[key])
             })
@@ -77,10 +77,6 @@ export class Compiler {
         })
         this._compiler = webpack(this._config)
         this._compiler.outputFileSystem = this._memfs
-    }
-
-    get memfs() {
-        return this._memfs
     }
 
     get hooks() {
@@ -134,5 +130,15 @@ export class Compiler {
 
     writeVirtualModule(filePath: string, content: string) {
         this._vmp.writeModule(filePath, content)
+    }
+
+    existsOutput(filename: string) {
+        const filepath = path.join(this._config.output?.path || '/', filename)
+        return this._memfs.existsSync(filepath)
+    }
+
+    readOutputFile(filename: string): Buffer {
+        const filepath = path.join(this._config.output?.path || '/', filename)
+        return this._memfs.readFileSync(filepath)
     }
 }

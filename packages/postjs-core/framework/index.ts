@@ -11,8 +11,10 @@ export * from './utils'
 
 export interface AppConfig {
     lang?: string                      // default is 'en'
+    locales?: Record<string, any>      // default is {}
     baseUrl?: string                   // default is '/'
     srcDir?: string                    // default is '/'
+    outputDir?: string                 // default is '/dist'
     browserslist?: any                 // default is '> 1%, last 2 versions, Firefox ESR'
     polyfillsMode?: 'usage' | 'entry'  // default is 'usage'
     polyfills?: string[]               // default is ['core-js/stable', 'whatwg-fetch']
@@ -21,13 +23,14 @@ export interface AppConfig {
 type AppContextProps = {
     config: {
         lang: string
+        locales: Map<string, Map<string, string>>
         baseUrl: string
     }
     staticProps: Record<string, any>
 }
 
 export const AppContext = createContext<AppContextProps>({
-    config: { lang: 'en', baseUrl: '/' },
+    config: { lang: 'en', locales: new Map(), baseUrl: '/' },
     staticProps: {}
 })
 AppContext.displayName = 'AppContext'

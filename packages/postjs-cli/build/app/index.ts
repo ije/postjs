@@ -3,7 +3,7 @@ import fs from 'fs-extra'
 import path from 'path'
 import React, { ComponentType, createElement, Fragment } from 'react'
 import { renderToString } from 'react-dom/server'
-import { createHtml, peerDeps, runJS } from '../utils'
+import { createHtml, runJS } from '../utils'
 import { Compiler } from '../webpack'
 import { AppConfig, loadAppConfig } from './config'
 import './router'
@@ -54,7 +54,7 @@ export class App {
                         if (preloadEl) {
                             window['__post_loadScriptBaseUrl'] = preloadEl.getAttribute('href').split('_post/')[0]
                         }
-                        { (window['__POST_APP'] =  window['__POST_APP'] || {}).config = ${JSON.stringify(this.config, ['lang', 'baseUrl'])} }
+                        { (window['__POST_APP'] =  window['__POST_APP'] || {}).config = ${JSON.stringify(this.config, ['lang', 'locales', 'baseUrl'])} }
                         { (window['__POST_SSR_DATA'] =  window['__POST_SSR_DATA'] || {})[url.asPath] = { staticProps } }
 
                         // delete ssr head elements
@@ -88,8 +88,21 @@ export class App {
         `)
     }
 
+    get peerDependencies() {
+        const peerDependencies: Record<string, any> = {
+            'react': require('react'),
+            'react-dom': require('react-dom'),
+            '@postjs/core': require('@postjs/core')
+        }
+        if (this.config.useStyledComponents) {
+            peerDependencies['styled-components'] = require('styled-components')
+        }
+        return peerDependencies
+    }
+
     async build() {
-        const { customApp, pages: ssrPages, lazyComponents, hash: R } = await this.renderAll()
+        const { rootDir, lang, useSass, useStyledComponents, browserslist, polyfillsMode } = this.config
+        const { customApp, pages: ssrPages, lazyComponents } = await this.renderAll()
         const compiler = new Compiler(
             this.srcDir,
             Object.keys(ssrPages).reduce((entries, pagePath) => {
@@ -99,12 +112,12 @@ export class App {
                     const { utils } = require('@postjs/core');
                     (window.__POST_PAGES = window.__POST_PAGES || {})['${pagePath}'] = {
                         path: '${pagePath}',
-                        reqComponent:() => {
+                        Component: (() => {
                             const mod = require(${JSON.stringify(fullPath)})
                             const component = utils.isComponentModule(mod, 'page')
                             component.hasGetStaticPropsMethod = typeof mod['getStaticProps'] === 'function' || typeof component['getStaticProps'] === 'function'
                             return component
-                        }
+                        })()
                     }
                 `
                 return entries
@@ -114,47 +127,41 @@ export class App {
                     const { utils } = require('@postjs/core');
                     (window.__POST_COMPONENTS = window.__POST_COMPONENTS || {})['${name}'] = {
                         name: '${name}',
-                        style: '/*COMPONENT-STYLE-${R}*/',
-                        reqComponent:() => {
-                            const mod = require(${JSON.stringify(fullPath)})
-                            return utils.isComponentModule(mod)
-                        }
+                        Component: utils.isComponentModule(require(${JSON.stringify(fullPath)}))
                     }
                 `
                 return entries
             }, {
                 app: customApp ? `
-                    const { utils } = require('@postjs/core')
-                    const mod = require('./pages/_app')
-
-                    window.__POST_APP = {
-                        staticProps: '/*APP-STATIC-PROPS-${R}*/',
-                        Component: utils.isComponentModule(mod, 'app')
-                    }
+                    const { utils } = require('@postjs/core');
+                    (window.__POST_APP = window.__POST_APP || {}).Component = utils.isComponentModule(require('./pages/_app'), 'app')
                 ` : '',
                 main: this.entryJS
             })),
             {
                 isProduction: true,
-                browserslist: this.config.browserslist,
-                useBuiltIns: this.config.polyfillsMode
+                useSass,
+                useStyledComponents,
+                browserslist,
+                polyfillsMode
             }
         )
 
         const { hash, chunks, warnings, errors, startTime, endTime } = await compiler.compile()
         const buildManifest = { hash, warnings, errors, startTime, endTime, pages: {} as Record<string, any>, components: {} as Record<string, any> }
-        const buildDir = path.join(this.config.rootDir, '.post/builds', hash)
-        const publicDir = path.join(this.config.rootDir, 'public')
+        const buildDir = path.join(rootDir, '.post/builds', hash)
+        const publicDir = path.join(rootDir, 'public')
 
-        for (const chuck of chunks.values()) {
-            const jsFile = path.join(buildDir, '_post', `${chuck.name}.js`)
-            await fs.ensureDir(path.dirname(jsFile))
-            if (chuck.name === 'app') {
-                await fs.writeFile(jsFile, chuck.content.replace(`"/*APP-STATIC-PROPS-${R}*/"`, JSON.stringify(customApp.staticProps)))
-            } else if (chuck.name.startsWith('components/')) {
-                await fs.writeFile(jsFile, chuck.content.replace(`"/*COMPONENT-STYLE-${R}*/"`, JSON.stringify(chuck.css?.trim() || '')))
+        for (const chunk of chunks.values()) {
+            const filepath = path.join(buildDir, '_post', `${chunk.name}.js`)
+            const content = chunk.css ? `(function(d){var h=d.head;if(!h.querySelector('style[data-post-style=${JSON.stringify(chunk.name)}]'))` +
+                `{var e=d.createElement("style");e.setAttribute("data-post-style",${JSON.stringify(chunk.name)});` +
+                `e.innerText=${JSON.stringify(chunk.css.trim())};h.appendChild(e)}})(window.document);${chunk.content}` : chunk.content
+            await fs.ensureDir(path.dirname(filepath))
+            if (chunk.name === 'app') {
+                await fs.writeFile(filepath, `(window.__POST_APP=window.__POST_APP||{}).staticProps=${JSON.stringify(customApp.staticProps)};${content}`)
             } else {
-                await fs.writeFile(jsFile, chuck.content)
+                await fs.writeFile(filepath, content)
             }
         }
 
@@ -165,22 +172,24 @@ export class App {
                 hash: chunks.get('pages/' + pageName)!.hash
             }
             for (const ssrPage of ssrPages[pagePath]) {
-                const { url, staticProps, html, head } = ssrPage
+                const { url, staticProps, html, head, styledTags } = ssrPage
                 const { asPath } = url
                 const asName = asPath.replace(/^\/+/, '') || 'index'
                 const depth = asName.split('/').length - 1
                 const htmlFile = path.join(buildDir, asName + '.html')
+                const exposedChunks = Array.from(chunks.values()).filter(({ name }) => !(/^(pages|components)\//.test(name)) || name === 'pages/' + pageName)
                 await fs.ensureDir(path.dirname(htmlFile))
                 await fs.writeFile(htmlFile, createHtml({
-                    lang: this.config.lang,
+                    lang,
                     head: head.concat('<meta name="post-head-end" content="true" />'),
-                    styles: Array.from(chunks.values()).filter(({ css, name }) => css && !name.startsWith('components/')).map(({ name, css }) => ({ 'data-post-style': name, content: css! })),
+                    styles: [
+                        ...exposedChunks.map(({ name, css }) => ({ 'data-post-style': name, content: css || '' })),
+                        { plain: true, content: styledTags }
+                    ],
                     scripts: [
                         { type: 'application/json', id: 'ssr-data', innerText: JSON.stringify({ url, staticProps }) },
                         { src: '../'.repeat(depth) + `_post/build-manifest.js?v=${hash}`, async: true },
-                        ...Array.from(chunks.values())
-                            .filter(({ name }) => !(/^(pages|components)\//.test(name)) || name === 'pages/' + pageName)
-                            .map(({ name, hash }) => ({ src: '../'.repeat(depth) + `_post/${name}.js?v=${hash}`, async: true }))
+                        ...exposedChunks.map(({ name, hash }) => ({ src: '../'.repeat(depth) + `_post/${name}.js?v=${hash}`, async: true }))
                     ],
                     body: html
                 }))
@@ -211,50 +220,31 @@ export class App {
     }
 
     async renderAll() {
-        const hasComponentsDir = fs.existsSync(path.join(this.srcDir, 'components'))
-        const compiler = new Compiler(
-            this.srcDir,
-            `
-                const { utils } = require('@postjs/core')
-                const r = require.context('./pages', true, /\\.(jsx?|mjs|tsx?)$/i)
-                ${hasComponentsDir ? "const r2 = require.context('./components', true, /\\.(jsx?|mjs|tsx?)$/i)" : ''}
-                const isValidName = key => /^[a-z0-9/.$*_~ -]+$/i.test(key)
-                const pages = {}
-                const components = {}
+        const { useSass, useStyledComponents } = this.config
+        const compiler = new Compiler(this.srcDir, `
+            const { utils } = require('@postjs/core')
+            const r = require.context('./pages', true, /\\.(jsx?|mjs|tsx?)$/i)
+            const pages = {}
 
-                r.keys().filter(isValidName).forEach(key => {
-                    const pagePath = key.replace(/^[.]+/, '').replace(/(\\/index)?\\.(jsx?|mjs|tsx?)$/i, '').replace(/ /g, '-') || '/'
-                    pages[pagePath] = {
-                        rawRequest: './pages/' + key.replace(/^[./]+/, ''),
-                        reqComponent: () => {
-                            return utils.isComponentModule(r(key), 'page', ['getStaticProps', 'getStaticPaths'])
-                        }
-                    }
-                })
-
-                ${hasComponentsDir ? 'r2.keys().filter(isValidName).forEach(each)' : ''}
-                function each(key) {
-                    const name = key.replace(/^[.]+\\//, '').replace(/\\.(jsx?|mjs|tsx?)$/i, '').replace(/ /g, '-')
-                    components[name] = {
-                        rawRequest: './components/' + key.replace(/^[./]+/, ''),
-                        reqComponent: () => {
-                            return utils.isComponentModule(r2(key))
-                        }
-                    }
+            r.keys().filter(key => /^[a-z0-9/.$*_~ -]+$/i.test(key)).forEach(key => {
+                const pagePath = key.replace(/^[.]+/, '').replace(/(\\/index)?\\.(jsx?|mjs|tsx?)$/i, '').replace(/ /g, '-') || '/'
+                pages[pagePath] = {
+                    rawRequest: './pages/' + key.replace(/^[./]+/, ''),
+                    Component: utils.isComponentModule(r(key), 'page', ['getStaticProps', 'getStaticPaths'])
                 }
+            })
 
-                exports.pages = pages
-                exports.components = components
-            `,
-            {
-                isServer: true,
-                externals: Object.keys(peerDeps)
-            }
-        )
+            exports.pages = pages
+        `, {
+            isServer: true,
+            useSass,
+            useStyledComponents,
+            externals: Object.keys(this.peerDependencies)
+        })
         const { chunks, hash, warnings, startTime, endTime } = await compiler.compile()
-        const { pages, components } = runJS(chunks.get('main')!.content, peerDeps)
+        const { pages } = runJS(chunks.get('main')!.content, this.peerDependencies)
 
-        type RenderedPage = { url: URL, staticProps: any, html: string, head: string[] }
+        type RenderedPage = { url: URL, staticProps: any, html: string, head: string[], styledTags: string }
         const renderRet = {
             hash,
             warnings,
@@ -267,14 +257,14 @@ export class App {
 
         let App: ComponentType = Fragment
         if ('/_app' in pages) {
-            App = pages['/_app'].reqComponent()
+            App = pages['/_app'].Component
             renderRet.customApp = { staticProps: await this._getAppStaticProps(App) }
         }
 
         for (const pagePath of Object.keys(pages).filter(pagePath => pagePath !== '/_app')) {
             const pageName = pagePath.replace(/^\/+/, '') || 'index'
             const pagePaths = new Set([pagePath])
-            const PageComponent = pages[pagePath].reqComponent()
+            const PageComponent = pages[pagePath].Component
             const getStaticPaths = PageComponent['getStaticPaths']
 
             if (utils.isFunction(getStaticPaths)) {
@@ -295,75 +285,70 @@ export class App {
                     }
                     url.params = params
                 }
-                const { staticProps, html } = await this._renderPage(App, renderRet.customApp?.staticProps, PageComponent, url)
-                const head = renderHeadToString()
-                renderRet.pages[pagePath].push({ url, staticProps, html, head })
+                const { staticProps, html, head, styledTags } = await this._renderPage(App, renderRet.customApp?.staticProps, PageComponent, url)
+                renderRet.pages[pagePath].push({ url, staticProps, html, head, styledTags })
             }
         }
 
-        renderRet.lazyComponents = Object.keys(components).filter(name => activatedLazyComponents.has(name))
+        renderRet.lazyComponents = Array.from(activatedLazyComponents)
         activatedLazyComponents.clear()
 
         return renderRet
     }
 
     async renderPage(url: URL) {
-        const { chunks } = await new Compiler(
-            this.srcDir,
-            `
-                const { utils } = require('@postjs/core')
-                const r = require.context('./pages', false, /\\.\\/_app\\.(jsx?|mjs|tsx?)$/i)
+        const { useSass, useStyledComponents } = this.config
+        const compiler = new Compiler(this.srcDir, `
+            const { utils } = require('@postjs/core')
+            const r = require.context('./pages', false, /\\.\\/_app\\.(jsx?|mjs|tsx?)$/i)
 
-                exports.reqApp = () => {
-                    const rKeys = r.keys()
-                    if (rKeys.length === 1) {
-                        return utils.isComponentModule(r(rKeys[0]), 'app', ['getStaticProps'])
-                    }
-                    return null
+            exports.App = (() => {
+                const rKeys = r.keys()
+                if (rKeys.length === 1) {
+                    return utils.isComponentModule(r(rKeys[0]), 'app', ['getStaticProps'])
                 }
-                exports.reqComponent = () => {
-                    const mod = require('./pages${url.pagePath}')
-                    return utils.isComponentModule(mod, 'page', ['getStaticProps'])
-                }
-            `,
-            {
-                isServer: true,
-                externals: Object.keys(peerDeps)
-            }
-        ).compile()
+                return null
+            })()
+            exports.PageComponent = utils.isComponentModule(require('./pages${url.pagePath}'), 'page', ['getStaticProps'])
+        `, {
+            isServer: true,
+            useSass,
+            useStyledComponents,
+            externals: Object.keys(this.peerDependencies)
+        })
+        const { chunks } = await compiler.compile()
         const { content: js, css } = chunks.get('main')!
-        const { reqApp, reqComponent } = runJS(js, peerDeps)
+        const { App, PageComponent } = runJS(js, this.peerDependencies)
 
-        const App: ComponentType = reqApp() || Fragment
-        const appStaticProps: any = await this._getAppStaticProps(App)
+        let appStaticProps: any = null
+        if (App) {
+            appStaticProps = await this._getAppStaticProps(App)
+        }
 
-        const { staticProps, html } = await this._renderPage(App || Fragment, appStaticProps, reqComponent(), url)
-        return { staticProps, html, css }
+        const { staticProps, html, head, styledTags } = await this._renderPage(App || Fragment, appStaticProps, PageComponent, url)
+        return { staticProps, html, head, styledTags, css }
     }
 
     async getStaticProps(pagePath: string, ...args: any[]) {
-        const { chunks } = await new Compiler(
-            this.srcDir,
-            `
-                const { utils } = require('@postjs/core')
+        const { chunks } = await new Compiler(this.srcDir, `
+            const { utils } = require('@postjs/core')
 
-                exports.reqComponent = () => {
-                    const mod = require('./pages${pagePath}')
-                    return utils.isComponentModule(mod, 'page', ['getStaticProps'])
-                }
-            `,
-            {
-                isServer: true,
-                externals: Object.keys(peerDeps)
-            }
-        ).compile()
+            exports.Component = utils.isComponentModule(
+                require('./pages${pagePath}'),
+                'page',
+                ['getStaticProps']
+            )
+        `, {
+            isServer: true,
+            externals: Object.keys(this.peerDependencies)
+        }).compile()
         const { content: js } = chunks.get('main')!
-        const { reqComponent } = runJS(js, peerDeps)
+        const { Component } = runJS(js, this.peerDependencies)
 
         if (pagePath === '/_app') {
-            return await this._getAppStaticProps(reqComponent())
+            return await this._getAppStaticProps(Component)
         }
-        return await this._getStaticProps(reqComponent(), ...args)
+        return await this._getStaticProps(Component, ...args)
     }
 
     private async _getAppStaticProps(App: ComponentType) {
@@ -399,12 +384,22 @@ export class App {
             }
         }
 
-        const { lang, baseUrl } = this.config
-        const el = createElement(
+        const { lang, locales, baseUrl } = this.config
+        const sheet = (() => {
+            if (this.config.useStyledComponents) {
+                const { ServerStyleSheet } = require('styled-components')
+                return new ServerStyleSheet()
+            }
+            return {
+                collectStyles: (el: any) => el,
+                getStyleTags: () => ''
+            }
+        })()
+        const el = sheet.collectStyles(createElement(
             AppContext.Provider,
             {
                 value: {
-                    config: { lang, baseUrl },
+                    config: { lang, locales, baseUrl },
                     staticProps: appStaticProps
                 }
             },
@@ -420,10 +415,14 @@ export class App {
                     )
                 )
             )
-        )
+        ))
+        const html = renderToString(el)
+        const head = renderHeadToString()
 
         return {
-            html: renderToString(el),
+            html,
+            head,
+            styledTags: sheet.getStyleTags() as string,
             staticProps
         }
     }

@@ -1,3 +1,4 @@
+import { isValidElementType } from 'react-is'
 import { isServer, utils } from './utils'
 
 export async function fetchPage(pagePath: string, asPath: string) {
@@ -75,7 +76,7 @@ async function fetchPageData(page: any, asPath: string, hash: string): Promise<v
         __post_loadScriptBaseUrl: loadScriptBaseUrl = ''
     } = window as any
 
-    if (page.reqComponent().hasGetStaticPropsMethod === true) {
+    if (page.Component.hasGetStaticPropsMethod === true) {
         try {
             const asName = asPath.replace(/^\/+/, '') || 'index'
             const data = await fetch(`${loadScriptBaseUrl}_post/pages/${asName}.json?v=${hash}`).then(resp => resp.json())
@@ -87,5 +88,5 @@ async function fetchPageData(page: any, asPath: string, hash: string): Promise<v
 }
 
 function isValidPage(page: any, pagePath: string) {
-    return utils.isObject(page) && page.path === pagePath && utils.isFunction(page.reqComponent)
+    return utils.isObject(page) && page.path === pagePath && isValidElementType(page.Component)
 }

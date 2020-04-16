@@ -1,8 +1,7 @@
-import { renderHeadToString, route, URL, utils } from '@postjs/core'
+import { route, URL, utils } from '@postjs/core'
 import chokidar from 'chokidar'
 import { EventEmitter } from 'events'
 import glob from 'glob'
-import path from 'path'
 import { Watching } from 'webpack'
 import DynamicEntryPlugin from 'webpack/lib/DynamicEntryPlugin'
 import { App } from './app'
@@ -22,6 +21,7 @@ export class DevWatcher {
 
     constructor(appDir: string) {
         const app = new App(appDir)
+        const { useSass, useStyledComponents, browserslist, polyfillsMode } = app.config
         this._app = app
         this._entryFiles = []
         this._buildManifest = null
@@ -33,8 +33,10 @@ export class DevWatcher {
             app.entryJS,
             {
                 enableHMR: true,
-                browserslist: app.config.browserslist,
-                useBuiltIns: app.config.polyfillsMode
+                useSass,
+                useStyledComponents,
+                browserslist,
+                polyfillsMode
             }
         )
         this._compiler.hooks.make.tapPromise(
@@ -101,15 +103,12 @@ export class DevWatcher {
         return null
     }
 
-    getOutputContent(filename: string) {
+    async readOutputFile(filename: string) {
         if (!this.isWatched) {
             return null
         }
-
-        const memfs = this._compiler!.memfs
-        const filepath = path.join('/', filename)
-        if (memfs.existsSync(filepath)) {
-            return memfs.readFileSync(filepath)
+        if (this._compiler.existsOutput(filename)) {
+            return this._compiler.readOutputFile(filename)
         }
         return null
     }
@@ -177,13 +176,16 @@ export class DevWatcher {
             const app = this._app
             const baseUrl = app.config.baseUrl.replace(/\/+$/, '')
             const pageChunk = this._pageChunks.get(url.pagePath)!
-            const { staticProps, html, css } = await app.renderPage(url)
-            const head = renderHeadToString()
+            const { staticProps, html, head, styledTags, css } = await app.renderPage(url)
 
+            // console.log(renderRet.lazyComponents = Object.keys(components).filter(name => activatedLazyComponents.has(name)))
             pageChunk.htmls[url.asPath] = createHtml({
                 lang: app.config.lang,
                 head: head.concat('<meta name="post-head-end" content="true" />'),
-                styles: css ? [{ 'data-post-style': pageChunk.name, content: css }] : undefined,
+                styles: [
+                    { 'data-post-style': pageChunk.name, content: css || '' },
+                    { plain: true, content: styledTags }
+                ],
                 scripts: [
                     { type: 'application/json', id: 'ssr-data', innerText: JSON.stringify({ url, staticProps }) },
                     { src: baseUrl + `/_post/build-manifest.js?v=${pageChunk.hash}`, async: true },
@@ -209,6 +211,10 @@ export class DevWatcher {
     watch(emitter: EventEmitter) {
         const jsPattern = '{pages,components}/**/*.{js,jsx,mjs,ts,tsx}'
         const isValidName = (s: string) => /^[a-z0-9/.$*_~ -]+$/i.test(s)
+
+        if (this._watching) {
+            return
+        }
 
         this._entryFiles = glob.sync(jsPattern, { cwd: this._app.srcDir }).filter(isValidName)
         this._fsWatcher = chokidar.watch(jsPattern, {
@@ -237,7 +243,6 @@ export class DevWatcher {
                 return
             }
 
-            const memfs = this._compiler!.memfs
             const { hash, startTime, endTime, compilation } = stats
             const { isWatched } = this
             const errorsWarnings = stats.toJson('errors-warnings')
@@ -253,18 +258,15 @@ export class DevWatcher {
             }
 
             if (!stats.hasErrors()) {
+                const appChunkChanged = compilation.namedChunks.get('app')?.hash !== this._commonChunks.get('app')?.hash
                 compilation.namedChunks.forEach(({ name, hash }) => {
                     const chunkFileName = '/' + name + '.js'
-                    if (memfs.existsSync(chunkFileName)) {
-                        let content = memfs.readFileSync(chunkFileName).toString()
+                    if (this._compiler.existsOutput(chunkFileName)) {
+                        const content = this._compiler.readOutputFile(chunkFileName).toString()
                         if (name.startsWith('pages/')) {
                             const pageName = utils.trimPrefix(name, 'pages/')
                             const pagePath = ('/' + pageName).replace(/\/index$/i, '') || '/'
-                            name = utils.trimPrefix(name, 'pages/')
-                            if (compilation.namedChunks.has('app')) {
-                                hash = compilation.namedChunks.get('app')!.hash + '.' + hash
-                            }
-                            if (!this._pageChunks.has(pagePath) || this._pageChunks.get(pagePath)!.hash !== hash) {
+                            if (!this._pageChunks.has(pagePath) || this._pageChunks.get(pagePath)!.hash !== hash || appChunkChanged) {
                                 this._pageChunks.set(pagePath, { name: pageName, hash, content, htmls: {}, datas: {} })
                             }
                             this._buildManifest!.pages[pagePath] = { name: pageName, hash }
@@ -293,23 +295,23 @@ export class DevWatcher {
                 // cleanup
                 Array.from(this._pageChunks.keys()).filter(pagePath => !Object.keys(this._buildManifest!.pages).includes(pagePath)).forEach(pagePath => {
                     this._pageChunks.delete(pagePath)
-                    console.log(`Page '${pagePath}' removed.`)
+                    console.log('[info]', `Page '${pagePath}' removed.`)
                 })
                 Array.from(this._componentChunks.keys()).filter(name => !Object.keys(this._buildManifest!.components).includes(name)).forEach(name => {
                     this._componentChunks.delete(name)
-                    console.log(`Component '${name}' removed.`)
+                    console.log('[info]', `Component '${name}' removed.`)
                 })
                 if (this._commonChunks.has('app') && !compilation.namedChunks.has('app')) {
                     this._commonChunks.delete('app')
-                    console.log('Custom App removed.')
+                    console.log('[info]', 'Custom App removed.')
                 }
             }
 
             errorsWarnings.errors.forEach(msg => {
-                console.error(msg)
+                console.error('[error]', msg)
             })
             errorsWarnings.warnings.forEach(msg => {
-                console.warn(msg)
+                console.warn('[warn]', msg)
             })
 
             if (isWatched) {
@@ -320,10 +322,13 @@ export class DevWatcher {
 
     unwatch() {
         if (this._fsWatcher) {
-            this._fsWatcher.close()
+            this._fsWatcher.close().then(() => {
+                delete this._fsWatcher
+            })
         }
         if (this._watching) {
             this._watching.close(() => {
+                delete this._watching
                 this._buildManifest = null
                 this._commonChunks.clear()
                 this._componentChunks.clear()

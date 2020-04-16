@@ -34,6 +34,7 @@ export function AppRouter({ baseUrl, initialUrl }: { baseUrl: string, initialUrl
     }, [])
 
     // console.log('[render] AppRouter')
+
     return createElement(
         RouterContext.Provider,
         { value: new RouterStore(url.current) },
@@ -59,7 +60,9 @@ function HotAPP({ children }: PropsWithChildren<{}>) {
 
     useEffect(() => {
         const hmr = Boolean(window['__POST_HMR'])
-        const hotUpdate = (Component: ComponentType) => setApp(({ staticProps }) => ({ Component, staticProps }))
+        const hotUpdate = (Component: ComponentType) => {
+            setApp(({ staticProps }) => ({ Component, staticProps }))
+        }
 
         if (hmr) {
             hotEmitter.on('postAppHotUpdate', hotUpdate)
@@ -73,6 +76,7 @@ function HotAPP({ children }: PropsWithChildren<{}>) {
     }, [])
 
     // console.log('[render] HotAPP')
+
     return createElement(
         app.Component || Fragment,
         app.staticProps,
@@ -143,7 +147,8 @@ function Switch({ enterPage, exitPage, sideEffect }: { enterPage: URL, exitPage?
         }
     }, [enterPage, exitPage, sideEffect])
 
-    // console.log('[render] Switch', 'enter:', enterPage.asPath, 'exit:', exitPage.asPath)
+    // console.log('[render] Switch', 'enter:', enterPage.asPath, 'exit:', exitPage?.asPath)
+
     if (pages.length === 1) {
         const pageProps = pages[0]
         return createElement(HotPage, { ...pageProps, key: pageProps.pagePath })
@@ -159,7 +164,7 @@ function HotPage({ pagePath, asPath, className, style }: URL & TransitionProps) 
         } = window as any
         if (pagePath in pages) {
             return {
-                Component: pages[pagePath].reqComponent(),
+                Component: pages[pagePath].Component,
                 staticProps: ssrData[asPath]?.staticProps
             }
         }
@@ -172,26 +177,32 @@ function HotPage({ pagePath, asPath, className, style }: URL & TransitionProps) 
         const {
             __POST_HMR: hmr = false,
             __POST_PAGES: pages = {},
-            __POST_SSR_DATA: ssrData = {}
+            __POST_SSR_DATA: ssrData = {},
+            __POST_BUILD_MANIFEST: buildManifest = {}
         } = window as any
-        const hotUpdate = (Component: ComponentType) => setHot({
-            Component,
-            staticProps: ssrData[asPath]?.staticProps
-        })
+        const hotUpdate = (Component: ComponentType) => {
+            setHot({
+                Component,
+                staticProps: ssrData[asPath]?.staticProps
+            })
+        }
 
         if (!(pagePath in pages)) {
-            setIsFetching(true)
-            setHot({ Component: null })
-            fetchPage(pagePath, asPath).then(() => {
-                setHot({
-                    Component: pages[pagePath].reqComponent(),
-                    staticProps: ssrData[asPath]?.staticProps
+            if (pagePath in (buildManifest.pages || {})) {
+                setIsFetching(true)
+                fetchPage(pagePath, asPath).then(() => {
+                    setHot({
+                        Component: pages[pagePath].Component,
+                        staticProps: ssrData[asPath]?.staticProps
+                    })
+                }).catch(error => {
+                    setError(error.message)
+                }).finally(() => {
+                    setIsFetching(false)
                 })
-            }).catch(error => {
-                setError(error.message)
-            }).finally(() => {
-                setIsFetching(false)
-            })
+            } else {
+                setError('page not found')
+            }
         }
 
         if (hmr) {
@@ -204,6 +215,8 @@ function HotPage({ pagePath, asPath, className, style }: URL & TransitionProps) 
             }
         }
     }, [pagePath])
+
+    // console.log('[render] HotPage', pagePath)
 
     if (isFetching) {
         return createElement(Loading)

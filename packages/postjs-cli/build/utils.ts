@@ -1,14 +1,5 @@
-import * as postjs from '@postjs/core'
 import { utils } from '@postjs/core'
 import { createHash } from 'crypto'
-import * as React from 'react'
-import * as ReactDom from 'react-dom'
-
-export const peerDeps = {
-    'react': React,
-    'react-dom': ReactDom,
-    '@postjs/core': postjs
-}
 
 export function runJS(code: string, peerDeps: Record<string, any>) {
     const exports: Record<string, any> = {}
@@ -26,7 +17,7 @@ export function createHtml({
 }: {
     lang?: string,
     head?: string[],
-    styles?: { [key: string]: string, content: string }[],
+    styles?: { [key: string]: any, content: string, plain?: boolean }[],
     scripts?: (string | { type?: string, id?: string, src?: string, async?: boolean, innerText?: string })[],
     body: string
 }) {
@@ -38,8 +29,10 @@ export function createHtml({
                 return ''
             }
         }).filter(Boolean))
-        .concat(styles.map(({ content, ...rest }) => {
-            if (utils.isNEString(content)) {
+        .concat(styles.map(({ content, plain, ...rest }) => {
+            if (plain) {
+                return content
+            } else if (content) {
                 return `<style${toAttrs(rest)}>${content}</style>`
             } else {
                 return ''
