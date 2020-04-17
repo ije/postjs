@@ -1,11 +1,23 @@
 import { utils } from '@postjs/core'
 import { createHash } from 'crypto'
+import { ComponentType } from 'react'
 
 export function runJS(code: string, peerDeps: Record<string, any>) {
     const exports: Record<string, any> = {}
     const fn = new Function('require', 'exports', 'module', code)
     fn((name: string) => peerDeps[name], exports, undefined)
     return exports
+}
+
+export async function callGetStaticProps(component: ComponentType, ...args: any[]) {
+    const getStaticProps = component['getStaticProps']
+    if (utils.isFunction(getStaticProps)) {
+        const props = await getStaticProps(...args)
+        if (utils.isObject(props)) {
+            return props
+        }
+    }
+    return null
 }
 
 export function createHtml({
@@ -30,10 +42,11 @@ export function createHtml({
             }
         }).filter(Boolean))
         .concat(styles.map(({ content, plain, ...rest }) => {
+            content = content.trim()
             if (plain) {
                 return content
             } else if (content) {
-                return `<style${toAttrs(rest)}>${content}</style>`
+                return `<style${toAttrs(rest)}>\n${content}\n    </style>`
             } else {
                 return ''
             }
@@ -51,7 +64,7 @@ export function createHtml({
         }
     }).filter(Boolean)
 
-    return (`<!DOCTYPE html>
+    return `<!DOCTYPE html>
 <html lang="${lang}">
 <head>
     <meta charSet="utf-8" />
@@ -61,7 +74,7 @@ export function createHtml({
     <main>${body}</main>
     ${scriptTags.join('\n' + ' '.repeat(4))}
 </body>
-</html>`)
+</html>`
 }
 
 function toAttrs(v: any) {

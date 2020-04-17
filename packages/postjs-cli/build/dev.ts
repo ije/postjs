@@ -14,7 +14,7 @@ export class DevWatcher {
     private _buildManifest: Record<string, any> | null
     private _commonChunks: Map<string, ChunkWithContent>
     private _componentChunks: Map<string, ChunkWithContent>
-    private _pageChunks: Map<string, ChunkWithContent & { htmls: Record<string, string>, datas: Record<string, Record<string, any> | null> }>
+    private _pageChunks: Map<string, ChunkWithContent & { rendered: Record<string, Record<string, any>> }>
     private _compiler: Compiler
     private _watching: Watching
     private _fsWatcher: chokidar.FSWatcher
@@ -120,14 +120,14 @@ export class DevWatcher {
 
         const url = route('/', Array.from(this._pageChunks.keys()), { location: { pathname } })
         const { pagePath, asPath } = url
-        // todo: ensure page/component
         if (pagePath !== '' && this._pageChunks.has(pagePath)) {
             const pageChunk = this._pageChunks.get(pagePath)!
-            if (pageChunk.datas[asPath] === undefined) {
-                const staticProps = await this._app.getStaticProps(pagePath, url)
-                pageChunk.datas[asPath] = staticProps
+            if (pageChunk.rendered[asPath] === undefined) {
+                await this._renderPage(url)
             }
-            return pageChunk.datas[asPath]
+            if (pageChunk.rendered[asPath]) {
+                return pageChunk.rendered[asPath].staticProps
+            }
         }
         return undefined
     }
@@ -141,26 +141,35 @@ export class DevWatcher {
             })]
         }
 
-        const url = route('/', Array.from(this._pageChunks.keys()), { location: { pathname } })
-        const { pagePath, asPath } = url
-        // todo: ensure page/component
+        let url = route('/', Array.from(this._pageChunks.keys()), { location: { pathname } })
+        let { pagePath, asPath } = url
+        if (pagePath === '' || !this._pageChunks.has(pagePath)) {
+            pagePath = '/_404'
+            url = { pagePath, asPath: url.asPath, params: {}, query: {} }
+        }
         if (pagePath !== '' && this._pageChunks.has(pagePath)) {
             const pageChunk = this._pageChunks.get(pagePath)!
-            if (pageChunk.htmls[asPath] === undefined) {
+            if (pageChunk.rendered[asPath] === undefined) {
                 await this._renderPage(url)
             }
-            if (pageChunk.htmls[asPath]) {
-                return [200, pageChunk.htmls[asPath]]
-            }
-        }
-
-        if (this._pageChunks.has('/_404')) {
-            const pageChunk = this._pageChunks.get('/_404')!
-            if (pageChunk.htmls[asPath] === undefined) {
-                await this._renderPage({ pagePath: '/_404', asPath: url.asPath, params: {}, query: {} })
-            }
-            if (pageChunk.htmls[asPath]) {
-                return [404, pageChunk.htmls[asPath]]
+            if (pageChunk.rendered[asPath]) {
+                const { staticProps, html, head, styledTags, css } = pageChunk.rendered[asPath]
+                const baseUrl = this._app.config.baseUrl.replace(/\/+$/, '')
+                return [200, createHtml({
+                    lang: this._app.config.lang,
+                    head: head.concat('<meta name="post-head-end" content="true" />'),
+                    styles: [
+                        { 'data-post-style': pageChunk.name, content: css || '' },
+                        { plain: true, content: styledTags }
+                    ],
+                    scripts: [
+                        { type: 'application/json', id: 'ssr-data', innerText: JSON.stringify({ url, staticProps }) },
+                        { src: baseUrl + `/_post/build-manifest.js?v=${this.buildManifest!.hash}`, async: true },
+                        { src: baseUrl + `/_post/pages/${url.pagePath.replace(/^\/+/, '') || 'index'}.js?v=${pageChunk.hash}`, async: true },
+                        ...Array.from(this._commonChunks.values()).map(({ name, hash }) => ({ src: baseUrl + `/_post/${name}.js?v=${hash}`, async: true }))
+                    ],
+                    body: html
+                })]
             }
         }
 
@@ -173,28 +182,8 @@ export class DevWatcher {
 
     private async _renderPage(url: URL) {
         if (this._pageChunks.has(url.pagePath)) {
-            const app = this._app
-            const baseUrl = app.config.baseUrl.replace(/\/+$/, '')
             const pageChunk = this._pageChunks.get(url.pagePath)!
-            const { staticProps, html, head, styledTags, css } = await app.renderPage(url)
-
-            // console.log(renderRet.lazyComponents = Object.keys(components).filter(name => activatedLazyComponents.has(name)))
-            pageChunk.htmls[url.asPath] = createHtml({
-                lang: app.config.lang,
-                head: head.concat('<meta name="post-head-end" content="true" />'),
-                styles: [
-                    { 'data-post-style': pageChunk.name, content: css || '' },
-                    { plain: true, content: styledTags }
-                ],
-                scripts: [
-                    { type: 'application/json', id: 'ssr-data', innerText: JSON.stringify({ url, staticProps }) },
-                    { src: baseUrl + `/_post/build-manifest.js?v=${pageChunk.hash}`, async: true },
-                    { src: baseUrl + `/_post/pages/${url.pagePath.replace(/^\/+/, '') || 'index'}.js?v=${pageChunk.hash}`, async: true },
-                    ...Array.from(this._commonChunks.values()).map(({ name, hash }) => ({ src: baseUrl + `/_post/${name}.js?v=${hash}`, async: true }))
-                ],
-                body: html
-            })
-
+            pageChunk.rendered[url.asPath] = await this._app.renderPage(url)
             if (url.asPath !== url.pagePath) {
                 console.log(`Page '${url.pagePath}' as '${url.asPath}' rendered.`)
             } else {
@@ -267,7 +256,7 @@ export class DevWatcher {
                             const pageName = utils.trimPrefix(name, 'pages/')
                             const pagePath = ('/' + pageName).replace(/\/index$/i, '') || '/'
                             if (!this._pageChunks.has(pagePath) || this._pageChunks.get(pagePath)!.hash !== hash || appChunkChanged) {
-                                this._pageChunks.set(pagePath, { name: pageName, hash, content, htmls: {}, datas: {} })
+                                this._pageChunks.set(pagePath, { name: pageName, hash, content, rendered: {} })
                             }
                             this._buildManifest!.pages[pagePath] = { name: pageName, hash }
                         } else if (name.startsWith('components/')) {
@@ -277,13 +266,16 @@ export class DevWatcher {
                             }
                             this._buildManifest!.components[name] = { hash }
                         } else if (!this._commonChunks.has(name) || this._commonChunks.get(name)!.hash !== hash) {
+                            if (name === 'webpack-runtime') {
+                                hash = this._buildManifest!.hash
+                            }
                             this._commonChunks.set(name, { name, hash, content })
                             if (name === 'app') {
-                                this._app.getStaticProps('/_app').then(appStaticProps => {
-                                    const chunk = this._commonChunks.get('app')!
+                                this._app.getStaticProps().then(appStaticProps => {
+                                    const chunk = this._commonChunks.get('app')
                                     if (chunk?.hash === hash) {
                                         Object.assign(chunk, {
-                                            content: `(window.__POST_APP = window.__POST_APP || {}).staticProps = ${JSON.stringify(appStaticProps)};\n${chunk.content}`
+                                            content: `(window.__POST_APP = window.__POST_APP || {}).staticProps = ${JSON.stringify(appStaticProps)};\n${chunk!.content}`
                                         })
                                     }
                                 })

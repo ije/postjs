@@ -3,7 +3,7 @@ import fs from 'fs-extra'
 import path from 'path'
 import React, { ComponentType, createElement, Fragment } from 'react'
 import { renderToString } from 'react-dom/server'
-import { createHtml, runJS } from '../utils'
+import { callGetStaticProps, createHtml, runJS } from '../utils'
 import { Compiler } from '../webpack'
 import { AppConfig, loadAppConfig } from './config'
 import './router'
@@ -54,7 +54,7 @@ export class App {
                         if (preloadEl) {
                             window['__post_loadScriptBaseUrl'] = preloadEl.getAttribute('href').split('_post/')[0]
                         }
-                        { (window['__POST_APP'] =  window['__POST_APP'] || {}).config = ${JSON.stringify(this.config, ['lang', 'locales', 'baseUrl'])} }
+                        { (window['__POST_APP'] =  window['__POST_APP'] || {}).config = ${JSON.stringify(this._publicConfig)} }
                         { (window['__POST_SSR_DATA'] =  window['__POST_SSR_DATA'] || {})[url.asPath] = { staticProps } }
 
                         // delete ssr head elements
@@ -88,7 +88,12 @@ export class App {
         `)
     }
 
-    get peerDependencies() {
+    private get _publicConfig() {
+        const { lang, locales, baseUrl } = this.config
+        return { lang, locales, baseUrl }
+    }
+
+    private get _peerDependencies() {
         const peerDependencies: Record<string, any> = {
             'react': require('react'),
             'react-dom': require('react-dom'),
@@ -239,10 +244,10 @@ export class App {
             isServer: true,
             useSass,
             useStyledComponents,
-            externals: Object.keys(this.peerDependencies)
+            externals: Object.keys(this._peerDependencies)
         })
         const { chunks, hash, warnings, startTime, endTime } = await compiler.compile()
-        const { pages } = runJS(chunks.get('main')!.content, this.peerDependencies)
+        const { pages } = runJS(chunks.get('main')!.content, this._peerDependencies)
 
         type RenderedPage = { url: URL, staticProps: any, html: string, head: string[], styledTags: string }
         const renderRet = {
@@ -258,7 +263,7 @@ export class App {
         let App: ComponentType = Fragment
         if ('/_app' in pages) {
             App = pages['/_app'].Component
-            renderRet.customApp = { staticProps: await this._getAppStaticProps(App) }
+            renderRet.customApp = { staticProps: await callGetStaticProps(App, this._publicConfig) }
         }
 
         for (const pagePath of Object.keys(pages).filter(pagePath => pagePath !== '/_app')) {
@@ -296,6 +301,35 @@ export class App {
         return renderRet
     }
 
+    async getStaticProps() {
+        const { useSass, useStyledComponents } = this.config
+        const compiler = new Compiler(this.srcDir, `
+            const { utils } = require('@postjs/core')
+            const r = require.context('./pages', false, /\\.\\/_app\\.(jsx?|mjs|tsx?)$/i)
+
+            exports.App = (() => {
+                const rKeys = r.keys()
+                if (rKeys.length === 1) {
+                    return utils.isComponentModule(r(rKeys[0]), 'app', ['getStaticProps'])
+                }
+                return null
+            })()
+        `, {
+            isServer: true,
+            useSass,
+            useStyledComponents,
+            externals: Object.keys(this._peerDependencies)
+        })
+        const { chunks } = await compiler.compile()
+        const { content: js } = chunks.get('main')!
+        const { App } = runJS(js, this._peerDependencies)
+
+        if (App) {
+            return await callGetStaticProps(App, this._publicConfig)
+        }
+        return null
+    }
+
     async renderPage(url: URL) {
         const { useSass, useStyledComponents } = this.config
         const compiler = new Compiler(this.srcDir, `
@@ -314,57 +348,19 @@ export class App {
             isServer: true,
             useSass,
             useStyledComponents,
-            externals: Object.keys(this.peerDependencies)
+            externals: Object.keys(this._peerDependencies)
         })
         const { chunks } = await compiler.compile()
         const { content: js, css } = chunks.get('main')!
-        const { App, PageComponent } = runJS(js, this.peerDependencies)
+        const { App, PageComponent } = runJS(js, this._peerDependencies)
 
         let appStaticProps: any = null
         if (App) {
-            appStaticProps = await this._getAppStaticProps(App)
+            appStaticProps = await callGetStaticProps(App, this._publicConfig)
         }
 
         const { staticProps, html, head, styledTags } = await this._renderPage(App || Fragment, appStaticProps, PageComponent, url)
         return { staticProps, html, head, styledTags, css }
-    }
-
-    async getStaticProps(pagePath: string, ...args: any[]) {
-        const { chunks } = await new Compiler(this.srcDir, `
-            const { utils } = require('@postjs/core')
-
-            exports.Component = utils.isComponentModule(
-                require('./pages${pagePath}'),
-                'page',
-                ['getStaticProps']
-            )
-        `, {
-            isServer: true,
-            externals: Object.keys(this.peerDependencies)
-        }).compile()
-        const { content: js } = chunks.get('main')!
-        const { Component } = runJS(js, this.peerDependencies)
-
-        if (pagePath === '/_app') {
-            return await this._getAppStaticProps(Component)
-        }
-        return await this._getStaticProps(Component, ...args)
-    }
-
-    private async _getAppStaticProps(App: ComponentType) {
-        const { lang, baseUrl } = this.config
-        return await this._getStaticProps(App, { lang, baseUrl })
-    }
-
-    private async _getStaticProps(component: ComponentType, ...args: any[]) {
-        const getStaticProps = component['getStaticProps']
-        if (utils.isFunction(getStaticProps)) {
-            const props = await getStaticProps(...args)
-            if (utils.isObject(props)) {
-                return props
-            }
-        }
-        return null
     }
 
     private async _renderPage(
@@ -373,18 +369,8 @@ export class App {
         PageComponent: React.ComponentType,
         url: URL
     ) {
-        let staticProps: any = null
-        const getStaticProps = PageComponent['getStaticProps']
-        if (utils.isFunction(getStaticProps)) {
-            const props = await getStaticProps(url)
-            if (utils.isObject(props)) {
-                staticProps = props
-            } else {
-                staticProps = {}
-            }
-        }
-
         const { lang, locales, baseUrl } = this.config
+        const pageStaticProps: any = await callGetStaticProps(PageComponent, url) || {}
         const sheet = (() => {
             if (this.config.useStyledComponents) {
                 const { ServerStyleSheet } = require('styled-components')
@@ -411,7 +397,7 @@ export class App {
                     appStaticProps,
                     createElement(
                         PageComponent,
-                        staticProps
+                        pageStaticProps
                     )
                 )
             )
@@ -420,10 +406,10 @@ export class App {
         const head = renderHeadToString()
 
         return {
+            staticProps: pageStaticProps,
             html,
             head,
-            styledTags: sheet.getStyleTags() as string,
-            staticProps
+            styledTags: sheet.getStyleTags() as string
         }
     }
 }

@@ -201,17 +201,23 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
             runtimeChunk: !isServer && { name: 'webpack-runtime' },
             splitChunks: !isServer && {
                 cacheGroups: {
+                    common: {
+                        name: 'common',
+                        minChunks: 2,
+                        chunks: 'initial',
+                        priority: 1
+                    },
                     vendor: {
-                        priority: 1,
-                        test: /[\\/](node_modules|packages[\\/]postjs-core)[\\/]/,
                         name: 'vendor',
-                        chunks: 'initial'
+                        test: /[\\/](node_modules|packages[\\/]postjs-core)[\\/]/,
+                        chunks: 'initial',
+                        priority: 2
                     },
                     ployfills: {
-                        priority: 2,
-                        test: /[\\/]node_modules[\\/](@babel[\\/]runtime|core-js|regenerator-runtime|whatwg-fetch)[\\/]/,
                         name: 'ployfills',
-                        chunks: 'initial'
+                        test: /[\\/]node_modules[\\/](@babel[\\/]runtime|core-js|regenerator-runtime|whatwg-fetch)[\\/]/,
+                        chunks: 'initial',
+                        priority: 3
                     }
                 }
             },

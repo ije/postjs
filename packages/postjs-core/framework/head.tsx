@@ -213,8 +213,8 @@ function parse(node: ReactNode, nodes?: Map<string, { type: string, props: any }
                     } else if (type !== 'title') {
                         key += '-' + (nodes!.size + 1)
                     }
-                    // remove children prop of base/meta/link tag
-                    if ('children' in props && /^base|meta|link$/.test(type)) {
+                    // remove the children prop of base/meta/link
+                    if (/^base|meta|link$/.test(type) && 'children' in props) {
                         const { children, ...rest } = props
                         nodes!.set(key, { type, props: rest })
                     } else {
