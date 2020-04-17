@@ -62,7 +62,10 @@
             "always"
         ],
         "no-empty": [
-            "warn"
+            "warn",
+            {
+                "allowEmptyCatch": true
+            }
         ],
         "no-unused-vars": "off",
         "@typescript-eslint/no-unused-vars": [
