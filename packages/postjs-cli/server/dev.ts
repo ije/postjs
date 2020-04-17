@@ -7,6 +7,7 @@ import { parse } from 'url'
 import { server as WebsocketServer } from 'websocket'
 import { getContentType, sendText } from '.'
 import { DevWatcher } from '../build/dev'
+import { colorful } from '../shared/colorful'
 
 export function start(appDir: string, port: number) {
     const emitter = new EventEmitter().setMaxListeners(1 << 30)
@@ -90,5 +91,5 @@ export function start(appDir: string, port: number) {
         })
     })
 
-    console.log(`Server ready on http://localhost:${port}`)
+    console.log(colorful(`Server ready on http://localhost:${port}`, 'green'))
 }

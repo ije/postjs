@@ -3,6 +3,7 @@ import fs from 'fs-extra'
 import path from 'path'
 import React, { ComponentType, createElement, Fragment } from 'react'
 import { renderToString } from 'react-dom/server'
+import { colorful } from '../../shared/colorful'
 import { callGetStaticProps, createHtml, runJS } from '../utils'
 import { Compiler } from '../webpack'
 import { AppConfig, loadAppConfig } from './config'
@@ -402,14 +403,29 @@ export class App {
                 )
             )
         ))
-        const html = renderToString(el)
-        const head = renderHeadToString()
+
+        let html: string = ''
+        let head: string[] = []
+        let styledTags: string = ''
+        try {
+            html = renderToString(el)
+            head = renderHeadToString()
+            styledTags = sheet.getStyleTags()
+        } catch (error) {
+            const pageName = url.pagePath.replace(/^\/+/, '') || 'index'
+            const msg = `render page '${pageName}' failed: ${error.message}`
+            html = `<p><strong><code>500</code></strong><small>&nbsp;-&nbsp;</small><span>${msg}</span></p>`
+            console.log(colorful(`[error] [ssr] ${msg}`, 'red'))
+            console.log(colorful(error.stack, 'dim'))
+        } finally {
+            sheet.seal()
+        }
 
         return {
             staticProps: pageStaticProps,
             html,
             head,
-            styledTags: sheet.getStyleTags() as string
+            styledTags
         }
     }
 }

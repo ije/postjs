@@ -4,6 +4,7 @@ import { EventEmitter } from 'events'
 import glob from 'glob'
 import { Watching } from 'webpack'
 import DynamicEntryPlugin from 'webpack/lib/DynamicEntryPlugin'
+import { colorful } from '../shared/colorful'
 import { App } from './app'
 import { createHtml } from './utils'
 import { ChunkWithContent, Compiler } from './webpack'
@@ -287,23 +288,23 @@ export class DevWatcher {
                 // cleanup
                 Array.from(this._pageChunks.keys()).filter(pagePath => !Object.keys(this._buildManifest!.pages).includes(pagePath)).forEach(pagePath => {
                     this._pageChunks.delete(pagePath)
-                    console.log('[info]', `Page '${pagePath}' removed.`)
+                    console.log('[info]', colorful(`Page '${pagePath}' removed.`, 'dim'))
                 })
                 Array.from(this._componentChunks.keys()).filter(name => !Object.keys(this._buildManifest!.components).includes(name)).forEach(name => {
                     this._componentChunks.delete(name)
-                    console.log('[info]', `Component '${name}' removed.`)
+                    console.log('[info]', colorful(`Component '${name}' removed.`, 'dim'))
                 })
                 if (this._commonChunks.has('app') && !compilation.namedChunks.has('app')) {
                     this._commonChunks.delete('app')
-                    console.log('[info]', 'Custom App removed.')
+                    console.log('[info]', colorful('Custom App removed.', 'dim'))
                 }
             }
 
             errorsWarnings.errors.forEach(msg => {
-                console.error('[error]', msg)
+                console.error('[error]', colorful(msg, 'red'))
             })
             errorsWarnings.warnings.forEach(msg => {
-                console.warn('[warn]', msg)
+                console.warn('[warn]', colorful(msg, 'yellow'))
             })
 
             if (isWatched) {
