@@ -13,7 +13,7 @@ export async function redirect(href: string, replace?: boolean, transition?: Pag
         return Promise.reject(new Error('can\'t redirect on server'))
     }
 
-    if (/^(https?|file):/.test(href)) {
+    if (/^https?:\/\//i.test(href)) {
         location.href = href
         return
     }

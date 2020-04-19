@@ -24,7 +24,12 @@ export function Link({
     children
 }: PropsWithChildren<LinkProps>) {
     const router = useRouter()
-    const href = useMemo(() => utils.cleanPath(to), [to])
+    const href = useMemo(() => {
+        if (/^https?:\/\//i.test(to)) {
+            return to
+        }
+        return utils.cleanPath(to)
+    }, [to])
     const onClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
         e.preventDefault()
         if (router.asPath !== href) {
@@ -115,8 +120,7 @@ export function NavLink({
 }
 
 function prefetchPage(href: string) {
-    // not a file
-    if (location.protocol === 'file:') {
+    if (/^https?:\/\//i.test(href) || location.protocol === 'file:') {
         return
     }
 
