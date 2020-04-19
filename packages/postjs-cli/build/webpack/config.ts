@@ -1,6 +1,6 @@
 import autoprefixer from 'autoprefixer'
 import Cssnano from 'cssnano-simple'
-import fs from 'fs'
+import fs from 'fs-extra'
 import MiniCssExtractPlugin from 'mini-css-extract-plugin'
 import path from 'path'
 import postcss from 'postcss'
@@ -10,6 +10,7 @@ import webpack from 'webpack'
 import './loaders/post-app-loader'
 import './loaders/post-component-loader'
 import './loaders/post-page-loader'
+import './plugins/babel-plugin-post-module-resolver'
 
 export type Config = Pick<webpack.Configuration, 'externals' | 'plugins'> & {
     isServer?: boolean
@@ -94,21 +95,20 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
                                     ['@babel/preset-typescript', { allowNamespaces: true }]
                                 ],
                                 plugins: [
-                                    ['babel-plugin-module-resolver', {
-                                        root: [context],
+                                    [path.join(__dirname, 'plugins/babel-plugin-post-module-resolver'), {
+                                        root: context,
                                         alias: (() => {
-                                            const alias = {}
+                                            const alias: Array<string> = []
                                             const items = fs.readdirSync(context)
                                             items.forEach(name => {
-                                                const fullPath = path.join(context, name)
-                                                const stat = fs.statSync(fullPath)
+                                                const stat = fs.statSync(path.join(context, name))
                                                 if (
                                                     stat.isDirectory() &&
                                                     !name.startsWith('.') &&
                                                     !(/^dist|node_modules$/.test(name)) &&
                                                     !fs.existsSync(path.join(context, 'node_modules', name))
                                                 ) {
-                                                    alias[name] = fullPath
+                                                    alias.push(name)
                                                 }
                                             })
                                             return alias
@@ -124,8 +124,8 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
                                     '@babel/plugin-proposal-optional-chaining',
                                     '@babel/plugin-proposal-nullish-coalescing-operator',
                                     '@babel/plugin-proposal-numeric-separator',
-                                    !isProduction && ['babel-plugin-transform-react-remove-prop-types', { removeImport: true }],
                                     isServer && '@babel/plugin-syntax-bigint',
+                                    !isProduction && ['babel-plugin-transform-react-remove-prop-types', { removeImport: true }],
                                     useStyledComponents && ['babel-plugin-styled-components', { ssr: isServer }]
                                 ].filter(Boolean)
                             }
@@ -175,13 +175,11 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
                 }
             ].filter(Boolean) as webpack.RuleSetRule[]
         },
-        plugins: (isProduction || isServer ? [
-            new MiniCssExtractPlugin({
-                filename: '[name].css',
-                chunkFilename: '[name].css',
-                ignoreOrder: true // remove order warnings
-            })
-        ] : []).concat(plugins || []),
+        plugins: (plugins || []).concat(isProduction || isServer ? new MiniCssExtractPlugin({
+            filename: '[name].css',
+            chunkFilename: '[name].css',
+            ignoreOrder: true // remove order warnings
+        }) : []),
         resolve: {
             extensions: ['.js', '.jsx', '.mjs', '.ts', '.tsx', '.json', '.wasm']
         },
