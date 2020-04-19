@@ -2,21 +2,21 @@ import loaderUtils from 'loader-utils'
 import webpack from 'webpack'
 
 const template = (rawRequest: string) => `
-    const { utils } = require('@postjs/core')
-    const hotEmitter = require('webpack/hot/emitter')
+    var postjs = require('@postjs/core')
+    var hotEmitter = require('webpack/hot/emitter')
 
     if (module.hot) {
-        module.hot.accept(${rawRequest}, () => {
-            const Component = req()
-            setTimeout(() => {
+        module.hot.accept(${rawRequest}, function() {
+            var Component = req()
+            setTimeout(function() {
                 hotEmitter.emit('postAppHotUpdate', Component)
             }, 0)
         })
     }
 
     function req() {
-        const mod = require(${rawRequest})
-        return (window.__POST_APP = window.__POST_APP || {}).Component = utils.isComponentModule(mod, 'app')
+        var mod = require(${rawRequest})
+        return (window.__POST_APP = window.__POST_APP || {}).Component = postjs.utils.isComponentModule(mod, 'app')
     }
     req()
 `

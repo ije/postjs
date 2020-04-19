@@ -2,22 +2,23 @@ import loaderUtils from 'loader-utils'
 import webpack from 'webpack'
 
 const template = (pagePath: string, rawRequest: string) => `
-    const { utils } = require('@postjs/core')
-    const hotEmitter = require('webpack/hot/emitter')
+    var postjs = require('@postjs/core')
+    var hotEmitter = require('webpack/hot/emitter')
 
     if (module.hot) {
-        module.hot.accept(${rawRequest}, () => {
-            const { Component } = req()
-            setTimeout(() => {
-                hotEmitter.emit('postPageHotUpdate:' + ${pagePath}, Component)
+        module.hot.accept(${rawRequest}, function() {
+            var mod = req()
+            setTimeout(function() {
+                hotEmitter.emit('postPageHotUpdate:' + ${pagePath}, mod.Component)
             }, 0)
         })
     }
 
     function req() {
-        const mod = require(${rawRequest})
-        const component = utils.isComponentModule(mod, 'page')
-        component.hasGetStaticPropsMethod = typeof mod['getStaticProps'] === 'function' || typeof component['getStaticProps'] === 'function'
+        var utils = postjs.utils
+        var mod = require(${rawRequest})
+        var component = utils.isComponentModule(mod, 'page')
+        component.hasGetStaticPropsMethod = utils.isFunction(mod['getStaticProps']) || utils.isFunction(component['getStaticProps'])
         return (window.__POST_PAGES = window.__POST_PAGES || {})[${pagePath}] = {
             path: ${pagePath},
             Component: component
