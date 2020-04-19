@@ -17,8 +17,8 @@ export class DevWatcher {
     private _componentChunks: Map<string, ChunkWithContent>
     private _pageChunks: Map<string, ChunkWithContent & { rendered: Record<string, Record<string, any>> }>
     private _compiler: Compiler
-    private _watching: Watching
     private _fsWatcher: chokidar.FSWatcher
+    private _watching: Watching
 
     constructor(appDir: string) {
         const app = new App(appDir)
@@ -193,7 +193,7 @@ export class DevWatcher {
         }
     }
 
-    // tell webpack watcher the page/component entries changed
+    // ask webpack recompile
     private _emitChange() {
         this._compiler.writeVirtualModule('./_main.js', this._app.entryJS)
     }
@@ -248,7 +248,9 @@ export class DevWatcher {
             }
 
             if (!stats.hasErrors()) {
-                const appChunkChanged = compilation.namedChunks.get('app')?.hash !== this._commonChunks.get('app')?.hash
+                let appChunkChanged = false
+                let commonsChunkChanged = false
+
                 compilation.namedChunks.forEach(({ name, hash }) => {
                     const chunkFileName = '/' + name + '.js'
                     if (this._compiler.existsOutput(chunkFileName)) {
@@ -256,7 +258,7 @@ export class DevWatcher {
                         if (name.startsWith('pages/')) {
                             const pageName = utils.trimPrefix(name, 'pages/')
                             const pagePath = ('/' + pageName).replace(/\/index$/i, '') || '/'
-                            if (!this._pageChunks.has(pagePath) || this._pageChunks.get(pagePath)!.hash !== hash || appChunkChanged) {
+                            if (!this._pageChunks.has(pagePath) || this._pageChunks.get(pagePath)!.hash !== hash) {
                                 this._pageChunks.set(pagePath, { name: pageName, hash, content, rendered: {} })
                             }
                             this._buildManifest!.pages[pagePath] = { name: pageName, hash }
@@ -267,25 +269,34 @@ export class DevWatcher {
                             }
                             this._buildManifest!.components[name] = { hash }
                         } else if (!this._commonChunks.has(name) || this._commonChunks.get(name)!.hash !== hash) {
-                            if (name === 'webpack-runtime') {
+                            if (name === 'app') {
+                                appChunkChanged = true
+                            } else if (name === 'commons') {
+                                commonsChunkChanged = true
+                            } else if (name === 'webpack-runtime') {
                                 hash = this._buildManifest!.hash
                             }
                             this._commonChunks.set(name, { name, hash, content })
-                            if (name === 'app') {
-                                this._app.getStaticProps().then(appStaticProps => {
-                                    const chunk = this._commonChunks.get('app')
-                                    if (chunk?.hash === hash) {
-                                        Object.assign(chunk, {
-                                            content: `(window.__POST_APP = window.__POST_APP || {}).staticProps = ${JSON.stringify(appStaticProps)};\n${chunk!.content}`
-                                        })
-                                    }
-                                })
-                            }
                         }
                     }
                 })
 
+                // inject app static props
+                if (appChunkChanged) {
+                    this._app.getStaticProps().then(appStaticProps => {
+                        const chunk = this._commonChunks.get('app')
+                        Object.assign(chunk, {
+                            content: `(window.__POST_APP = window.__POST_APP || {}).staticProps = ${JSON.stringify(appStaticProps)};\n${chunk!.content}`
+                        })
+                    })
+                }
+
                 // cleanup
+                if (appChunkChanged || commonsChunkChanged) {
+                    this._pageChunks.forEach(chunk => {
+                        chunk.rendered = {}
+                    })
+                }
                 Array.from(this._pageChunks.keys()).filter(pagePath => !Object.keys(this._buildManifest!.pages).includes(pagePath)).forEach(pagePath => {
                     this._pageChunks.delete(pagePath)
                     console.log('[info]', colorful(`Page '${pagePath}' removed.`, 'dim'))

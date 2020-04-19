@@ -201,8 +201,8 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
             runtimeChunk: !isServer && { name: 'webpack-runtime' },
             splitChunks: !isServer && {
                 cacheGroups: {
-                    common: {
-                        name: 'common',
+                    commons: {
+                        name: 'commons',
                         minChunks: 2,
                         chunks: 'initial',
                         priority: 1
