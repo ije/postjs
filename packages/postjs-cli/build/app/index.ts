@@ -371,7 +371,7 @@ export class App {
         url: URL
     ) {
         const { lang, locales, baseUrl } = this.config
-        const pageStaticProps: any = await callGetStaticProps(PageComponent, url) || {}
+        const pageStaticProps: any = await callGetStaticProps(PageComponent, url)
         const sheet = (() => {
             if (this.config.useStyledComponents) {
                 const { ServerStyleSheet } = require('styled-components')

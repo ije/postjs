@@ -15,6 +15,8 @@ export async function callGetStaticProps(component: ComponentType, ...args: any[
         const props = await getStaticProps(...args)
         if (utils.isObject(props)) {
             return props
+        } else if (props !== undefined && props !== null) {
+            return { _: props }
         }
     }
     return null
