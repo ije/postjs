@@ -24,30 +24,24 @@ export function Link({
     children
 }: PropsWithChildren<LinkProps>) {
     const router = useRouter()
-    const asPath = useMemo(() => utils.cleanPath(to), [to])
-    const pagePath = useMemo(() => {
-        const { baseUrl = '/' } = window['__POST_APP']?.config || {}
-        const { pages = {} } = window['__POST_BUILD_MANIFEST'] || {}
-        const { pagePath } = route(baseUrl, Object.keys(pages), { fallback: '/_404', location: { pathname: asPath } })
-        return pagePath
-    }, [asPath])
+    const href = useMemo(() => utils.cleanPath(to), [to])
     const onClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
         e.preventDefault()
-        if (router.asPath !== asPath) {
-            redirect(asPath, replace, transition).catch(err => {
+        if (router.asPath !== href) {
+            redirect(href, replace, transition).catch(err => {
                 alert(`Error: ${err.message}`)
             })
         }
-    }, [asPath, replace, router, transition])
+    }, [href, replace, router, transition])
     const onMouseEnter = useCallback(() => {
-        prefetchPage(pagePath, asPath)
-    }, [pagePath])
+        prefetchPage(href)
+    }, [href])
 
     useEffect(() => {
         if (prefetch) {
-            prefetchPage(pagePath, asPath)
+            prefetchPage(href)
         }
-    }, [prefetch, pagePath])
+    }, [prefetch, href])
 
     if (Children.count(children) === 1) {
         const child = Children.toArray(children)[0]
@@ -57,7 +51,7 @@ export function Link({
                 ...props,
                 className: [className, props.className].filter(utils.isNEString).join(' ') || undefined,
                 style: Object.assign({}, style, props.style),
-                href: asPath,
+                href,
                 'aria-current': props['aria-current'] || 'page',
                 onClick: (e: React.MouseEvent<HTMLAnchorElement>) => {
                     if (utils.isFunction(props.onClick)) {
@@ -83,7 +77,7 @@ export function Link({
         <a
             className={className}
             style={style}
-            href={asPath}
+            href={href}
             onClick={onClick}
             onMouseEnter={onMouseEnter}
             aria-current="page"
@@ -120,19 +114,21 @@ export function NavLink({
     )
 }
 
-function prefetchPage(pagePath: string, asPath: string) {
+function prefetchPage(href: string) {
     // not a file
     if (location.protocol === 'file:') {
         return
     }
 
     const {
+        __POST_APP: app = {},
         __POST_PAGES: pages = {},
         __POST_SSR_DATA: ssrData = {},
         __POST_BUILD_MANIFEST: buildManifest = {}
     } = window as any
+    const { pagePath } = route(app.config?.baseUrl || '/', Object.keys(buildManifest.pages), { fallback: '/_404', location: { pathname: href } })
 
-    if (pagePath in (buildManifest.pages || {}) && (!(pagePath in pages) || !(asPath in ssrData))) {
-        fetchPage(pagePath, asPath)
+    if (pagePath in (buildManifest.pages || {}) && (!(pagePath in pages) || !(href in ssrData))) {
+        fetchPage(pagePath, href)
     }
 }
