@@ -1,6 +1,6 @@
 import { Link } from '@postjs/core'
 import React from 'react'
-import '../style/nav.less'
+import 'style/nav.less'
 
 export default function Nav() {
     return (
