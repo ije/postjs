@@ -4,7 +4,7 @@ import fs from 'fs-extra'
 import http from 'http'
 import path from 'path'
 import { parse } from 'url'
-import { server as WebsocketServer } from 'websocket'
+import { Server as WebsocketServer } from 'ws'
 import { getContentType, sendText } from '.'
 import { DevWatcher } from '../build/dev'
 import { colorful } from '../shared/colorful'
@@ -76,18 +76,17 @@ export function start(appDir: string, port: number) {
         const [statusCode, html] = await watcher.getPageHtml(pathname)
         sendText(req, res, statusCode, 'text/html', html)
     })
-    const wsServer = new WebsocketServer({ httpServer })
+    const wsServer = new WebsocketServer({ server: httpServer })
 
     watcher.watch(emitter)
     httpServer.listen(port)
-    wsServer.on('request', req => {
-        const conn = req.accept('hot-update', req.origin)
-        const sendUpdate = async manifest => {
-            conn.sendUTF(JSON.stringify(manifest))
+    wsServer.on('connection', conn => {
+        const sendHotUpdate = async (val: any) => {
+            conn.send(JSON.stringify(val))
         }
-        emitter.on('webpackHotUpdate', sendUpdate)
+        emitter.on('webpackHotUpdate', sendHotUpdate)
         conn.on('close', () => {
-            emitter.off('webpackHotUpdate', sendUpdate)
+            emitter.off('webpackHotUpdate', sendHotUpdate)
         })
     })
 
