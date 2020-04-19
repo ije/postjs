@@ -37,17 +37,13 @@ export function loadAppConfig(appDir: string) {
         if (require.resolve('styled-components')) {
             Object.assign(config, { useStyledComponents: true })
         }
-    } catch (error) {
-        // styled-components not found
-    }
+    } catch (error) { }
 
     try {
         if (require.resolve('sass-loader')) {
             Object.assign(config, { useSass: true })
         }
-    } catch (error) {
-        // sass-loader not found
-    }
+    } catch (error) { }
 
     try {
         const configJson = path.join(appDir, 'post.config.json')
@@ -83,8 +79,8 @@ export function loadAppConfig(appDir: string) {
         Object.assign(config, { lang })
     }
     if (utils.isObject(locales)) {
-        Object.keys(locales).forEach(key => {
-            const value = locales[key]
+        Object.keys(locales).forEach(locale => {
+            const value = locales[locale]
             if (utils.isObject(value)) {
                 const dictMap = new Map<string, string>()
                 utils.each(value, (text, key) => {
@@ -92,7 +88,7 @@ export function loadAppConfig(appDir: string) {
                         dictMap.set(key, text)
                     }
                 })
-                Object.assign(config, { [key]: dictMap })
+                config.locales.set(locale, dictMap)
             }
         })
     }

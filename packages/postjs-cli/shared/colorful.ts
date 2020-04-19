@@ -27,9 +27,9 @@ const Colors = {
 
 type Color = keyof typeof Colors
 export function colorful(text: string, ...colors: Color[]) {
-    const color = Array.from(new Set(colors)).map(c => Colors[c]).filter(Boolean)
-    if (color.length > 0) {
-        return `${color.join('')}${text}\x1b[0m`
+    const colorCodes = Array.from(new Set(colors)).map(c => Colors[c]).filter(Boolean)
+    if (colorCodes.length > 0) {
+        return `${colorCodes.join('')}${text}\x1b[0m`
     }
     return text
 }

@@ -22,7 +22,7 @@ export default function (...argv: string[]) {
     }
 
     if (!fs.existsSync(path.join(appDir, 'pages'))) {
-        console.error('exit: no pages')
+        console.error('miss pages')
         process.exit(0)
     }
 

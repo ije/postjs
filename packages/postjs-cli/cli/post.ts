@@ -43,9 +43,9 @@ if (!hasCommand && h) {
     process.exit(0)
 }
 
-// enhance globalThis using jsdom
-// const { window: vw } = new JSDOM(undefined, { url: 'http://localhost/', pretendToBeVisual: true })
+// extend globalThis
 Object.assign(globalThis, { fetch })
+// const { window: vw } = new JSDOM(undefined, { url: 'http://localhost/', pretendToBeVisual: true })
 // Object.keys(vw).forEach(key => {
 //     if (!key.startsWith('_') && !/^(set|clear)(Timeout|Interval)$/.test(key)) {
 //         globalThis[key] = vw[key]
