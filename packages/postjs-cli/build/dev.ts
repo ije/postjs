@@ -144,8 +144,10 @@ export class DevWatcher {
 
         let url = route('/', Array.from(this._pageChunks.keys()), { location: { pathname } })
         let { pagePath, asPath } = url
+        let code = 200
         if (pagePath === '' || !this._pageChunks.has(pagePath)) {
             pagePath = '/_404'
+            code = 404
             url = { pagePath, asPath: url.asPath, params: {}, query: {} }
         }
         if (pagePath !== '' && this._pageChunks.has(pagePath)) {
@@ -156,7 +158,7 @@ export class DevWatcher {
             if (pageChunk.rendered[asPath]) {
                 const { staticProps, html, head, styledTags, css } = pageChunk.rendered[asPath]
                 const baseUrl = this._app.config.baseUrl.replace(/\/+$/, '')
-                return [200, createHtml({
+                return [code, createHtml({
                     lang: this._app.config.lang,
                     head: head.concat('<meta name="post-head-end" content="true" />'),
                     styles: [
