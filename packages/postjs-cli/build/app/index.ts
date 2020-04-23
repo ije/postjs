@@ -1,13 +1,17 @@
-import { activatedLazyComponents, AppContext, renderHeadToString, RouterContext, RouterStore, URL, utils } from '@postjs/core'
+import { AppContext, RouterContext, RouterStore, URL, utils } from '@postjs/core'
 import fs from 'fs-extra'
 import path from 'path'
 import React, { ComponentType, createElement, Fragment } from 'react'
 import { renderToString } from 'react-dom/server'
 import { colorful } from '../../shared/colorful'
-import { callGetStaticProps, createHtml, runJS } from '../utils'
+import { callGetStaticProps, createHtml, matchPath, runJS } from '../utils'
 import { Compiler } from '../webpack'
 import { AppConfig, loadAppConfig } from './config'
 import './router'
+
+const activatedLazyComponents = new Set<string>()
+const headElements = new Map<string, { type: string, props: any }>()
+Object.assign(global, { activatedLazyComponents, headElements })
 
 export class App {
     config: AppConfig
@@ -284,7 +288,7 @@ export class App {
             for (const asPath of pagePaths) {
                 const url = { pagePath, asPath, params: {}, query: {} }
                 if (asPath !== pagePath) {
-                    const [params, ok] = utils.matchPath(pagePath, asPath)
+                    const [params, ok] = matchPath(pagePath, asPath)
                     if (!ok) {
                         console.log(`invalid static path '${asPath}' of page '${pageName}'`)
                         continue
@@ -409,7 +413,7 @@ export class App {
         let styledTags: string = ''
         try {
             html = renderToString(el)
-            head = renderHeadToString()
+            head = getHeadTags()
             styledTags = sheet.getStyleTags()
         } catch (error) {
             const pageName = url.pagePath.replace(/^\/+/, '') || 'index'
@@ -428,4 +432,31 @@ export class App {
             styledTags
         }
     }
+}
+
+function getHeadTags(): string[] {
+    const tags: string[] = []
+    headElements.forEach(({ type, props }) => {
+        if (type === 'title') {
+            if (utils.isNEString(props.children)) {
+                tags.push(`<title>${props.children}</title>`)
+            } else if (utils.isNEArray(props.children)) {
+                tags.push(`<title>${props.children.join('')}</title>`)
+            }
+        } else {
+            const attrs = Object.keys(props)
+                .filter(key => key !== 'children')
+                .map(key => ` ${key}=${JSON.stringify(props[key])}`)
+                .join('')
+            if (utils.isNEString(props.children)) {
+                tags.push(`<${type}${attrs}>${props.children}</${type}>`)
+            } else if (utils.isNEArray(props.children)) {
+                tags.push(`<${type}${attrs}>${props.children.join('')}</${type}>`)
+            } else {
+                tags.push(`<${type}${attrs} />`)
+            }
+        }
+    })
+    headElements.clear()
+    return tags
 }

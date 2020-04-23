@@ -102,20 +102,25 @@ export function NavLink({
     ...rest
 }: PropsWithChildren<NavLinkProps>) {
     const router = useRouter()
-    const asPath = useMemo(() => utils.cleanPath(to), [to])
-    if (router.asPath === asPath) {
+    const href = useMemo(() => {
+        if (/^https?:\/\//i.test(to)) {
+            return to
+        }
+        return utils.cleanPath(to)
+    }, [to])
+
+    if (router.asPath === href) {
         return (
             <Link
                 {...rest}
-                to={asPath}
+                to={href}
                 className={[rest.className, activeClassName].filter(Boolean).join(' ')}
                 style={Object.assign({}, rest.style, activeStyle)}
             />
         )
     }
-
     return (
-        <Link {...rest} to={asPath} />
+        <Link {...rest} to={href} />
     )
 }
 

@@ -3,13 +3,13 @@ import hotEmitter from 'webpack/hot/emitter'
 import { fetchPage } from './page'
 import { route } from './router'
 import { PageTransition } from './transition'
-import { isServer, utils } from './utils'
+import { utils } from './utils'
 
 let redirectMark: string | null = null
 
 export async function redirect(href: string, replace?: boolean, transition?: PageTransition | string) {
     // only in browser
-    if (isServer()) {
+    if (!process['browser']) {
         return Promise.reject(new Error('can\'t redirect on server'))
     }
 

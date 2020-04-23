@@ -70,7 +70,7 @@ export function route(base: string, pagePaths: string[], options?: { location?: 
     // todo: sort pagePaths
 
     utils.each(pagePaths, routePath => {
-        const [p, ok] = utils.matchPath(routePath, asPath)
+        const [p, ok] = matchPath(routePath, asPath)
         if (ok) {
             pagePath = routePath
             params = p
@@ -86,3 +86,36 @@ export function route(base: string, pagePaths: string[], options?: { location?: 
     return { pagePath, asPath, params, query }
 }
 
+function matchPath(routePath: string, locPath: string): [Record<string, string>, boolean] {
+    const routeSegments = utils.cleanPath(routePath).replace(/^\//, '').split('/')
+    const locSegments = utils.cleanPath(locPath).replace(/^\//, '').split('/')
+    const isRoot = locSegments[0] === ''
+    const max = Math.max(routeSegments.length, locSegments.length)
+    const params: Record<string, string> = {}
+
+    let ok = true
+
+    for (let i = 0; i < max; i++) {
+        const routeSeg = routeSegments[i]
+        const locSeg = locSegments[i]
+
+        if (locSeg === undefined || routeSeg === undefined) {
+            ok = false
+            break
+        }
+
+        if (routeSeg === '*') {
+            params['*'] = locSegments.slice(i).map(decodeURIComponent).join('/')
+            break
+        }
+
+        if (!isRoot && routeSeg.startsWith('$')) {
+            params[routeSeg.slice(1)] = decodeURIComponent(locSeg)
+        } else if (routeSeg !== locSeg) {
+            ok = false
+            break
+        }
+    }
+
+    return [params, ok]
+}

@@ -1,4 +1,4 @@
-import { fetchPage, isDev, Loading, PageTransition, route, RouterContext, RouterStore, transitionsToStyle, URL, utils } from '@postjs/core'
+import { fetchPage, Loading, PageTransition, route, RouterContext, RouterStore, transitionsToStyle, URL, utils } from '@postjs/core'
 import { ComponentType, createElement, CSSProperties, Fragment, PropsWithChildren, useCallback, useEffect, useState } from 'react'
 import hotEmitter from 'webpack/hot/emitter'
 
@@ -20,7 +20,7 @@ export function AppRouter({ baseUrl, initialUrl }: { baseUrl: string, initialUrl
             setSideEffect({ transition: state?.transition })
         }
 
-        if (isDev()) {
+        if (process.env.NODE_ENV === 'development') {
             console.log(`[postjs] page ${url.current.pagePath} hydrated.`)
         }
 

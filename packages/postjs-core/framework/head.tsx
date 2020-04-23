@@ -1,11 +1,9 @@
 import React, { Children, Fragment, isValidElement, PropsWithChildren, ReactElement, ReactNode, useEffect } from 'react'
-import { isServer, utils } from './utils'
-
-const stateOnServer = new Map<string, { type: string, props: any }>()
+import { utils } from './utils'
 
 export function Head({ children }: PropsWithChildren<{}>) {
-    if (isServer()) {
-        parse(children).forEach(({ type, props }, key) => stateOnServer.set(key, { type, props }))
+    if (!process['browser']) {
+        parse(children).forEach(({ type, props }, key) => global['headElements'].set(key, { type, props }))
     }
 
     useEffect(() => {
@@ -139,33 +137,6 @@ export function Viewport(props: ViewportProps) {
             <meta name="viewport" content={content} />
         </Head>
     )
-}
-
-export function renderHeadToString(): string[] {
-    const tags: string[] = []
-    stateOnServer.forEach(({ type, props }) => {
-        if (type === 'title') {
-            if (utils.isNEString(props.children)) {
-                tags.push(`<title>${props.children}</title>`)
-            } else if (utils.isNEArray(props.children)) {
-                tags.push(`<title>${props.children.join('')}</title>`)
-            }
-        } else {
-            const attrs = Object.keys(props)
-                .filter(key => key !== 'children')
-                .map(key => ` ${key}=${JSON.stringify(props[key])}`)
-                .join('')
-            if (utils.isNEString(props.children)) {
-                tags.push(`<${type}${attrs}>${props.children}</${type}>`)
-            } else if (utils.isNEArray(props.children)) {
-                tags.push(`<${type}${attrs}>${props.children.join('')}</${type}>`)
-            } else {
-                tags.push(`<${type}${attrs} />`)
-            }
-        }
-    })
-    stateOnServer.clear()
-    return tags
 }
 
 function parse(node: ReactNode, nodes?: Map<string, { type: string, props: any }>) {

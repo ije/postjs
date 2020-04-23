@@ -1,8 +1,5 @@
 import React, { Children, ComponentType, Fragment, PropsWithChildren, useEffect, useState } from 'react'
 import hotEmitter from 'webpack/hot/emitter'
-import { isServer } from './utils'
-
-export const activatedLazyComponents = new Set<string>()
 
 interface LazyComponentProps {
     is: string
@@ -15,9 +12,9 @@ export function LazyComponent({ is: name, props, children }: PropsWithChildren<L
     const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
 
-    if (isServer()) {
+    if (!process['browser']) {
         // todo: ssr
-        activatedLazyComponents.add(name)
+        global['activatedLazyComponents'].add(name)
     }
 
     useEffect(() => {

@@ -1,9 +1,6 @@
 import React, { ReactType } from 'react'
 import { isValidElementType } from 'react-is'
 
-export const isServer = () => !process['browser']
-export const isDev = () => process.env.NODE_ENV === 'development'
-
 export const utils = {
     isNumber(a: any): a is number {
         return typeof a === 'number' && !Number.isNaN(a)
@@ -91,39 +88,5 @@ export const utils = {
             .map(p => p.trim())
             .filter(Boolean)
             .join('/')
-    },
-
-    matchPath(routePath: string, locPath: string): [Record<string, string>, boolean] {
-        const routeSegments = utils.cleanPath(routePath).replace(/^\//, '').split('/')
-        const locSegments = utils.cleanPath(locPath).replace(/^\//, '').split('/')
-        const isRoot = locSegments[0] === ''
-        const max = Math.max(routeSegments.length, locSegments.length)
-        const params: Record<string, string> = {}
-
-        let ok = true
-
-        for (let i = 0; i < max; i++) {
-            const routeSeg = routeSegments[i]
-            const locSeg = locSegments[i]
-
-            if (locSeg === undefined || routeSeg === undefined) {
-                ok = false
-                break
-            }
-
-            if (routeSeg === '*') {
-                params['*'] = locSegments.slice(i).map(decodeURIComponent).join('/')
-                break
-            }
-
-            if (!isRoot && routeSeg.startsWith('$')) {
-                params[routeSeg.slice(1)] = decodeURIComponent(locSeg)
-            } else if (routeSeg !== locSeg) {
-                ok = false
-                break
-            }
-        }
-
-        return [params, ok]
     }
 }

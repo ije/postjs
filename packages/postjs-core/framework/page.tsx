@@ -1,9 +1,9 @@
 import { isValidElementType } from 'react-is'
-import { isServer, utils } from './utils'
+import { utils } from './utils'
 
 export async function fetchPage(pagePath: string, asPath: string) {
     // only in browser
-    if (isServer()) {
+    if (!process['browser']) {
         return Promise.reject(new Error(`can't fetch page '${pagePath}' on server`))
     }
 
