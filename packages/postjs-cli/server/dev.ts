@@ -75,20 +75,20 @@ export function start(appDir: string, port: number) {
 
         const [statusCode, html] = await watcher.getPageHtml(pathname)
         sendText(req, res, statusCode, 'text/html', html)
-    })
-    const wsServer = new WebsocketServer({ server: httpServer })
-
-    watcher.watch(emitter)
-    httpServer.listen(port)
-    wsServer.on('connection', conn => {
-        const sendHotUpdate = async (val: any) => {
-            conn.send(JSON.stringify(val))
-        }
-        emitter.on('webpackHotUpdate', sendHotUpdate)
-        conn.on('close', () => {
-            emitter.off('webpackHotUpdate', sendHotUpdate)
+    }).on('error', error => {
+        console.log(colorful('error', 'red'), error.message)
+    }).listen(port, () => {
+        const wss = new WebsocketServer({ server: httpServer })
+        wss.on('connection', conn => {
+            const sendHotUpdate = async (val: any) => {
+                conn.send(JSON.stringify(val))
+            }
+            emitter.on('webpackHotUpdate', sendHotUpdate)
+            conn.on('close', () => {
+                emitter.off('webpackHotUpdate', sendHotUpdate)
+            })
         })
+        watcher.watch(emitter)
+        console.log(colorful(`Server ready on http://localhost:${port}`, 'green'))
     })
-
-    console.log(colorful(`Server ready on http://localhost:${port}`, 'green'))
 }
