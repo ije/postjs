@@ -89,7 +89,7 @@ export class DevWatcher {
 
     getChunk(name: string): ChunkWithContent | null {
         if (name.startsWith('pages/')) {
-            const pagePath = '/' + name.replace(/^pages\/(index)?/, '')
+            const pagePath = '/' + name.replace(/^pages\/(index)?/i, '').replace(/\/index$/i, '')
             if (this._pageChunks.has(pagePath)) {
                 return this._pageChunks.get(pagePath)!
             }
@@ -168,7 +168,7 @@ export class DevWatcher {
                     scripts: [
                         { type: 'application/json', id: 'ssr-data', innerText: JSON.stringify({ url, staticProps }) },
                         { src: baseUrl + `/_post/build-manifest.js?v=${this.buildManifest!.hash}`, async: true },
-                        { src: baseUrl + `/_post/pages/${url.pagePath.replace(/^\/+/, '') || 'index'}.js?v=${pageChunk.hash}`, async: true },
+                        { src: baseUrl + `/_post/pages/${pageChunk.name}.js?v=${pageChunk.hash}`, async: true },
                         ...Array.from(this._commonChunks.values()).map(({ name, hash }) => ({ src: baseUrl + `/_post/${name}.js?v=${hash}`, async: true }))
                     ],
                     body: html
