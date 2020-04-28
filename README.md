@@ -1,8 +1,8 @@
 ## Postjs
-The Post-Front-End Framework with [React](https://reactjs.org).
+The radical new Front-End Framework with [deno](https://deno.land).
 
 ## Documentation
-Please visit https://post-js.org/docs to view the documentation.
+Please visit https://postjs.io/docs to view the documentation.
 
 ## Contributing
-Please read the [contributing.md](contributing.md).
+Please read the [CONTRIBUTING.md](CONTRIBUTING.md).

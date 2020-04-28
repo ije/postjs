@@ -4,24 +4,29 @@
     "files.exclude": {
         "**/.git": true,
         "**/.DS_Store": true,
-        "**/*.log": true,
         "**/Thumbs.db": true,
-        "**/node_modules/": true,
+        "**/*.log": true,
         "**/dist/": true,
-        "**/.post/": true
+    },
+    "typescript.updateImportsOnFileMove.enabled": "always",
+    "[typescript]": {
+        "editor.defaultFormatter": "vscode.typescript-language-features",
+    },
+    "[typescriptreact]": {
+        "editor.defaultFormatter": "vscode.typescript-language-features",
     },
     "editor.formatOnSave": true,
     "editor.formatOnPaste": true,
     "editor.codeActionsOnSave": {
-        "source.fixAll": true,
-        "source.organizeImports": true
+        "source.organizeImports": true,
     },
-    "typescript.tsdk": "node_modules/typescript/lib",
-    "typescript.updateImportsOnFileMove.enabled": "always",
     "eslint.validate": [
         "javascript",
         "javascriptreact",
         "typescript",
-        "typescriptreact"
-    ]
+        "typescriptreact",
+    ],
+    "deno.enable": true,
+    "deno.import_map": "./import_map.json",
+    "http.proxy": "http://localhost:1088",
 }

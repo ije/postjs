@@ -1,7 +1,4 @@
 .DS_Store
 Thumbs.db
 *.log
-node_modules/
-dist/
-typings/
-.post/
+_archive/

@@ -5,17 +5,13 @@ Welcome, and thank you for taking the time in contributing to postjs!
 
 ## Development Setup
 
-You will need [Node.js](https://nodejs.org/) 10+
+You will need [deno](https://deno.land/)
 
 ```bash
 # clone the code and install dependencies
 $ git clone https://github.com/postui/postjs
 $ cd postjs
-$ yarn
-
-# build and watch for code changes
-$ yarn watch
 
 # run examples
-$ yarn post ./examples/hello-world/
+$ deno --allow-all cli.ts ./examples/hello-world/
 ```
