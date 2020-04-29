@@ -1,4 +1,4 @@
-import utils from './utils.ts'
+import util from './util.ts'
 
 export function createHtml({
     lang = 'en',
@@ -13,9 +13,9 @@ export function createHtml({
 }) {
     const headTags = head.map(tag => tag.trim())
         .concat(scripts.map(v => {
-            if (!utils.isString(v) && utils.isNEString(v.src)) {
+            if (!util.isString(v) && util.isNEString(v.src)) {
                 if (v.type === 'module') {
-                     return `<link rel="modulepreload" href=${JSON.stringify(v.src)} />`
+                    return `<link rel="modulepreload" href=${JSON.stringify(v.src)} />`
                 } else if (v.async === true) {
                     return `<link rel="preload" href=${JSON.stringify(v.src)} as="script" />`
                 }
@@ -23,13 +23,13 @@ export function createHtml({
             return ''
         })).filter(Boolean)
     const scriptTags = scripts.map(v => {
-        if (utils.isString(v)) {
+        if (util.isString(v)) {
             return `<script>${v}</script>`
             // return `<script integrity="sha256-${createHash('sha256').update(v).digest('base64')}">${v}</script>`
-        } else if (utils.isNEString(v.innerText)) {
+        } else if (util.isNEString(v.innerText)) {
             const { innerText, ...rest } = v
             return `<script${toAttrs(rest)}>${innerText}</script>`
-        } else if (utils.isNEString(v.src)) {
+        } else if (util.isNEString(v.src)) {
             return `<script${toAttrs(v)}></script>`
         } else {
             return ''
@@ -41,12 +41,12 @@ export function createHtml({
 <head>
     <meta charSet="utf-8" />${
         headTags.map(tag => '\n' + ' '.repeat(4) + tag).join('')
-    }
+        }
 </head>
 <body>
     ${body}${
         scriptTags.map(tag => '\n' + ' '.repeat(4) + tag).join('')
-    }
+        }
 </body>
 </html>`
 }

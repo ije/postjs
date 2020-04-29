@@ -1,6 +1,6 @@
 import log from '../log.ts'
 import { fs, path } from '../package.ts'
-import utils from '../utils.ts'
+import util from '../util.ts'
 
 export interface AppConfig {
     readonly rootDir: string
@@ -43,25 +43,25 @@ export function loadAppConfig(appDir: string) {
         polyfills
     } = settings
 
-    if (utils.isNEString(srcDir)) {
-        Object.assign(config, { srcDir: utils.cleanPath(srcDir) })
+    if (util.isNEString(srcDir)) {
+        Object.assign(config, { srcDir: util.cleanPath(srcDir) })
     }
-    if (utils.isNEString(ouputDir)) {
-        Object.assign(config, { ouputDir: utils.cleanPath(ouputDir) })
+    if (util.isNEString(ouputDir)) {
+        Object.assign(config, { ouputDir: util.cleanPath(ouputDir) })
     }
-    if (utils.isNEString(baseUrl)) {
-        Object.assign(config, { baseUrl: utils.cleanPath(encodeURI(baseUrl)) })
+    if (util.isNEString(baseUrl)) {
+        Object.assign(config, { baseUrl: util.cleanPath(encodeURI(baseUrl)) })
     }
     if (/^[a-z]{2}(-[a-z0-9]+)?$/i.test(lang)) {
         Object.assign(config, { lang })
     }
-    if (utils.isObject(locales)) {
+    if (util.isObject(locales)) {
         Object.keys(locales).forEach(locale => {
             const value = locales[locale]
-            if (utils.isObject(value)) {
+            if (util.isObject(value)) {
                 const dictMap = new Map<string, string>()
                 Object.entries(value).forEach(([key, text]) => {
-                    if (utils.isNEString(text)) {
+                    if (util.isNEString(text)) {
                         dictMap.set(key, text)
                     }
                 })
@@ -69,14 +69,14 @@ export function loadAppConfig(appDir: string) {
             }
         })
     }
-    if (utils.isNEString(browserslist) || utils.isNEArray(browserslist) || utils.isObject(browserslist)) {
+    if (util.isNEString(browserslist) || util.isNEArray(browserslist) || util.isObject(browserslist)) {
         Object.assign(config, { browserslist })
     }
     if (/^usage|entry$/.test(polyfillsMode)) {
         Object.assign(config, { polyfillsMode })
     }
-    if (utils.isNEArray(polyfills)) {
-        Object.assign(config, { polyfills: polyfills.filter(utils.isNEString) })
+    if (util.isNEArray(polyfills)) {
+        Object.assign(config, { polyfills: polyfills.filter(util.isNEString) })
     }
     return config
 }

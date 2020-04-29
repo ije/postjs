@@ -23,52 +23,28 @@ export default {
     isNEArray<T = any>(a: any): a is Array<T> {
         return Array.isArray(a) && a.length > 0
     },
-    isObject(a: any): a is Object {
+    isObject(a: any): a is Record<string, any> {
         return typeof a === 'object' && a !== null && !this.isArray(a)
     },
     isFunction(a: any): a is Function {
         return typeof a === 'function'
     },
-
-    /**
-     * Perform the specified action for each element in an array or object,
-     * break loop when the stepCallback returns false.
-     */
-    each(a: any, stepCallback: (value: any, key: any) => void | boolean) {
-        if (this.isArray(a)) {
-            const l = a.length
-            for (let i = 0; i < l; i++) {
-                if (stepCallback(a[i], i) === false) {
-                    break
-                }
-            }
-        } else if (this.isObject(a)) {
-            for (const key of Object.keys(a)) {
-                if (stepCallback(a[key], key) === false) {
-                    break
-                }
-            }
-        }
-    },
-
     trimPrefix(s: string, prefix: string): string {
         if (prefix !== '' && s.startsWith(prefix)) {
             return s.slice(prefix.length)
         }
         return s
     },
-
     trimSuffix(s: string, suffix: string): string {
         if (suffix !== '' && s.endsWith(suffix)) {
             return s.slice(0, -suffix.length)
         }
         return s
     },
-
     cleanPath(path: string): string {
-        return '/' + path.replace(/^[./]+/, '').split('/')
-            .map(p => p.trim())
-            .filter(Boolean)
+        return '/' + path
+            .split('/')
+            .filter(p => p !== '' && p !== '.')
             .join('/')
     }
 }

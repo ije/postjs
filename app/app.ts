@@ -1,7 +1,7 @@
 import Link from '../link.tsx'
 import log from '../log.ts'
 import { fs, path, React, ReactDomServer, sha1 } from '../package.ts'
-import utils from '../utils.ts'
+import util from '../util.ts'
 import { AppConfig, loadAppConfig } from './config.ts'
 
 export class App {
@@ -29,7 +29,7 @@ export class App {
     private async _init() {
         const w = fs.walk(this.srcDir, { includeDirs: false, exts: ['.ts', '.tsx'] })
         for await (const { filename, info } of w) {
-            const name = utils.trimPrefix(filename, this.srcDir).replace(/^\/+/, '')
+            const name = util.trimPrefix(filename, this.srcDir).replace(/^\/+/, '')
             if (info.size < 1 << 20) {
                 const content = await Deno.readFile(filename)
                 const hasher = new sha1.Sha1()
