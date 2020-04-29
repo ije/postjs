@@ -1,4 +1,5 @@
-import { React } from './package.ts'
+// @deno-types="./@types/react/index.d.ts"
+import React from 'https://dev.jspm.io/react'
 
 interface LinkProps {
     to: string

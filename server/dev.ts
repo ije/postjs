@@ -14,7 +14,7 @@ export async function start(appDir: string, port: number) {
             body: createHtml({
                 lang: app.config.lang,
                 head: ['<title>404 - page not found</title>'],
-                body: '<p style="margin:50px"><strong><code>404</code></strong><small>&nbsp;-&nbsp;</small><span>page not found</span></p>'
+                body: '<p><strong><code>404</code></strong><small> - </small><span>page not found</span></p>'
             })
         })
     }
