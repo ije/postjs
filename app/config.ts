@@ -1,4 +1,4 @@
- import { colorful } from '../colorful.ts'
+import log from '../log.ts'
 import { fs, path } from '../package.ts'
 import utils from '../utils.ts'
 
@@ -25,10 +25,10 @@ export function loadAppConfig(appDir: string) {
     try {
         const configJson = path.join(appDir, 'post.config.json')
         if (fs.existsSync(configJson)) {
-            Object.assign(settings, fs.readJSONSync(configJson))
+            Object.assign(settings, fs.readJsonSync(configJson))
         }
     } catch (err) {
-        console.warn(colorful('warn', 'yellow'), 'bad app config: ', err)
+        log.warn('bad app config: ', err)
         return config
     }
 
@@ -60,7 +60,7 @@ export function loadAppConfig(appDir: string) {
             const value = locales[locale]
             if (utils.isObject(value)) {
                 const dictMap = new Map<string, string>()
-                utils.each(value, (text, key) => {
+                Object.entries(value).forEach(([key, text]) => {
                     if (utils.isNEString(text)) {
                         dictMap.set(key, text)
                     }

@@ -1,5 +1,5 @@
-import { colorfulTag } from '../colorful.ts'
 import Link from '../link.tsx'
+import log from '../log.ts'
 import { fs, path, React, ReactDomServer, sha1 } from '../package.ts'
 import utils from '../utils.ts'
 import { AppConfig, loadAppConfig } from './config.ts'
@@ -35,7 +35,7 @@ export class App {
                 const hasher = new sha1.Sha1()
                 this.modules.set(name, { hash: hasher.update(content).hex(), raw: content.toString() })
             } else {
-                console.log(colorfulTag('warn', 'magenta'), `ignored module '${name}': too large`)
+                log.warn(`ignored module '${name}': too large`)
             }
         }
     }
