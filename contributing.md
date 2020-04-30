@@ -13,5 +13,5 @@ $ git clone https://github.com/postui/postjs
 $ cd postjs
 
 # run examples
-$ deno --allow-all cli.ts ./examples/hello-world/
+$ deno -A cli.ts ./examples/hello-world/
 ```

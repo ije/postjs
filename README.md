@@ -1,4 +1,4 @@
-## Postjs
+# Postjs
 The radical new Front-End Framework with [deno](https://deno.land).
 
 ## Documentation
