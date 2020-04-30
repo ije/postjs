@@ -1,7 +1,7 @@
-import { Sha1 } from 'https://deno.land/std/util/sha1.ts'
+import { Sha1 } from 'https://deno.land/std@v0.42.0/util/sha1.ts'
 import React from 'https://dev.jspm.io/react'
-import Head from '../../head.tsx'
-import Link from '../../link.tsx'
+import Head from '../../../head.tsx'
+import Link from '../../../link.tsx'
 
 export default function Home() {
     const sha1 = new Sha1()
