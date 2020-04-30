@@ -3,6 +3,7 @@ import { fs, path } from '../package.ts'
 import util from '../util.ts'
 
 export interface AppConfig {
+    readonly framework: 'react' | 'preact' | 'vue'
     readonly rootDir: string
     readonly srcDir: string
     readonly outputDir: string
@@ -13,6 +14,7 @@ export interface AppConfig {
 
 export function loadAppConfig(appDir: string) {
     const config: AppConfig = {
+        framework: 'react',
         rootDir: path.resolve(appDir),
         srcDir: '/',
         outputDir: '/dist',
