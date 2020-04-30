@@ -1,0 +1,26 @@
+{
+    "name": "@types/astring",
+    "version": "1.3.0",
+    "description": "TypeScript definitions for astring",
+    "license": "MIT",
+    "contributors": [
+        {
+            "name": "Nikolaj Kappler",
+            "url": "https://github.com/nkappler",
+            "githubUsername": "nkappler"
+        }
+    ],
+    "main": "",
+    "types": "",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/DefinitelyTyped/DefinitelyTyped.git"
+    },
+    "scripts": {},
+    "dependencies": {
+        "@types/estree": "*",
+        "@types/node": "*"
+    },
+    "typesPublisherContentHash": "8d31b806e1c39b0a20ef2d0fb7c598214f0d78927c7382ebb9a41fbb162b5499",
+    "typeScriptVersion": "2.8"
+}
