@@ -1,4 +1,5 @@
-import { path } from './package.ts'
+import log from './log.ts'
+import { fs, path } from './package.ts'
 import { version } from './version.ts'
 
 const commands = ['dev', 'build', 'start', 'export']
@@ -67,7 +68,12 @@ function main() {
     // execute command
     const command = hasCommand ? args.shift() : 'dev'
     import(`./cli-${command}.ts`).then(({ default: cmd }) => {
-        cmd(path.resolve(args[0] || '.'), argOptions)
+        const appDir = path.resolve(args[0] || '.')
+        if (!fs.existsSync(appDir)) {
+            log.error("No such app directory:", appDir)
+            return
+        }
+        cmd(appDir, argOptions)
     })
 }
 
