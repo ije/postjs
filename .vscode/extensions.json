@@ -1,6 +1,5 @@
 {
   "recommendations": [
-    "axetroy.vscode-deno",
-    "dbaeumer.vscode-eslint",
+    "axetroy.vscode-deno"
   ]
 }
