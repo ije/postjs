@@ -1,14 +1,19 @@
 import { renderToTags } from '../head.tsx'
 import log from '../log.ts'
-import { fs, path, React, ReactDomServer, Sha1 } from '../package.ts'
+import { acorn, astring, fs, path, React, ReactDomServer, Sha1 } from '../package.ts'
 import { RouterContext, RouterState, URI } from '../router.ts'
 import util from '../util.ts'
 import { AppConfig, loadAppConfig } from './config.ts'
 
+const code = 'let num=1+2*(3+4)-5;'
+const ast = acorn.parse(code, { ecmaVersion: 9 })
+const formattedCode = astring.generate(ast)
+console.log(formattedCode)
+
 export class App {
     readonly mode: 'development' | 'production'
     readonly config: AppConfig
-    readonly modules: Map<string, { hash: string, raw: string, js?: string }>
+    readonly modules: Map<string, { hash: string, raw: string, js?: string, sourceMap?: string }>
 
     constructor(appDir: string, mode: 'development' | 'production') {
         this.mode = mode
@@ -24,25 +29,27 @@ export class App {
 
     private async _init() {
         const w = fs.walk(this.srcDir, { includeDirs: false, exts: ['.ts', '.tsx'] })
-        for await (const { filename, info } of w) {
-            if (!filename.endsWith('.d.ts')) {
-                const name = util.trimPrefix(util.trimPrefix(filename, this.srcDir), '/')
+        for await (const { path } of w) {
+            if (!path.endsWith('.d.ts')) {
+                const info = await Deno.stat(path)
+                const name = util.trimPrefix(util.trimPrefix(path, this.srcDir), '/')
                 if (info.size < 1 << 20) {
-                    const content = await Deno.readFile(filename)
+                    const raw = await Deno.readTextFile(path)
                     const hasher = new Sha1()
-                    this.modules.set(name, { hash: hasher.update(content).hex(), raw: content.toString() })
+                    this.modules.set(name, { hash: hasher.update(raw).hex(), raw })
                 } else {
                     log.warn(`ignored module '${name}': too large(${(info.size / (1 << 20)).toFixed(2)}mb)`)
                 }
             }
         }
+
         if (this.mode === 'development') {
-            await this._watch()
+            this._watch()
         }
     }
 
     private async _watch() {
-        const w = Deno.fsEvents(this.srcDir, { recursive: true })
+        const w = Deno.watchFs(this.srcDir, { recursive: true })
         for await (const event of w) {
             console.log('>>> event', event)
         }
