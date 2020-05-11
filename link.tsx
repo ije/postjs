@@ -1,5 +1,4 @@
-// @deno-types="./@types/react/index.d.ts"
-import React from 'https://dev.jspm.io/react'
+import React from 'https://cdn.pika.dev/react'
 
 interface LinkProps {
     to: string
@@ -12,3 +11,4 @@ interface LinkProps {
 export default function Link({ to, children }: React.PropsWithChildren<LinkProps>) {
     return <a href={to}>{children}</a>
 }
+

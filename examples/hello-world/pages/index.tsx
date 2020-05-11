@@ -1,5 +1,5 @@
+import React from 'https://cdn.pika.dev/react'
 import { Sha1 } from 'https://deno.land/std@v0.42.0/util/sha1.ts'
-import React from 'https://dev.jspm.io/react'
 import Head from '../../../head.tsx'
 import Link from '../../../link.tsx'
 

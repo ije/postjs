@@ -1,3 +1,4 @@
+import React from 'https://cdn.pika.dev/react'
 import util from './util.ts'
 
 const headElements = new Map<string, { type: string, props: any }>()

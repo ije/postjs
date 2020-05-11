@@ -1,5 +1,4 @@
-// @deno-types="./@types/react/index.d.ts"
-import React from 'https://dev.jspm.io/react'
+import React from 'https://cdn.pika.dev/react'
 
 export interface URI {
     pagePath: string

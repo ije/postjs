@@ -1,14 +1,11 @@
+import React from 'https://cdn.pika.dev/react'
 import { renderToTags } from '../head.tsx'
 import log from '../log.ts'
-import { acorn, astring, fs, path, React, ReactDomServer, Sha1 } from '../package.ts'
+import { fs, path, ReactDomServer, Sha1 } from '../package.ts'
 import { RouterContext, RouterState, URI } from '../router.ts'
+import { compile } from '../ts/compile.ts'
 import util from '../util.ts'
 import { AppConfig, loadAppConfig } from './config.ts'
-
-const code = 'let num=1+2*(3+4)-5;'
-const ast = acorn.parse(code, { ecmaVersion: 9 })
-const formattedCode = astring.generate(ast)
-console.log(formattedCode)
 
 export class App {
     readonly mode: 'development' | 'production'
@@ -28,12 +25,13 @@ export class App {
     }
 
     private async _init() {
-        const w = fs.walk(this.srcDir, { includeDirs: false, exts: ['.ts', '.tsx'] })
+        const w = fs.walk(this.srcDir, { includeDirs: false, exts: ['.js', '.jsx', '.mjs', '.ts', '.tsx'] })
         for await (const { path } of w) {
             if (!path.endsWith('.d.ts')) {
                 const info = await Deno.stat(path)
                 const name = util.trimPrefix(util.trimPrefix(path, this.srcDir), '/')
-                if (info.size < 1 << 20) {
+                // 10mb limit
+                if (info.size < 10 * (1 << 20)) {
                     const raw = await Deno.readTextFile(path)
                     const hasher = new Sha1()
                     this.modules.set(name, { hash: hasher.update(raw).hex(), raw })
@@ -42,6 +40,10 @@ export class App {
                 }
             }
         }
+
+        const now = performance.now()
+        const tmr = compile('/pages/index.tsx', this.modules.get('pages/index.tsx')!.raw)
+        log.info('tsc', performance.now() - now, tmr.outputText)
 
         if (this.mode === 'development') {
             this._watch()
@@ -61,10 +63,10 @@ export class App {
 
     async renderPage(uri: URI) {
         const modules = Array.from(this.modules.keys())
-        const appModule = modules.find(key => ['app.tsx', 'app.ts'].includes(key))
+        const appModule = modules.find(key => /^app\.(m?jsx?|tsx?)$/i.test(key))
         const pageModule = modules.find(key => {
             if (key.startsWith('pages/')) {
-                const pagePath = util.trimPrefix(key, 'pages').replace(/(\/index)?.tsx?$/i, '') || '/'
+                const pagePath = util.trimPrefix(key, 'pages').replace(/(\/index)?\.(m?jsx?|tsx?)$/i, '') || '/'
                 return pagePath === uri.pagePath
             }
             return false
@@ -90,7 +92,7 @@ export class App {
                     }
                 }
                 const mod = await import(path.join(this.srcDir, pageModule))
-                const ret = ReactDomServer.renderToString(
+                const ret = ReactDomServer['renderToString'](
                     React.createElement(
                         RouterContext.Provider,
                         { value: new RouterState(uri) },
