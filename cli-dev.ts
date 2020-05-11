@@ -5,17 +5,17 @@ const helpMessage = `postjs v${version}
 Starts the postjs app in development mode
 
 Usage:
-    deno --allow-all https://postjs.io/cli.ts dev <dir> [...options]
+    deno -A run https://postjs.io/cli.ts dev <dir> [...options]
 
 <dir> represents the directory of the postjs app,
 if the <dir> is empty, the current directory will be used.
 
 Options:
     --port, -p  A port number to start the postjs app, default is 8080
-    --help, -h  Prints help message
+    --help, -h  Prints the help message
 `
 
-export default function Dev(appDir: string, options: Record<string, string|boolean>) {
+export default function Dev(appDir: string, options: Record<string, string | boolean>) {
     if (options.h || options.help) {
         console.log(helpMessage)
         Deno.exit(0)

@@ -4,20 +4,20 @@ import { version } from './version.ts'
 
 const commands = ['dev', 'build', 'start', 'export']
 const helpMessage = `postjs v${version}
-The radical new Front-End Framework with deno
+The radical new Front-End Framework with deno.
 
 Docs: https://postjs.io/docs
 Bugs: https://github.com/postui/postjs/issues
 
 Usage:
-    deno --allow-all https://postjs.io/cli.ts <command> [...options]
+    deno -A run https://postjs.io/cli.ts <command> [...options]
 
 Commands:
     ${commands.join(', ')}
 
 Options:
     -h, --help     Prints help message
-    -v, --version  Prints version information
+    -v, --version  Prints version number
 `
 
 function main() {
