@@ -1,4 +1,4 @@
-import { fmt } from './package.ts'
+import { fmt } from './deps.ts'
 
 export default {
     debug(...args: unknown[]) {

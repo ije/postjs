@@ -1,5 +1,5 @@
+import { fs, path } from './deps.ts'
 import log from './log.ts'
-import { fs, path } from './package.ts'
 import { version } from './version.ts'
 
 const commands = ['dev', 'build', 'start', 'export']

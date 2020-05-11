@@ -1,4 +1,4 @@
-import { typescript as ts } from '../package.ts';
+import { typescript as ts } from '../deps.ts';
 
 export interface Transform {
     (sf: ts.SourceFile, node: ts.Node, options: TransformOptions): ts.VisitResult<ts.Node> | null

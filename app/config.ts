@@ -1,5 +1,5 @@
+import { fs, path } from '../deps.ts'
 import log from '../log.ts'
-import { fs, path } from '../package.ts'
 import util from '../util.ts'
 
 export interface AppConfig {
@@ -19,22 +19,23 @@ export function loadAppConfig(appDir: string) {
         rootDir: path.resolve(appDir),
         srcDir: '/',
         outputDir: '/dist',
-        downloadRemoteModules: false,
+        downloadRemoteModules: true,
         baseUrl: '/',
         lang: 'en',
         locales: new Map()
     }
 
     try {
-        const configJson = path.join(appDir, 'post.config.json')
-        if (fs.existsSync(configJson)) {
+        const configFile = path.join(appDir, 'post.config.json')
+        if (fs.existsSync(configFile)) {
             const {
                 srcDir,
                 ouputDir,
                 baseUrl,
+                downloadRemoteModules,
                 lang,
                 locales,
-            } = fs.readJsonSync(configJson) as any
+            } = fs.readJsonSync(configFile) as any
             if (util.isNEString(srcDir)) {
                 Object.assign(config, { srcDir: util.cleanPath(srcDir) })
             }
@@ -46,6 +47,9 @@ export function loadAppConfig(appDir: string) {
             }
             if (util.isNEString(lang)) {
                 Object.assign(config, { lang })
+            }
+            if (downloadRemoteModules === false) {
+                Object.assign(config, { downloadRemoteModules: false })
             }
             if (util.isObject(locales)) {
                 Object.keys(locales).forEach(locale => {
@@ -63,7 +67,7 @@ export function loadAppConfig(appDir: string) {
             }
         }
     } catch (err) {
-        log.warn('bad app config: ', err)
+        log.error('bad app config: ', err)
     }
     return config
 }

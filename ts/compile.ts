@@ -1,7 +1,7 @@
-import { typescript as ts } from '../package.ts'
+import { typescript as ts } from '../deps.ts'
 import { CreateTransformer, TransformOptions } from './transformer.ts'
 
-export interface CompileOptions extends Omit<TransformOptions, 'context'> {
+export interface CompileOptions extends TransformOptions {
     transformers?: (ts.TransformerFactory<ts.SourceFile> | ts.CustomTransformerFactory)[]
 }
 

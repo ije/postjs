@@ -1,7 +1,7 @@
 import { App } from '../app/app.ts'
+import { server } from '../deps.ts'
 import { createHtml } from '../html.ts'
 import log from '../log.ts'
-import { server } from '../package.ts'
 
 export async function start(appDir: string, port: number) {
     const app = new App(appDir, 'development')

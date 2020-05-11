@@ -1,7 +1,7 @@
 import React from 'https://cdn.pika.dev/react'
+import { fs, path, ReactDomServer, Sha1 } from '../deps.ts'
 import { renderToTags } from '../head.tsx'
 import log from '../log.ts'
-import { fs, path, ReactDomServer, Sha1 } from '../package.ts'
 import { RouterContext, RouterState, URI } from '../router.ts'
 import { compile } from '../ts/compile.ts'
 import util from '../util.ts'
