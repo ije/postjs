@@ -41,8 +41,6 @@ export class App {
             }
         }
 
-        this._compile('pages/index.tsx')
-
         if (this.mode === 'development') {
             this._watch()
         }
@@ -111,7 +109,9 @@ export class App {
                         App = mod.default
                     }
                 }
-                const mod = await import(path.join(this.srcDir, pageModule))
+                const { default: Page, getStaticProps } = await import(path.join(this.srcDir, pageModule))
+                const gspFn = Page.getStaticProps || getStaticProps
+                const staticProps = util.isFunction(gspFn) ? await gspFn(uri) : null
                 const ret = ReactDomServer.renderToString(
                     React.createElement(
                         RouterContext.Provider,
@@ -120,8 +120,8 @@ export class App {
                             App,
                             appStaticProps,
                             React.createElement(
-                                mod.default,
-                                await ((mod.default || {}).getStaticProps || mod.getStaticProps || (() => null))(uri)
+                                Page,
+                                util.isObject(staticProps) ? staticProps : null
                             )
                         )
                     )
