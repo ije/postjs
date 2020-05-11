@@ -41,9 +41,7 @@ export class App {
             }
         }
 
-        const now = performance.now()
-        const tmr = compile('/pages/index.tsx', this.modules.get('pages/index.tsx')!.raw)
-        log.info('tsc', performance.now() - now, tmr.outputText)
+        this._compile('pages/index.tsx')
 
         if (this.mode === 'development') {
             this._watch()
@@ -55,6 +53,28 @@ export class App {
         for await (const event of w) {
             console.log('>>> event', event)
         }
+    }
+
+    private _compile(filePath: string) {
+        const rewriteImportPath = (rawPath: string): string => {
+            const regHttp = /^https?:\/\//i
+            const regNotjs = /\.(jsx|tsx?)$/i
+            let newPath = rawPath
+            if (regHttp.test(rawPath)) {
+                if (this.config.downloadRemoteModules || regNotjs.test(rawPath)) {
+                    newPath = '/-/' + rawPath.replace(regHttp, '')
+                }
+            }
+            if (regNotjs.test(rawPath)) {
+                newPath = newPath.replace(regNotjs, '') + '.js'
+            }
+            console.log(rawPath, '->', newPath)
+            return newPath
+        }
+
+        const now = performance.now()
+        const tmr = compile(filePath, this.modules.get(filePath)!.raw, { mode: this.mode, rewriteImportPath })
+        log.info('tsc', performance.now() - now, tmr.outputText)
     }
 
     async build() {
@@ -92,7 +112,7 @@ export class App {
                     }
                 }
                 const mod = await import(path.join(this.srcDir, pageModule))
-                const ret = ReactDomServer['renderToString'](
+                const ret = ReactDomServer.renderToString(
                     React.createElement(
                         RouterContext.Provider,
                         { value: new RouterState(uri) },
@@ -118,3 +138,4 @@ export class App {
         return { code, head, body }
     }
 }
+

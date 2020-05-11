@@ -3,6 +3,8 @@ import { Sha1 } from 'https://deno.land/std@v0.42.0/util/sha1.ts'
 import Head from '../../../head.tsx'
 import Link from '../../../link.tsx'
 
+const mod = await import('../../../head.tsx')
+
 export default function Home() {
     const sha1 = new Sha1()
     return (

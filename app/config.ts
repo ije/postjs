@@ -7,6 +7,7 @@ export interface AppConfig {
     readonly rootDir: string
     readonly srcDir: string
     readonly outputDir: string
+    readonly downloadRemoteModules: boolean
     readonly baseUrl: string
     readonly lang: string
     readonly locales: Map<string, Map<string, string>>
@@ -18,6 +19,7 @@ export function loadAppConfig(appDir: string) {
         rootDir: path.resolve(appDir),
         srcDir: '/',
         outputDir: '/dist',
+        downloadRemoteModules: false,
         baseUrl: '/',
         lang: 'en',
         locales: new Map()
