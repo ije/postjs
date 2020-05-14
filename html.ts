@@ -1,16 +1,21 @@
+import { base64, Sha256 } from './deps.ts'
 import util from './util.ts'
 
 export function createHtml({
     lang = 'en',
     head = [],
     scripts = [],
-    body
+    body,
+    mini = false
 }: {
     lang?: string,
     head?: string[],
     scripts?: (string | { type?: string, id?: string, src?: string, async?: boolean, innerText?: string })[],
-    body: string
+    body: string,
+    mini?: boolean
 }) {
+    const indent = mini ? '' : ' '.repeat(4)
+    const eol = mini ? '' : '\n'
     const headTags = head.map(tag => tag.trim())
         .concat(scripts.map(v => {
             if (!util.isString(v) && util.isNEString(v.src)) {
@@ -24,8 +29,7 @@ export function createHtml({
         })).filter(Boolean)
     const scriptTags = scripts.map(v => {
         if (util.isString(v)) {
-            return `<script>${v}</script>`
-            // return `<script integrity="sha256-${createHash('sha256').update(v).digest('base64')}">${v}</script>`
+            return `<script integrity="${genIntegrity(v)}">${v}</script>`
         } else if (util.isNEString(v.innerText)) {
             const { innerText, ...rest } = v
             return `<script${toAttrs(rest)}>${innerText}</script>`
@@ -36,21 +40,27 @@ export function createHtml({
         }
     }).filter(Boolean)
 
-    return `<!DOCTYPE html>
-<html lang="${lang}">
-<head>
-    <meta charSet="utf-8" />${
-        headTags.map(tag => '\n' + ' '.repeat(4) + tag).join('')
-        }
-</head>
-<body>
-    ${body}${
-        scriptTags.map(tag => '\n' + ' '.repeat(4) + tag).join('')
-        }
-</body>
-</html>`
+    return [
+        `<!DOCTYPE html>`,
+        `<html lang="${lang}">`,
+        `<head>`,
+        `${indent}<meta charSet="utf-8" />`,
+        ...headTags.map(tag => indent + tag),
+        `</head>`,
+        `<body>`,
+        indent + body,
+        ...scriptTags.map(tag => indent + tag),
+        `</body>`,
+        `</html>`
+    ].join(eol)
 }
 
 function toAttrs(v: any) {
     return Object.keys(v).map(k => ` ${k}=${JSON.stringify(String(v[k]))}`).join('')
+}
+
+function genIntegrity(v: string) {
+    const sha256 = new Sha256()
+    const arr = new Uint8Array(sha256.update(v).digest())
+    return 'sha256-' + base64.fromUint8Array(arr)
 }
