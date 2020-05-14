@@ -10,12 +10,13 @@ import { AppConfig, loadAppConfig } from './config.ts'
 export class App {
     readonly mode: 'development' | 'production'
     readonly config: AppConfig
-    readonly modules: Map<string, { hash: string, raw: string, js?: string, sourceMap?: string }>
+
+    private _modules: Map<string, { hash: string, source: string, js?: string, sourceMap?: string }>
 
     constructor(appDir: string, mode: 'development' | 'production') {
         this.mode = mode
         this.config = loadAppConfig(appDir)
-        this.modules = new Map()
+        this._modules = new Map()
         this._init()
     }
 
@@ -32,11 +33,10 @@ export class App {
                 const name = util.trimPrefix(util.trimPrefix(path, this.srcDir), '/')
                 // 10mb limit
                 if (info.size < 10 * (1 << 20)) {
-                    const raw = await Deno.readTextFile(path)
-                    const hasher = new Sha1()
-                    this.modules.set(name, { hash: hasher.update(raw).hex(), raw })
+                    const source = await Deno.readTextFile(path)
+                    this._modules.set(name, { hash: (new Sha1()).update(source).hex(), source })
                 } else {
-                    log.warn(`ignored module '${name}': too large(${(info.size / (1 << 20)).toFixed(2)}mb)`)
+                    log.error(`ignored module '${name}': too large(${(info.size / (1 << 20)).toFixed(2)}mb)`)
                 }
             }
         }
@@ -71,7 +71,7 @@ export class App {
         }
 
         const now = performance.now()
-        const tmr = compile(filePath, this.modules.get(filePath)!.raw, { mode: this.mode, rewriteImportPath })
+        const tmr = compile(filePath, this._modules.get(filePath)!.source, { mode: this.mode, rewriteImportPath })
         log.info('tsc', performance.now() - now, tmr.outputText)
     }
 
@@ -80,7 +80,7 @@ export class App {
     }
 
     async renderPage(uri: URI) {
-        const modules = Array.from(this.modules.keys())
+        const modules = Array.from(this._modules.keys())
         const appModule = modules.find(key => /^app\.(m?jsx?|tsx?)$/i.test(key))
         const pageModule = modules.find(key => {
             if (key.startsWith('pages/')) {
@@ -94,41 +94,47 @@ export class App {
         let body = '<p><strong><code>404</code></strong><small> - </small><span>page not found</span></p>'
         if (pageModule) {
             try {
-                let App = React.Fragment
-                let appStaticProps = null
-                if (appModule) {
-                    const mod = await import(path.join(this.srcDir, appModule))
-                    if (mod.default && util.isFunction(mod.default)) {
-                        const getStaticProps = mod.default.getStaticProps || mod.getStaticProps
-                        if (util.isFunction(getStaticProps)) {
-                            const props = await getStaticProps()
-                            if (util.isObject(props)) {
-                                appStaticProps = props
-                            }
-                        }
-                        App = mod.default
-                    }
-                }
                 const { default: Page, getStaticProps } = await import(path.join(this.srcDir, pageModule))
-                const gspFn = Page.getStaticProps || getStaticProps
-                const staticProps = util.isFunction(gspFn) ? await gspFn(uri) : null
-                const ret = ReactDomServer.renderToString(
-                    React.createElement(
-                        RouterContext.Provider,
-                        { value: new RouterState(uri) },
+                if (util.isFunction(Page)) {
+                    let App = React.Fragment
+                    let appStaticProps = null
+                    if (appModule) {
+                        const mod = await import(path.join(this.srcDir, appModule))
+                        if (mod.default && util.isFunction(mod.default)) {
+                            const getStaticProps = mod.default.getStaticProps || mod.getStaticProps
+                            if (util.isFunction(getStaticProps)) {
+                                const props = await getStaticProps()
+                                if (util.isObject(props)) {
+                                    appStaticProps = props
+                                }
+                            }
+                            App = mod.default
+                        }
+                    }
+                    const gspFn = Page.getStaticProps || getStaticProps
+                    const staticProps = util.isFunction(gspFn) ? await gspFn(uri) : null
+                    const ret = ReactDomServer.renderToString(
                         React.createElement(
-                            App,
-                            appStaticProps,
+                            RouterContext.Provider,
+                            { value: new RouterState(uri) },
                             React.createElement(
-                                Page,
-                                util.isObject(staticProps) ? staticProps : null
+                                App,
+                                appStaticProps,
+                                React.createElement(
+                                    Page,
+                                    util.isObject(staticProps) ? staticProps : null
+                                )
                             )
                         )
                     )
-                )
-                code = 200
-                head = renderToTags()
-                body = `<main>${ret}</main>`
+                    code = 200
+                    head = renderToTags()
+                    body = `<main>${ret}</main>`
+                } else {
+                    code = 500
+                    head = ['<title>500 - render error</title>']
+                    body = `<p><strong><code>500</code></strong><small> - </small><span>render error: missing default export</span></p>`
+                }
             } catch (err) {
                 code = 500
                 head = ['<title>500 - render error</title>']
@@ -138,4 +144,3 @@ export class App {
         return { code, head, body }
     }
 }
-

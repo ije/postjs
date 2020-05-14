@@ -15,8 +15,9 @@ export function compile(fileName: string, source: string, options: CompileOption
             module: ts.ModuleKind.ES2015,
             jsx: ts.JsxEmit.React,
             allowJs: true,
+            experimentalDecorators: true,
             alwaysStrict: true,
-            sourceMap: false
+            sourceMap: true,
         },
         transformers: {
             before: [CreateTransformer({ ...rest }), ...transformers]
