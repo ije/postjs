@@ -44,7 +44,16 @@ export default {
     cleanPath(path: string): string {
         return '/' + path
             .split('/')
+            .map(p => p.trim())
             .filter(p => p !== '' && p !== '.')
+            .reduce((path, p) => {
+                if (p === '..') {
+                    path.pop()
+                } else {
+                    path.push(p)
+                }
+                return path
+            }, [] as Array<string>)
             .join('/')
     }
 }
