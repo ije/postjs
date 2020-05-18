@@ -1,0 +1,403 @@
+import React from 'https://cdn.pika.dev/react'
+import { APIHandle } from '../api.ts'
+import { colors, existsSync, path, ReactDomServer, ServerRequest, Sha1, walk } from '../deps.ts'
+import { renderToTags } from '../head.ts'
+import { createHtml } from '../html.ts'
+import log from '../log.ts'
+import { route, RouterContext, RouterState, URI } from '../router.ts'
+import { compile } from '../ts/compile.ts'
+import util from '../util.ts'
+import { apiRequest, apiResponse } from './api.ts'
+import { AppConfig, loadAppConfig } from './config.ts'
+
+const regHttpUrl = /^https?:\/\//i
+const regModuleExt = /\.(m?jsx?|tsx?)$/i
+
+interface Module {
+    compiledJs: string,
+    sourceFile: string,
+    sourceHash: string,
+    sourceMap: string
+}
+
+export class App {
+    readonly config: AppConfig
+    readonly mode: 'development' | 'production'
+
+    private _deps: Map<string, Module> = new Map()
+    private _modules: Map<string, Module> = new Map()
+    private _apis: Map<string, APIHandle> = new Map()
+    private _pagePaths: Map<string, string> = new Map()
+    private _customApp: { Component: React.ComponentType, staticProps: any } = { Component: React.Fragment, staticProps: null }
+
+    constructor(appDir: string, mode: 'development' | 'production') {
+        this.mode = mode
+        this.config = loadAppConfig(appDir)
+        this._init()
+    }
+
+    get isDev() {
+        return this.mode === 'development'
+    }
+
+    get srcDir() {
+        const { rootDir, srcDir } = this.config
+        return path.join(rootDir, srcDir)
+    }
+
+    async getPageHtml(pathname: string, search: string): Promise<[number, string]> {
+        const uri = route(this.config.baseUrl, Array.from(this._pagePaths.keys()), { location: { pathname, search }, fallback: '/404' })
+        const { code, head, body, ssrData } = await this.renderPage(uri)
+        const html = createHtml({
+            lang: this.config.lang,
+            head: head.concat(`<meta name="postjs-head-count" content="${head.length}" />`),
+            scripts: [
+                { type: 'application/json', id: 'ssr-data', innerText: JSON.stringify(ssrData) },
+                { src: path.join(this.config.baseUrl, 'main.js') + `?t=${performance.now()}`, type: 'module' },
+            ],
+            body
+        })
+        return [code, html]
+    }
+
+    getModule(filename: string): Module | null {
+        if (filename.startsWith('/-/')) {
+            filename = util.trimPrefix(filename, '/-/')
+            if (this._deps.has(filename)) {
+                return this._deps.get(filename)!
+            }
+        } else {
+            filename = './' + util.trimPrefix(util.trimPrefix(filename, this.config.baseUrl), '/')
+            if (this._modules.has(filename)) {
+                return this._modules.get(filename)!
+            }
+        }
+        return null
+    }
+
+    callAPI(req: ServerRequest, path: string) {
+        if (this._apis.has(path)) {
+            const handle = this._apis.get(path)!
+            handle(new apiRequest(req, {}), new apiResponse(req))
+        } else {
+            req.respond({
+                status: 404,
+                headers: new Headers({ 'Content-Type': 'text/plain' }),
+                body: 'not found'
+            })
+        }
+    }
+
+    private async _init() {
+        const walkOptions = { includeDirs: false, exts: ['.js', '.jsx', '.mjs', '.ts', '.tsx'], skip: [/\.d\.ts$/i] }
+        const w1 = walk(path.join(this.srcDir), { ...walkOptions, maxDepth: 1 })
+        const w2 = walk(path.join(this.srcDir, 'pages'), walkOptions)
+        const w3 = walk(path.join(this.srcDir, 'api'), walkOptions)
+
+        for await (const { path: fp } of w1) {
+            const name = path.basename(fp)
+            if (name.split('.')[0] === 'app') {
+                const { default: Component, getStaticProps } = await import(fp)
+                if (Component && util.isFunction(Component)) {
+                    const gsp = Component.getStaticProps || getStaticProps
+                    if (util.isFunction(gsp)) {
+                        const props = await gsp()
+                        if (util.isObject(props)) {
+                            this._customApp.staticProps = props
+                        }
+                    }
+                    this._customApp.Component = Component
+                }
+            }
+            await this._compile('./' + name)
+        }
+
+        for await (const { path: fp } of w2) {
+            const name = path.basename(fp)
+            const pagePath = '/' + name.replace(regModuleExt, '').replace(/\s+/g, '-').replace(/\/?index$/i, '')
+            this._pagePaths.set(pagePath, './pages/' + name.replace(regModuleExt, '') + '.js')
+            await this._compile('./pages/' + name)
+        }
+
+        const pagePaths = Array.from(this._pagePaths.keys()).reduce((m, pagePath) => {
+            m[pagePath] = this._pagePaths.get(pagePath)!
+            return m
+        }, {} as Record<string, string>)
+        await this._compile('./main.js', `
+            import { bootstrap } from 'https://postjs.io/app.ts'
+            bootstrap({
+                baseUrl: ${JSON.stringify(this.config.baseUrl)},
+                pagePaths: ${JSON.stringify(pagePaths)},
+                hmr: ${this.isDev}
+            })
+        `)
+
+        for await (const { path: fp } of w3) {
+            const name = path.basename(fp)
+            const apiPath = '/' + name.replace(regModuleExt, '').replace(/\s+/g, '-')
+            const { default: handle } = await import(fp)
+            if (util.isFunction(handle)) {
+                this._apis.set(apiPath, handle)
+            }
+        }
+
+        log.info(colors.bold('Pages'))
+        for (const path of this._pagePaths.keys()) {
+            log.info(`▲ ${path}`, path == '/' ? '(home)' : '')
+        }
+        log.info(colors.bold('APIs'))
+        for (const path of this._apis.keys()) {
+            log.info(`λ /api${path}`)
+        }
+
+        if (this.isDev) {
+            this._watch()
+        }
+    }
+
+    private async _watch() {
+        const w = Deno.watchFs(this.srcDir, { recursive: true })
+        log.info('Start watching code changes.')
+        for await (const event of w) {
+            for (const p of event.paths) {
+                const rp = util.trimPrefix(util.trimPrefix(p, this.config.rootDir), '/')
+                if (regModuleExt.test(rp) && !rp.startsWith('.postjs') && !rp.startsWith(this.config.outputDir.slice(1))) {
+                    console.log(event.kind, './' + rp)
+                }
+            }
+        }
+    }
+
+    private async _compile(sourceFile: string, sourceCode?: string) {
+        const { baseUrl, downloadRemoteModules, rootDir, importmap } = this.config
+        const isRemote = regHttpUrl.test(sourceFile)
+        const name = path.basename(sourceFile).replace(regModuleExt, '')
+        const moduleName = sourceFile.replace(regHttpUrl, '').replace(regModuleExt, '') + '.js'
+        const cacheDir = path.join(rootDir, '.postjs', path.dirname(isRemote ? sourceFile.replace(regHttpUrl, 'deps/') : this.mode + sourceFile.slice(1)))
+        const metaCacheFile = path.join(cacheDir, `${name}.meta.json`)
+        const jsCacheFile = path.join(cacheDir, `${name}.js`)
+        const sourceMapCacheFile = path.join(cacheDir, `${name}.js.map`)
+
+        if ((isRemote && this._deps.has(moduleName)) || this._modules.has(moduleName)) {
+            return
+        }
+
+        let source = ''
+        let sourceHash = ''
+        let deps: Array<string> = []
+        let compiledJs: string = ''
+        let sourceMap: string = ''
+
+        if (existsSync(metaCacheFile) && existsSync(jsCacheFile) && existsSync(sourceMapCacheFile)) {
+            try {
+                const { sourceHash: _sourceHash, deps: _deps } = JSON.parse(Deno.readTextFileSync(metaCacheFile))
+                if (util.isNEString(_sourceHash)) {
+                    sourceHash = _sourceHash
+                    if (util.isNEArray(_deps)) {
+                        deps = _deps
+                    }
+                    compiledJs = Deno.readTextFileSync(jsCacheFile)
+                    sourceMap = Deno.readTextFileSync(sourceMapCacheFile)
+                }
+            } catch (err) {
+                sourceHash = ''
+                deps = []
+                compiledJs = ''
+                sourceMap = ''
+            }
+        }
+
+        if (isRemote) {
+            let url = sourceFile
+            if (importmap) {
+                for (const path in importmap.imports) {
+                    const alias = importmap.imports[path]
+                    if (path === url) {
+                        url = alias
+                        break
+                    } else if (path.endsWith('/') && url.startsWith(path)) {
+                        url = util.trimSuffix(alias, '/') + '/' + util.trimPrefix(url, path)
+                        break
+                    }
+                }
+            }
+            if (sourceHash === '') {
+                log.info('Download', sourceFile, url != sourceFile ? colors.dim(`• ${url}`) : '')
+                try {
+                    source = await fetch(url).then(resp => {
+                        if (resp.status == 200) {
+                            return resp.text()
+                        }
+                        return Promise.reject(new Error(`${resp.status} - ${resp.statusText}`))
+                    })
+                    sourceHash = (new Sha1()).update(source).hex()
+                } catch (err) {
+                    log.error(`Download ${sourceFile}: ${err.message}`)
+                    return
+                }
+            } else if (/^http:\/\/(localhost|127.0.0.1)(:\d+)?\//.test(url)) {
+                const text = await fetch(url).then(resp => {
+                    if (resp.status == 200) {
+                        return resp.text()
+                    }
+                    return Promise.reject(new Error(`${resp.status} - ${resp.statusText}`))
+                })
+                const hash = (new Sha1()).update(text).hex()
+                if (sourceHash !== hash) {
+                    source = text
+                    sourceHash = hash
+                }
+            }
+        } else if (sourceCode) {
+            const hash = (new Sha1()).update(sourceCode).hex()
+            if (sourceHash === '' || sourceHash !== hash) {
+                source = sourceCode
+                sourceHash = hash
+            }
+        } else {
+            const filepath = path.join(this.srcDir, sourceFile)
+            const fileinfo = await Deno.stat(filepath)
+
+            // 10mb limit
+            if (fileinfo.size > 10 * (1 << 20)) {
+                log.error(`ignored module '${sourceFile}': too large(${(fileinfo.size / (1 << 20)).toFixed(2)}mb)`)
+                return
+            }
+
+            const text = await Deno.readTextFile(filepath)
+            const hash = (new Sha1()).update(text).hex()
+            if (sourceHash === '' || sourceHash !== hash) {
+                source = text
+                sourceHash = hash
+            }
+        }
+
+        if (source !== '') {
+            deps = []
+            compiledJs = ''
+            sourceMap = ''
+
+            const rewriteImportPath = (importPath: string): string => {
+                let newImportPath: string
+                if (regHttpUrl.test(importPath)) {
+                    if (downloadRemoteModules || /\.(jsx|tsx?)$/i.test(importPath)) {
+                        newImportPath = path.join(baseUrl, importPath.replace(regHttpUrl, '-/'))
+                    } else {
+                        return importPath
+                    }
+                } else {
+                    if (isRemote) {
+                        const sourceUrl = new URL(sourceFile)
+                        let pathname = importPath
+                        if (!pathname.startsWith('/')) {
+                            pathname = path.join(path.dirname(sourceUrl.pathname), importPath)
+                        }
+                        newImportPath = path.join(baseUrl, '-', sourceUrl.host, pathname)
+                    } else {
+                        newImportPath = path.resolve(baseUrl, path.dirname(sourceFile), importPath)
+                    }
+                }
+                if (regHttpUrl.test(importPath)) {
+                    deps.push(importPath)
+                } else {
+                    if (isRemote) {
+                        const sourceUrl = new URL(sourceFile)
+                        let pathname = importPath
+                        if (!pathname.startsWith('/')) {
+                            pathname = path.join(path.dirname(sourceUrl.pathname), importPath)
+                        }
+                        deps.push(sourceUrl.protocol + '//' + sourceUrl.host + pathname)
+                    } else {
+                        deps.push('.' + path.resolve('/', path.dirname(sourceFile), importPath))
+                    }
+                }
+                return newImportPath.replace(regModuleExt, '') + '.js'
+            }
+            const t = performance.now()
+            const { diagnostics, outputText, sourceMapText } = compile(sourceFile, source, { mode: this.mode, rewriteImportPath })
+            if (diagnostics && diagnostics.length) {
+                log.warn(`compile ${sourceFile}:`, diagnostics)
+                return
+            }
+
+            compiledJs = outputText
+            sourceMap = sourceMapText!
+
+            if (!existsSync(cacheDir)) {
+                await Deno.mkdir(cacheDir, { recursive: true })
+            }
+            await Promise.all([
+                Deno.writeTextFile(metaCacheFile, JSON.stringify({
+                    sourceFile,
+                    sourceHash,
+                    deps: deps
+                })),
+                Deno.writeTextFile(jsCacheFile, outputText),
+                Deno.writeTextFile(sourceMapCacheFile, sourceMapText!)
+            ])
+
+            log.debug(`${sourceFile} compiled in ${(performance.now() - t).toFixed(3)}ms`)
+        }
+
+        const mod = { compiledJs, sourceFile, sourceHash, sourceMap }
+        if (isRemote) {
+            this._deps.set(moduleName, mod)
+        } else {
+            this._modules.set(moduleName, mod)
+        }
+
+        for (const path of deps) {
+            await this._compile(path)
+        }
+    }
+
+    async build() {
+
+    }
+
+    async renderPage(uri: URI) {
+        let code = 404
+        let head = ['<title>404 - page not found</title>']
+        let body = '<p><strong><code>404</code></strong><small> - </small><span>page not found</span></p>'
+        let ssrData: Record<string, any> = { uri }
+        if (this._pagePaths.has(uri.pagePath)) {
+            try {
+                const pageModule = this._modules.get(this._pagePaths.get(uri.pagePath)!)
+                const { Component: App, staticProps: appStaticProps } = this._customApp
+                const { default: Page, getStaticProps } = await import(path.join(this.srcDir, pageModule!.sourceFile))
+                if (util.isFunction(Page)) {
+                    const gsp = Page.getStaticProps || getStaticProps
+                    const staticProps = util.isFunction(gsp) ? await gsp(uri) : null
+                    const ret = ReactDomServer.renderToString(
+                        React.createElement(
+                            RouterContext.Provider,
+                            { value: new RouterState(uri) },
+                            React.createElement(
+                                App,
+                                appStaticProps,
+                                React.createElement(
+                                    Page,
+                                    util.isObject(staticProps) ? staticProps : null
+                                )
+                            )
+                        )
+                    )
+                    code = 200
+                    head = renderToTags()
+                    body = `<main>${ret}</main>`
+                    ssrData['staticProps'] = util.isObject(staticProps) ? staticProps : null
+                } else {
+                    code = 500
+                    head = ['<title>500 - render error</title>']
+                    body = `<p><strong><code>500</code></strong><small> - </small><span>render error: bad page component</span></p>`
+                }
+            } catch (err) {
+                code = 500
+                head = ['<title>500 - render error</title>']
+                body = `<p><strong><code>500</code></strong><small> - </small><span>render error: <pre>${err.message}</pre></span></p>`
+                log.error(err.message)
+            }
+        }
+        return { code, head, body, ssrData }
+    }
+}

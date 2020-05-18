@@ -1,14 +1,9 @@
-import { Head } from '@postjs/core'
-import React from 'react'
+import React from 'https://cdn.pika.dev/react'
 
-export default function About() {
+export default function Home() {
     return (
         <div style={{ margin: 50 }}>
-            <Head>
-                <title>The Post-Front-End Framework.</title>
-            </Head>
-            <h1>* postjs</h1>
-            <p><em>The Post-Front-End Framework.</em></p>
+            <p>The radical new Post-Front-End Framework...</p>
         </div>
     )
 }

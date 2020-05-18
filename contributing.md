@@ -1,21 +1,16 @@
 # Contributing to postjs
 
-Welcome, and thank you for taking the time in contributing to postjs!
-
+Welcome, and thank you for taking time in contributing to postjs!
 
 ## Development Setup
 
-You will need [Node.js](https://nodejs.org/) 10+
+You will need [deno](https://deno.land/) 1.0+
 
 ```bash
-# clone the code and install dependencies
+# clone the code
 $ git clone https://github.com/postui/postjs
 $ cd postjs
-$ yarn
-
-# build and watch for code changes
-$ yarn watch
 
 # run examples
-$ yarn post ./examples/hello-world/
+$ deno run --allow-read --allow-write --allow-net --unstable --importmap=./import_map.json cli.ts ./examples/hello-world/
 ```

@@ -1,0 +1,114 @@
+import { APIRequest, APIResponse } from '../api.ts'
+import { ServerRequest } from '../deps.ts'
+
+export class apiRequest implements APIRequest {
+    private _req: ServerRequest
+
+    cookies: ReadonlyMap<string, string>
+    params: ReadonlyMap<string, string>
+    query: Record<string, string | string[]>
+
+    constructor(req: ServerRequest, params: Record<string, string>) {
+        this._req = req
+
+        const paramsMap = new Map<string, string>()
+        for (const key in params) {
+            paramsMap.set(key, params[key])
+        }
+        this.params = paramsMap
+
+        // todo: parse cookies
+        this.cookies = new Map()
+
+        const qs = this.url.split('?', 2)[1] || ''
+        const q = new URLSearchParams(qs)
+        this.query = Array.from(q.keys()).reduce((query, key) => {
+            const value = q.getAll(key)
+            if (value.length === 1) {
+                query[key] = value[0]
+            } else if (value.length > 1) {
+                query[key] = value
+            }
+            return query
+        }, {} as Record<string, string | string[]>)
+    }
+
+    get url(): string {
+        return this._req.url
+    }
+
+    get method(): string {
+        return this._req.method
+    }
+
+    get proto(): string {
+        return this._req.proto
+    }
+
+    get protoMinor(): number {
+        return this._req.protoMinor
+    }
+
+    get protoMajor(): number {
+        return this._req.protoMajor
+    }
+
+    get headers(): Headers {
+        return this._req.headers
+    }
+}
+
+export class apiResponse implements APIResponse {
+    private _req: ServerRequest
+    private _headers: Headers
+    private _status: number
+
+    constructor(req: ServerRequest) {
+        this._req = req
+        this._headers = new Headers()
+        this._status = 200
+    }
+
+    status(code: number): this {
+        this._status = code
+        return this
+    }
+
+    addHeader(key: string, value: string): this {
+        this._headers.append(key, value)
+        return this
+    }
+
+    setHeader(key: string, value: string): this {
+        this._headers.set(key, value)
+        return this
+    }
+
+    removeHeader(key: string): this {
+        this._headers.delete(key)
+        return this
+    }
+
+    send(data: string | Uint8Array | ArrayBuffer): void {
+        let body: string | Uint8Array
+        if (data instanceof ArrayBuffer) {
+            body = new Uint8Array(data)
+        } else {
+            body = data
+        }
+        this._req.respond({
+            status: this._status,
+            headers: this._headers,
+            body
+        })
+    }
+
+    json(data: any): void {
+        this._headers.set('Content-Type', 'application/json')
+        this._req.respond({
+            status: this._status,
+            headers: this._headers,
+            body: JSON.stringify(data)
+        })
+    }
+}
