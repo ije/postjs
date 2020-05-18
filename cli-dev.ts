@@ -11,8 +11,8 @@ Usage:
 if the <dir> is empty, the current directory will be used.
 
 Options:
-    --port, -p  A port number to start the postjs app, default is 8080
-    --help, -h  Prints the help message
+    -p, --port  A port number to start the postjs app, default is 8080
+    -h, --help  Prints the help message
 `
 
 export default function Dev(appDir: string, options: Record<string, string | boolean>) {

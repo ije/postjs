@@ -1,19 +1,23 @@
 import React from 'https://cdn.pika.dev/react'
-import { Sha1 } from 'https://deno.land/std@v0.42.0/util/sha1.ts'
-import Head from '../../../head.tsx'
-import Link from '../../../link.tsx'
-
-const mod = await import('../../../head.tsx')
+import { Link } from 'https://postjs.io/mod.ts'
+import Logo from '../components/logo.tsx'
+import { useServerTime } from '../shared/hooks.ts'
 
 export default function Home() {
-    const sha1 = new Sha1()
+    const time = useServerTime()
+
     return (
         <div style={{ margin: 50 }}>
-            <Head>
-                <title>Welcome to use postjs!</title>
-                <meta name="hash" content={sha1.update('hello world!').hex()} />
-            </Head>
-            <p>Welcome to use <strong>postjs</strong>! <Link style={{ paddingLeft: 18 }} to="/about">&rarr;&nbsp; About</Link></p>
+            <p><Logo /></p>
+            <p>Welcome to use <strong>postjs</strong>! &nbsp; <Link to="/about">&rarr;&nbsp; About</Link></p>
+            <p>
+                {!time && (
+                    <small>loading...</small>
+                )}
+                {time && (
+                    <small>Server Time: {time}</small>
+                )}
+            </p>
         </div>
     )
 }

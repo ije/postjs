@@ -1,12 +1,7 @@
-import { typescript as ts } from '../deps.ts';
+import { typescript as ts } from '../deps.ts'
 
 export interface Transform {
-    (sf: ts.SourceFile, node: ts.Node, options: TransformOptions): ts.VisitResult<ts.Node> | null
-}
-
-export interface TransformOptions {
-    mode?: 'development' | 'production'
-    rewriteImportPath?(path: string): string
+    (sf: ts.SourceFile, node: ts.Node, ...args: any[]): ts.VisitResult<ts.Node> | null
 }
 
 function isDynamicImport(node: ts.Node): node is ts.CallExpression {
@@ -17,7 +12,7 @@ function isDynamicImport(node: ts.Node): node is ts.CallExpression {
  * TS AST transformer to rewrite import path
  * @ref https://github.com/dropbox/ts-transform-import-path-rewrite
  */
-function transformImportPath(sf: ts.SourceFile, node: ts.Node, { rewriteImportPath }: TransformOptions): ts.VisitResult<ts.Node> | null {
+export function transformImportPathRewrite(sf: ts.SourceFile, node: ts.Node, rewriteImportPath?: (importPath: string) => string): ts.VisitResult<ts.Node> | null {
     if (rewriteImportPath) {
         let importPath = ''
         if (
@@ -27,8 +22,11 @@ function transformImportPath(sf: ts.SourceFile, node: ts.Node, { rewriteImportPa
             const importPathWithQuotes = node.moduleSpecifier.getText(sf)
             importPath = importPathWithQuotes.substr(1, importPathWithQuotes.length - 2)
         } else if (isDynamicImport(node)) {
-            const importPathWithQuotes = node.arguments[0].getText(sf)
-            importPath = importPathWithQuotes.substr(1, importPathWithQuotes.length - 2)
+            const arg0Node = node.arguments[0]
+            if (ts.isStringLiteral(arg0Node)) {
+                const importPathWithQuotes = arg0Node.getText(sf)
+                importPath = importPathWithQuotes.substr(1, importPathWithQuotes.length - 2)
+            }
         } else if (
             ts.isImportTypeNode(node) &&
             ts.isLiteralTypeNode(node.argument) &&
@@ -61,8 +59,8 @@ function transformImportPath(sf: ts.SourceFile, node: ts.Node, { rewriteImportPa
  * TypeScript AST Transformer that adds source file and line number to JSX elements.
  * @ref https://github.com/dropbox/ts-transform-react-jsx-source
  */
-function transformReactJsxSource(sf: ts.SourceFile, node: ts.Node, { mode }: TransformOptions): ts.VisitResult<ts.Node> | null {
-    if (mode === 'development' && ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+export function transformReactJsxSource(sf: ts.SourceFile, node: ts.Node): ts.VisitResult<ts.Node> | null {
+    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
         const fileNameAttr = ts.createPropertyAssignment(
             'fileName',
             ts.createStringLiteral(sf.fileName)
@@ -97,18 +95,12 @@ function transformReactJsxSource(sf: ts.SourceFile, node: ts.Node, { mode }: Tra
     return null
 }
 
-export function CreateTransformer(options: TransformOptions): ts.TransformerFactory<ts.SourceFile> {
-    const transforms: Array<Transform> = [
-        transformImportPath,
-        transformReactJsxSource,
-    ]
+export function CreateTransformer(transform: Transform, ...args: any[]): ts.TransformerFactory<ts.SourceFile> {
     function nodeVisitor(ctx: ts.TransformationContext, sf: ts.SourceFile) {
         const visitor: ts.Visitor = node => {
-            for (const transform of transforms) {
-                const ret = transform(sf, node, options)
-                if (ret != null) {
-                    return ret
-                }
+            const ret = transform(sf, node, ...args)
+            if (ret != null) {
+                return ret
             }
             return ts.visitEachChild(node, visitor, ctx)
         }

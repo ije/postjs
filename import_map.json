@@ -1,0 +1,5 @@
+{
+    "imports": {
+        "https://postjs.io/": "http://localhost:9000/"
+    }
+}

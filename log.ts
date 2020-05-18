@@ -1,20 +1,20 @@
-import { fmt } from './deps.ts'
+import { colors } from './deps.ts'
 
 export default {
     debug(...args: unknown[]) {
-        console.log(colorfulTag('debug', fmt.blue), ...args)
+        console.log(colorfulTag('debug', colors.blue), ...args)
     },
     info(...args: unknown[]) {
-        console.log(colorfulTag('info', fmt.green), ...args)
+        console.log(colorfulTag('info', colors.green), ...args)
     },
     warn(...args: unknown[]) {
-        console.log(colorfulTag('warn', fmt.yellow), ...args)
+        console.log(colorfulTag('warn', colors.yellow), ...args)
     },
     error(...args: unknown[]) {
-        console.log(colorfulTag('error', fmt.red), ...args)
+        console.log(colorfulTag('error', colors.red), ...args)
     }
 }
 
 function colorfulTag(tag: string, colorful: (text: string) => string) {
-    return [fmt.dim('['), colorful(tag), fmt.dim(']')].join(' ')
+    return [colors.dim('['), colorful(tag), colors.dim(']')].join(' ')
 }

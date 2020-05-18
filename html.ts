@@ -6,16 +6,16 @@ export function createHtml({
     head = [],
     scripts = [],
     body,
-    mini = false
+    minify = false
 }: {
     lang?: string,
     head?: string[],
-    scripts?: (string | { type?: string, id?: string, src?: string, async?: boolean, innerText?: string })[],
+    scripts?: (string | { type?: string, id?: string, src?: string, async?: boolean, innerText?: string, preload?: boolean })[],
     body: string,
-    mini?: boolean
+    minify?: boolean
 }) {
-    const indent = mini ? '' : ' '.repeat(4)
-    const eol = mini ? '' : '\n'
+    const indent = minify ? '' : ' '.repeat(4)
+    const eol = minify ? '' : '\n'
     const headTags = head.map(tag => tag.trim())
         .concat(scripts.map(v => {
             if (!util.isString(v) && util.isNEString(v.src)) {
@@ -33,7 +33,7 @@ export function createHtml({
         } else if (util.isNEString(v.innerText)) {
             const { innerText, ...rest } = v
             return `<script${toAttrs(rest)}>${innerText}</script>`
-        } else if (util.isNEString(v.src)) {
+        } else if (util.isNEString(v.src) && !v.preload) {
             return `<script${toAttrs(v)}></script>`
         } else {
             return ''
@@ -41,25 +41,25 @@ export function createHtml({
     }).filter(Boolean)
 
     return [
-        `<!DOCTYPE html>`,
+        '<!DOCTYPE html>',
         `<html lang="${lang}">`,
-        `<head>`,
+        '<head>',
         `${indent}<meta charSet="utf-8" />`,
         ...headTags.map(tag => indent + tag),
-        `</head>`,
-        `<body>`,
+        '</head>',
+        '<body>',
         indent + body,
         ...scriptTags.map(tag => indent + tag),
-        `</body>`,
-        `</html>`
+        '</body>',
+        '</html>'
     ].join(eol)
 }
 
-function toAttrs(v: any) {
+function toAttrs(v: any): string {
     return Object.keys(v).map(k => ` ${k}=${JSON.stringify(String(v[k]))}`).join('')
 }
 
-function genIntegrity(v: string) {
+function genIntegrity(v: string): string {
     const sha256 = new Sha256()
     const arr = new Uint8Array(sha256.update(v).digest())
     return 'sha256-' + base64.fromUint8Array(arr)

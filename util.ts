@@ -41,8 +41,8 @@ export default {
         }
         return s
     },
-    cleanPath(path: string): string {
-        return '/' + path
+    walkPath(path: string): string[] {
+        return path
             .split('/')
             .map(p => p.trim())
             .filter(p => p !== '' && p !== '.')
@@ -54,6 +54,8 @@ export default {
                 }
                 return path
             }, [] as Array<string>)
-            .join('/')
+    },
+    cleanPath(path: string): string {
+        return '/' + this.walkPath(path).join('/')
     }
 }

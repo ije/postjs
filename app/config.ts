@@ -1,4 +1,4 @@
-import { fs, path } from '../deps.ts'
+import { existsSync, path } from '../deps.ts'
 import log from '../log.ts'
 import util from '../util.ts'
 
@@ -11,6 +11,9 @@ export interface AppConfig {
     readonly baseUrl: string
     readonly lang: string
     readonly locales: Map<string, Map<string, string>>
+    readonly importmap?: {
+        imports: Record<string, string>
+    }
 }
 
 export function loadAppConfig(appDir: string) {
@@ -18,16 +21,36 @@ export function loadAppConfig(appDir: string) {
         framework: 'react',
         rootDir: path.resolve(appDir),
         srcDir: '/',
-        outputDir: '/dist',
+        outputDir: '/out',
         downloadRemoteModules: true,
         baseUrl: '/',
         lang: 'en',
         locales: new Map()
     }
 
+    const { POSTJS_IMPORT_MAP } = globalThis as any
+    if (POSTJS_IMPORT_MAP && POSTJS_IMPORT_MAP.imports) {
+        try {
+            const { imports } = POSTJS_IMPORT_MAP
+            Object.assign(config, { importmap: { imports: Object.assign({}, config.importmap?.imports, imports) } })
+        } catch (err) {
+            log.error('bad POSTJS_IMPORT_MAP: ', err)
+        }
+    }
+
+    try {
+        const mapFile = path.join(appDir, 'import_map.json')
+        if (existsSync(mapFile)) {
+            const { imports } = JSON.parse(Deno.readTextFileSync(mapFile))
+            Object.assign(config, { importmap: { imports: Object.assign({}, config.importmap?.imports, imports) } })
+        }
+    } catch (err) {
+        log.error('bad import_map.json:', err)
+    }
+
     try {
         const configFile = path.join(appDir, 'post.config.json')
-        if (fs.existsSync(configFile)) {
+        if (existsSync(configFile)) {
             const {
                 srcDir,
                 ouputDir,
@@ -35,7 +58,7 @@ export function loadAppConfig(appDir: string) {
                 downloadRemoteModules,
                 lang,
                 locales,
-            } = fs.readJsonSync(configFile) as any
+            } = JSON.parse(Deno.readTextFileSync(configFile))
             if (util.isNEString(srcDir)) {
                 Object.assign(config, { srcDir: util.cleanPath(srcDir) })
             }
