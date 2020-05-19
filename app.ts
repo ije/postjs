@@ -31,15 +31,15 @@ export async function bootstrap({
 
     if (el) {
         const ssrData = JSON.parse(el.innerHTML)
-        if (ssrData && 'uri' in ssrData) {
+        if (ssrData && 'uri' in ssrData && ssrData.uri.pagePath in pagePaths) {
             const { uri: initialUri, staticProps } = ssrData
             const initialPageModule = util.cleanPath(baseUrl + pagePaths[initialUri.pagePath])
             const { default: InitialPageComponent } = await import(initialPageModule)
 
             Object.assign(window, {
-                __POSTJS_BASEURL: baseUrl,
-                __POSTJS_PAGEPATHS: pagePaths,
+                __POSTJS_BASE_URL: baseUrl,
                 __POSTJS_HMR: hmr,
+                __POSTJS_PAGE_PATHS: pagePaths,
                 __POSTJS_COMPONENTS: {
                     [initialPageModule]: InitialPageComponent,
                 },
@@ -104,12 +104,15 @@ function AppRouter({ baseUrl, pagePaths, initialUri, children }: React.PropsWith
 }
 
 function AppLoader() {
-    const { __POSTJS_PAGEPATHS: pagePaths = {}, __POSTJS_BASEURL = '/' } = window as any
-    const { pagePath } = useContext(RouterContext)
+    const { __POSTJS_PAGE_PATHS: pagePaths = {}, __POSTJS_SSR_DATA: ssrData = {} } = window as any
+    const { pagePath, asPath } = useContext(RouterContext)
 
     return React.createElement(
         HotComponent,
-        { path: util.cleanPath(__POSTJS_BASEURL + pagePaths[pagePath]) }
+        {
+            path: pagePaths[pagePath],
+            props: asPath in ssrData ? ssrData[asPath].staticProps : null
+        }
     )
 }
 
@@ -120,12 +123,12 @@ function HotComponent({ path, props, children }: React.PropsWithChildren<{ path:
     })
 
     React.useEffect(() => {
-        const { __POSTJS_HMR: hmr = false, __POSTJS_COMPONENTS } = window as any
+        const { __POSTJS_BASE_URL: baseUrl = '/', __POSTJS_HMR: hmr = false, __POSTJS_COMPONENTS: components } = window as any
         const update = () => {
-            import(path).then(({ default: Component }) => {
+            import(util.cleanPath(baseUrl + path)).then(({ default: Component }) => {
                 setMod({ Component })
-                if (__POSTJS_COMPONENTS) {
-                    __POSTJS_COMPONENTS[path] = Component
+                if (components) {
+                    components[path] = Component
                 }
             })
         }
