@@ -8,7 +8,7 @@ export class apiRequest implements APIRequest {
     params: ReadonlyMap<string, string>
     query: Record<string, string | string[]>
 
-    constructor(req: ServerRequest, params: Record<string, string>) {
+    constructor(req: ServerRequest, params: Record<string, string>, query: Record<string, string | string[]>) {
         this._req = req
 
         const paramsMap = new Map<string, string>()
@@ -20,17 +20,7 @@ export class apiRequest implements APIRequest {
         // todo: parse cookies
         this.cookies = new Map()
 
-        const qs = this.url.split('?', 2)[1] || ''
-        const q = new URLSearchParams(qs)
-        this.query = Array.from(q.keys()).reduce((query, key) => {
-            const value = q.getAll(key)
-            if (value.length === 1) {
-                query[key] = value[0]
-            } else if (value.length > 1) {
-                query[key] = value
-            }
-            return query
-        }, {} as Record<string, string | string[]>)
+        this.query = query
     }
 
     get url(): string {

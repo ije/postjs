@@ -4,7 +4,7 @@ import { colors, existsSync, path, ReactDomServer, ServerRequest, Sha1, walk } f
 import { renderToTags } from '../head.ts'
 import { createHtml } from '../html.ts'
 import log from '../log.ts'
-import { route, RouterContext, RouterState, URI } from '../router.ts'
+import { ILocation, route, RouterContext, RouterState, URI } from '../router.ts'
 import { compile } from '../ts/compile.ts'
 import util from '../util.ts'
 import { apiRequest, apiResponse } from './api.ts'
@@ -14,10 +14,10 @@ const regHttpUrl = /^https?:\/\//i
 const regModuleExt = /\.(m?jsx?|tsx?)$/i
 
 interface Module {
-    compiledJs: string,
-    sourceFile: string,
-    sourceHash: string,
+    sourceFile: string
+    sourceHash: string
     sourceMap: string
+    js: string
 }
 
 export class App {
@@ -45,8 +45,8 @@ export class App {
         return path.join(rootDir, srcDir)
     }
 
-    async getPageHtml(pathname: string, search: string): Promise<[number, string]> {
-        const uri = route(this.config.baseUrl, Array.from(this._pagePaths.keys()), { location: { pathname, search }, fallback: '/404' })
+    async getPageHtml(location: ILocation): Promise<[number, string]> {
+        const uri = route(this.config.baseUrl, Array.from(this._pagePaths.keys()), { location, fallback: '/404' })
         const { code, head, body, ssrData } = await this.renderPage(uri)
         const html = createHtml({
             lang: this.config.lang,
@@ -61,13 +61,14 @@ export class App {
     }
 
     getModule(filename: string): Module | null {
+        filename = '/' + util.trimPrefix(util.trimPrefix(filename, this.config.baseUrl), '/')
         if (filename.startsWith('/-/')) {
             filename = util.trimPrefix(filename, '/-/')
             if (this._deps.has(filename)) {
                 return this._deps.get(filename)!
             }
         } else {
-            filename = './' + util.trimPrefix(util.trimPrefix(filename, this.config.baseUrl), '/')
+            filename = '.' + filename
             if (this._modules.has(filename)) {
                 return this._modules.get(filename)!
             }
@@ -75,17 +76,30 @@ export class App {
         return null
     }
 
-    callAPI(req: ServerRequest, path: string) {
-        if (this._apis.has(path)) {
-            const handle = this._apis.get(path)!
-            handle(new apiRequest(req, {}), new apiResponse(req))
-        } else {
-            req.respond({
-                status: 404,
-                headers: new Headers({ 'Content-Type': 'text/plain' }),
-                body: 'not found'
-            })
+    callAPI(req: ServerRequest, location: ILocation) {
+        const { pagePath, params, query } = route(
+            this.config.baseUrl,
+            Array.from(this._apis.keys()).map(p => path.join('/api/', p)),
+            { location }
+        )
+        if (pagePath) {
+            const handle = this._apis.get(util.trimPrefix(pagePath, '/api'))!
+            handle(new apiRequest(req, params, query), new apiResponse(req))
+            return
         }
+
+        req.respond({
+            status: 404,
+            headers: new Headers({
+                'Content-Type': 'application/json'
+            }),
+            body: JSON.stringify({
+                error: {
+                    status: 404,
+                    message: 'page not found'
+                }
+            })
+        })
     }
 
     private async _init() {
@@ -185,7 +199,7 @@ export class App {
         let source = ''
         let sourceHash = ''
         let deps: Array<string> = []
-        let compiledJs: string = ''
+        let js: string = ''
         let sourceMap: string = ''
 
         if (existsSync(metaCacheFile) && existsSync(jsCacheFile) && existsSync(sourceMapCacheFile)) {
@@ -196,13 +210,13 @@ export class App {
                     if (util.isNEArray(_deps)) {
                         deps = _deps
                     }
-                    compiledJs = Deno.readTextFileSync(jsCacheFile)
+                    js = Deno.readTextFileSync(jsCacheFile)
                     sourceMap = Deno.readTextFileSync(sourceMapCacheFile)
                 }
             } catch (err) {
                 sourceHash = ''
                 deps = []
-                compiledJs = ''
+                js = ''
                 sourceMap = ''
             }
         }
@@ -274,7 +288,7 @@ export class App {
 
         if (source !== '') {
             deps = []
-            compiledJs = ''
+            js = ''
             sourceMap = ''
 
             const rewriteImportPath = (importPath: string): string => {
@@ -320,7 +334,7 @@ export class App {
                 return
             }
 
-            compiledJs = outputText
+            js = outputText
             sourceMap = sourceMapText!
 
             if (!existsSync(cacheDir)) {
@@ -339,7 +353,7 @@ export class App {
             log.debug(`${sourceFile} compiled in ${(performance.now() - t).toFixed(3)}ms`)
         }
 
-        const mod = { compiledJs, sourceFile, sourceHash, sourceMap }
+        const mod = { js, sourceFile, sourceHash, sourceMap }
         if (isRemote) {
             this._deps.set(moduleName, mod)
         } else {
@@ -394,7 +408,7 @@ export class App {
             } catch (err) {
                 code = 500
                 head = ['<title>500 - render error</title>']
-                body = `<p><strong><code>500</code></strong><small> - </small><span>render error: <pre>${err.message}</pre></span></p>`
+                body = `<p><strong><code>500</code></strong><small> - </small><span>render error: <pre>${err.message}</pre></span></p>` // todo: ansi2html
                 log.error(err.message)
             }
         }

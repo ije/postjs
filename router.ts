@@ -60,17 +60,17 @@ export function useRouter() {
     return React.useContext(RouterContext)
 }
 
-interface Location {
+export interface ILocation {
     pathname: string
     search?: string
 }
 
-export function route(base: string, pagePaths: string[], options?: { location?: Location, fallback?: string }): URI {
-    const loc: Location = (options?.location || (window as any).location)
+export function route(base: string, pagePaths: string[], options?: { location?: ILocation, fallback?: string }): URI {
+    const loc: ILocation = (options?.location || (window as any).location)
     const q = new URLSearchParams(loc.search)
 
     let pagePath = ''
-    let asPath = loc.pathname
+    let asPath = util.cleanPath(util.trimPrefix(loc.pathname, base))
     let params: Record<string, string> = {}
     let query = Array.from(q.keys()).reduce((query, key) => {
         const value = q.getAll(key)
@@ -82,14 +82,7 @@ export function route(base: string, pagePaths: string[], options?: { location?: 
         return query
     }, {} as Record<string, string | string[]>)
 
-    if (/^\/.+/.test(base)) {
-        asPath = util.trimPrefix(asPath, base)
-        if (asPath === '' || asPath.charAt(0) !== '/') {
-            asPath = '/' + asPath
-        }
-    }
-
-    // todo: sort pagePaths
+    // todo: sort pagePaths to improve preformance
     for (const routePath of pagePaths) {
         const [p, ok] = matchPath(routePath, asPath)
         if (ok) {

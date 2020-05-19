@@ -8,6 +8,7 @@ import { getContentType } from './mime.ts'
 export async function start(appDir: string, port: number) {
     const app = new App(appDir, 'development')
     const s = serve({ port })
+
     log.info(`Server ready on http://localhost:${port}`)
 
     for await (const req of s) {
@@ -17,14 +18,14 @@ export async function start(appDir: string, port: number) {
         try {
             //serve apis
             if (pathname.startsWith('/api/')) {
-                app.callAPI(req, util.trimPrefix(pathname, '/api'))
+                app.callAPI(req, { pathname, search: urlSegments[1] })
                 continue
             }
 
             // serve js files
             if (pathname.endsWith('.js') || pathname.endsWith('.js.map')) {
-                const requsetMap = pathname.endsWith('.js.map')
-                const mod = app.getModule(util.trimSuffix(pathname, '.map'))
+                const requestMap = pathname.endsWith('.js.map')
+                const mod = app.getModule(requestMap ? pathname.slice(0, -4) : pathname)
                 if (mod) {
                     const inm = req.headers.get('If-None-Match')
                     if (inm && inm === mod.sourceHash) {
@@ -36,10 +37,10 @@ export async function start(appDir: string, port: number) {
                     req.respond({
                         status: 200,
                         headers: new Headers({
-                            'Content-Type': `application/${requsetMap ? 'json' : 'javascript'}; charset=utf-8`,
+                            'Content-Type': `application/${requestMap ? 'json' : 'javascript'}; charset=utf-8`,
                             'ETag': mod.sourceHash
                         }),
-                        body: requsetMap ? mod.sourceMap : mod.compiledJs
+                        body: requestMap ? mod.sourceMap : mod.js
                     })
                     continue
                 }
@@ -61,7 +62,7 @@ export async function start(appDir: string, port: number) {
                 }
             }
 
-            const [status, html] = await app.getPageHtml(pathname, urlSegments[1])
+            const [status, html] = await app.getPageHtml({ pathname, search: urlSegments[1] })
             req.respond({
                 status,
                 headers: new Headers({
