@@ -3,13 +3,17 @@ import { Link } from 'https://postjs.io/mod.ts'
 import Logo from '../components/logo.tsx'
 import { useServerTime } from '../shared/hooks.ts'
 
-export default function Home() {
+export async function getStaticProps() {
+    return { name: 'postjs' }
+}
+
+export default function Home({ name }: { name: string }) {
     const time = useServerTime()
 
     return (
-        <div style={{ margin: 50 }}>
+        <div style={{ margin: 60 }}>
             <p><Logo /></p>
-            <p>Welcome to use <strong>postjs</strong>! &nbsp; <Link to="/about">&rarr;&nbsp; About</Link></p>
+            <p>Welcome to use <strong>{name}</strong>! &nbsp; <Link to="/about">&rarr;&nbsp; About</Link></p>
             <p>
                 {!time && (
                     <small>loading...</small>
