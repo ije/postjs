@@ -421,8 +421,6 @@ export class App {
             html = `<p><strong><code>500</code></strong><small>&nbsp;-&nbsp;</small><span>${msg}</span></p>`
             console.log(colorful(`[error] [ssr] ${msg}`, 'red'))
             console.log(colorful(error.stack, 'dim'))
-        } finally {
-            sheet.seal()
         }
 
         return {
