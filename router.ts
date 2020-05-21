@@ -1,63 +1,26 @@
 import React from 'https://cdn.pika.dev/react'
-import { events } from './app.ts'
 import util from './util.ts'
 
-export interface URI {
+export interface RouterURL {
     pagePath: string
     asPath: string
     params: Record<string, string>
     query: Record<string, string | string[]>
 }
 
-export class RouterState {
-    readonly current: URI
-    readonly prev?: URI
-    readonly sideEffect?: any
-
-    constructor(current: URI, prev?: URI, sideEffect?: any) {
-        this.current = current
-        this.prev = prev
-        this.sideEffect = sideEffect
-    }
-
-    get pagePath() {
-        return this.current.pagePath
-    }
-
-    get asPath() {
-        return this.current.asPath
-    }
-
-    get params() {
-        return this.current.params
-    }
-
-    get query() {
-        return this.current.query
-    }
-
-    push(href: string) {
-        const { history } = window as any
-        if (history) {
-            history.push(null, '', href)
-        }
-        events.emit('popstate')
-    }
-
-    replace(href: string) {
-        const { history } = window as any
-        if (history) {
-            history.replace(null, '', href)
-        }
-        events.emit('popstate')
-    }
-}
-
-export const RouterContext = React.createContext(new RouterState({ pagePath: '/', asPath: '/', params: {}, query: {} }))
+export const RouterContext = React.createContext<RouterURL>({ pagePath: '/', asPath: '/', params: {}, query: {} })
 RouterContext.displayName = 'RouterContext'
 
 export function useRouter() {
     return React.useContext(RouterContext)
+}
+
+export function withRouter(Component: React.ComponentType<{ router: RouterURL }>) {
+    function WithRouter() {
+        const router = useRouter()
+        return React.createElement(Component, { router })
+    }
+    return WithRouter
 }
 
 export interface ILocation {
@@ -65,22 +28,30 @@ export interface ILocation {
     search?: string
 }
 
-export function route(base: string, pagePaths: string[], options?: { location?: ILocation, fallback?: string }): URI {
-    const loc: ILocation = (options?.location || (window as any).location)
-    const q = new URLSearchParams(loc.search)
+export function route(base: string, pagePaths: string[], options?: { location?: ILocation, fallback?: string }): RouterURL {
+    const { pathname, search }: ILocation = (options?.location || (window as any).location || { pathname: '/' })
+    const asPath = util.cleanPath(util.trimPrefix(pathname, base))
+    const query: Record<string, string | string[]> = {}
+
+    if (search) {
+        const segs = util.trimPrefix(search, '?').split('&')
+        segs.forEach(seg => {
+            const [key, value] = util.splitBy(seg, '=')
+            if (key in query) {
+                const prevValue = query[key]
+                if (util.isArray(prevValue)) {
+                    prevValue.push(value)
+                } else {
+                    query[key] = [prevValue, value]
+                }
+            } else {
+                query[key] = value
+            }
+        })
+    }
 
     let pagePath = ''
-    let asPath = util.cleanPath(util.trimPrefix(loc.pathname, base))
     let params: Record<string, string> = {}
-    let query = Array.from(q.keys()).reduce((query, key) => {
-        const value = q.getAll(key)
-        if (value.length === 1) {
-            query[key] = value[0]
-        } else if (value.length > 1) {
-            query[key] = value
-        }
-        return query
-    }, {} as Record<string, string | string[]>)
 
     // todo: sort pagePaths to improve preformance
     for (const routePath of pagePaths) {

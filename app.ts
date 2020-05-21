@@ -1,21 +1,34 @@
-import React, { useContext } from 'https://cdn.pika.dev/react'
+import React from 'https://cdn.pika.dev/react'
 import { hydrate } from 'https://cdn.pika.dev/react-dom'
 import { EventEmitter } from './events.ts'
-import { route, RouterContext, RouterState } from './mod.ts'
-import { URI } from './router.ts'
+import { route, RouterContext, RouterURL, withRouter } from './router.ts'
 import util from './util.ts'
 
-export const events = new EventEmitter()
-events.setMaxListeners(1 << 10)
-
-export interface AppContextProps {
-    readonly locale: string
+interface Runtime {
+    baseUrl: string
+    pagePaths: Record<string, string>
+    pageComponents: Record<string, React.ComponentType>,
+    ssrData: Record<string, { staticProps: any }>,
+    hmr: boolean
+}
+const runtime: Runtime = {
+    baseUrl: '/',
+    pagePaths: {},
+    pageComponents: {},
+    ssrData: {},
+    hmr: false,
 }
 
+interface AppContextProps {
+    readonly locale: string
+}
 export const AppContext = React.createContext<AppContextProps>({
     locale: 'en'
 })
 AppContext.displayName = 'AppContext'
+
+export const events = new EventEmitter()
+events.setMaxListeners(1 << 10)
 
 export async function bootstrap({
     baseUrl = '/',
@@ -31,22 +44,23 @@ export async function bootstrap({
 
     if (el) {
         const ssrData = JSON.parse(el.innerHTML)
-        if (ssrData && 'uri' in ssrData && ssrData.uri.pagePath in pagePaths) {
-            const { uri: initialUri, staticProps } = ssrData
-            const initialPageModule = util.cleanPath(baseUrl + pagePaths[initialUri.pagePath])
-            const { default: InitialPageComponent } = await import(initialPageModule)
+        if (ssrData && 'url' in ssrData && ssrData.url.pagePath in pagePaths) {
+            const { url: initialUrl, staticProps } = ssrData
+            const InitialPageModulePath = util.cleanPath(baseUrl + pagePaths[initialUrl.pagePath])
+            const { default: InitialPageComponent } = await import(InitialPageModulePath)
 
-            Object.assign(window, {
-                __POSTJS_BASE_URL: baseUrl,
-                __POSTJS_HMR: hmr,
-                __POSTJS_PAGE_PATHS: pagePaths,
-                __POSTJS_COMPONENTS: {
-                    [initialPageModule]: InitialPageComponent,
+            InitialPageComponent.hasStaticProps = staticProps !== null
+            Object.assign(runtime, {
+                baseUrl,
+                pagePaths,
+                pageComponents: {
+                    [initialUrl.pagePath]: InitialPageComponent,
                 },
-                __POSTJS_SSR_DATA: {
-                    [initialUri.asPath]: { staticProps }
+                ssrData: {
+                    [initialUrl.asPath]: { staticProps }
                 },
-            })
+                hmr
+            } as Runtime)
 
             hydrate((
                 React.createElement(
@@ -58,8 +72,12 @@ export async function bootstrap({
                     },
                     React.createElement(
                         AppRouter,
-                        { baseUrl, initialUri, pagePaths: Object.keys(pagePaths) },
-                        React.createElement(AppLoader)
+                        {
+                            baseUrl,
+                            initialUrl,
+                            pagePaths: Object.keys(pagePaths)
+                        },
+                        React.createElement(withRouter(AppLoader))
                     )
                 )
             ), document.querySelector('main'))
@@ -67,23 +85,20 @@ export async function bootstrap({
     }
 }
 
-interface AppRouterProps {
+function AppRouter({
+    baseUrl,
+    pagePaths,
+    initialUrl,
+    children
+}: React.PropsWithChildren<{
     baseUrl: string
     pagePaths: string[]
-    initialUri: URI
-}
-
-function AppRouter({ baseUrl, pagePaths, initialUri, children }: React.PropsWithChildren<AppRouterProps>) {
-    const [state, setState] = React.useState<RouterState>(() => new RouterState(initialUri))
-    const onPopstate = React.useCallback(({ sideEffect }) => {
+    initialUrl: RouterURL
+}>) {
+    const [state, setState] = React.useState<RouterURL>(() => initialUrl)
+    const onPopstate = React.useCallback(() => {
         const next = route(baseUrl, pagePaths, { fallback: '/404' })
-        setState(prev => {
-            const { current: prevUri } = prev
-            if (next.pagePath === prevUri.pagePath && next.asPath === prevUri.asPath) {
-                return prev
-            }
-            return new RouterState(next, prevUri, sideEffect)
-        })
+        setState(next)
     }, [baseUrl, pagePaths])
 
     React.useEffect(() => {
@@ -103,54 +118,98 @@ function AppRouter({ baseUrl, pagePaths, initialUri, children }: React.PropsWith
     )
 }
 
-function AppLoader() {
-    const { __POSTJS_PAGE_PATHS: pagePaths = {}, __POSTJS_SSR_DATA: ssrData = {} } = window as any
-    const { pagePath, asPath } = useContext(RouterContext)
+function AppLoader({ router: { pagePath, asPath } }: { router: RouterURL }) {
+    const Component = React.useMemo(() => {
+        const { pageComponents } = runtime
+        return pageComponents[pagePath]
+    }, [pagePath])
+    const staticProps = React.useMemo(() => {
+        const { ssrData } = runtime
+        return ssrData[asPath]?.staticProps
+    }, [asPath])
 
-    return React.createElement(
-        HotComponent,
-        {
-            path: pagePaths[pagePath],
-            props: asPath in ssrData ? ssrData[asPath].staticProps : null
-        }
-    )
+    return React.createElement(Component, staticProps)
 }
 
-function HotComponent({ path, props, children }: React.PropsWithChildren<{ path: string, props?: Record<string, any> }>) {
-    const [mod, setMod] = React.useState<{ Component: React.ComponentType | null }>(() => {
-        let { __POSTJS_COMPONENTS = {} } = window as any
-        return { Component: __POSTJS_COMPONENTS[path] || null }
-    })
+async function importPageComponent(pagePath: string) {
+    const { baseUrl, pagePaths, pageComponents } = runtime
+    if (!(pagePath in pagePaths)) {
+        throw new Error(`invalid pagePath '${pagePath}'`)
+    }
 
-    React.useEffect(() => {
-        const { __POSTJS_BASE_URL: baseUrl = '/', __POSTJS_HMR: hmr = false, __POSTJS_COMPONENTS: components } = window as any
-        const update = () => {
-            import(util.cleanPath(baseUrl + path)).then(({ default: Component }) => {
-                setMod({ Component })
-                if (components) {
-                    components[path] = Component
-                }
-            })
+    const importPath = util.cleanPath(baseUrl + pagePaths[pagePath])
+    const { default: Component, getStaticProps } = await import(importPath)
+    const gsp = [Component.getStaticProps, getStaticProps].filter(util.isFunction)
+    Component.hasStaticProps = gsp.length > 0
+    pageComponents[pagePath] = Component
+    return Component
+}
+
+export async function prefetchPage(url: string) {
+    const { baseUrl, pagePaths, pageComponents, ssrData } = runtime
+
+    if (!url.startsWith('/')) {
+        return false
+    }
+
+    const [pathname] = url.split('?', 1)
+    const { pagePath, asPath } = route(baseUrl, Object.keys(pagePaths), { location: { pathname } })
+    if (pagePath === '') {
+        return false
+    }
+
+    let hasStaticProps = false
+    if (pagePath in pagePaths) {
+        let Component: any
+        if (!(pagePath in pageComponents)) {
+            Component = await importPageComponent(pagePath)
+        } else {
+            Component = pageComponents[pagePath]
         }
+        hasStaticProps = !!Component.hasStaticProps
+    }
 
-        if (mod.Component == null) {
-            update()
-        }
+    if (hasStaticProps && !(asPath in ssrData)) {
+        const staticProps = await fetch(asPath + '/ssr-data.json').then(resp => resp.json())
+        ssrData[asPath] = { staticProps }
+    }
 
-        if (hmr) {
-            events.on(`hmr/${path}`, update)
-        }
+    return true
+}
 
-        return () => {
-            if (hmr) {
-                events.off(`hmr/${path}`, update)
+export async function redirect(url: string, replace: boolean) {
+    const { location, document, history } = window as any
+
+    if (util.isHttpUrl(url)) {
+        location.href = url
+        return
+    }
+
+    url = util.cleanPath(url)
+    if (location.protocol === 'file:') {
+        const dataEl = document.getElementById('ssr-data')
+        if (dataEl) {
+            const ssrData = JSON.parse(dataEl.innerHTML)
+            if (ssrData && 'url' in ssrData) {
+                const { url: { pagePath: initialPagePath } } = ssrData
+                location.href = location.href.replace(
+                    '/' + (util.trimPrefix(initialPagePath, '/') || 'index') + '.html',
+                    '/' + (util.trimPrefix(url, '/') || 'index') + '.html'
+                )
             }
         }
-    }, [path])
+        return
+    }
 
-    return mod.Component ? React.createElement(
-        mod.Component,
-        props,
-        children
-    ) : null
+    const ok = await prefetchPage(url)
+    if (!ok) {
+        return
+    }
+
+    if (replace) {
+        history.replaceState(null, '', url)
+    } else {
+        history.pushState(null, '', url)
+    }
+    events.emit('popstate', { type: 'popstate' })
 }

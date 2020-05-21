@@ -29,6 +29,9 @@ export default {
     isFunction(a: any): a is Function {
         return typeof a === 'function'
     },
+    isHttpUrl(url: string) {
+        return url.startsWith('http://') || url.startsWith('https://')
+    },
     trimPrefix(s: string, prefix: string): string {
         if (prefix !== '' && s.startsWith(prefix)) {
             return s.slice(prefix.length)
@@ -40,6 +43,13 @@ export default {
             return s.slice(0, -suffix.length)
         }
         return s
+    },
+    splitBy(s: string, splitter: string): [string, string] {
+        const i = s.indexOf(splitter)
+        if (i >= 0) {
+            return [s.slice(0, i), s.slice(i + 1)]
+        }
+        return [s, '']
     },
     walkPath(path: string): string[] {
         return path

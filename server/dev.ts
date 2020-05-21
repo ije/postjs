@@ -12,13 +12,13 @@ export async function start(appDir: string, port: number) {
     log.info(`Server ready on http://localhost:${port}`)
 
     for await (const req of s) {
-        const urlSegments = req.url.split('?', 2)
-        const pathname = util.cleanPath(urlSegments[0])
+        let [pathname, search] = util.splitBy(req.url, '?')
+        pathname = util.cleanPath(pathname)
 
         try {
             //serve apis
             if (pathname.startsWith('/api/')) {
-                app.callAPI(req, { pathname, search: urlSegments[1] })
+                app.callAPI(req, { pathname, search })
                 continue
             }
 
@@ -62,7 +62,7 @@ export async function start(appDir: string, port: number) {
                 }
             }
 
-            const [status, html] = await app.getPageHtml({ pathname, search: urlSegments[1] })
+            const [status, html] = await app.getPageHtml({ pathname, search })
             req.respond({
                 status,
                 headers: new Headers({
