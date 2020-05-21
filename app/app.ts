@@ -1,23 +1,24 @@
 import React from 'https://cdn.pika.dev/react'
 import { APIHandle } from '../api.ts'
+import { AppContext } from '../app.ts'
 import { colors, existsSync, path, ReactDomServer, ServerRequest, Sha1, walk } from '../deps.ts'
 import { renderToTags } from '../head.ts'
 import { createHtml } from '../html.ts'
 import log from '../log.ts'
-import { route, RouterContext, RouterState, URI } from '../router.ts'
+import { ILocation, route, RouterContext, RouterURL } from '../router.ts'
 import { compile } from '../ts/compile.ts'
 import util from '../util.ts'
 import { apiRequest, apiResponse } from './api.ts'
 import { AppConfig, loadAppConfig } from './config.ts'
 
-const regHttpUrl = /^https?:\/\//i
+const regHttp = /^https?:\/\//i
 const regModuleExt = /\.(m?jsx?|tsx?)$/i
 
 interface Module {
-    compiledJs: string,
-    sourceFile: string,
-    sourceHash: string,
+    sourceFile: string
+    sourceHash: string
     sourceMap: string
+    js: string
 }
 
 export class App {
@@ -45,29 +46,46 @@ export class App {
         return path.join(rootDir, srcDir)
     }
 
-    async getPageHtml(pathname: string, search: string): Promise<[number, string]> {
-        const uri = route(this.config.baseUrl, Array.from(this._pagePaths.keys()), { location: { pathname, search }, fallback: '/404' })
-        const { code, head, body, ssrData } = await this.renderPage(uri)
+    async getPageHtml(location: ILocation, locale?: string): Promise<[number, string]> {
+        const { lang, baseUrl } = this.config
+        const url = route(baseUrl, Array.from(this._pagePaths.keys()), { location, fallback: '/404' })
+        const { code, head, body, ssrData } = await this.renderPage(url, locale || lang)
         const html = createHtml({
-            lang: this.config.lang,
-            head: head.concat(`<meta name="postjs-head-count" content="${head.length}" />`),
+            lang: locale || lang,
+            head: head.concat(`<meta name="postjs-head-size" content="${head.length}" />`),
             scripts: [
                 { type: 'application/json', id: 'ssr-data', innerText: JSON.stringify(ssrData) },
-                { src: path.join(this.config.baseUrl, 'main.js') + `?t=${performance.now()}`, type: 'module' },
+                { src: path.join(baseUrl, 'main.js') + `?t=${performance.now()}`, type: 'module' },
             ],
             body
         })
         return [code, html]
     }
 
+    async getPageStaticProps(location: ILocation, locale?: string): Promise<any> {
+        const { lang, baseUrl } = this.config
+        const url = route(baseUrl, Array.from(this._pagePaths.keys()), { location, fallback: '/404' })
+        if (this._pagePaths.has(url.pagePath)) {
+            const pageModule = this._modules.get(this._pagePaths.get(url.pagePath)!)!
+            const { default: Page, getStaticProps } = await import(path.join(this.srcDir, pageModule.sourceFile))
+            if (util.isFunction(Page)) {
+                const gsp = [Page.getStaticProps, getStaticProps].filter(util.isFunction)[0]
+                const staticProps = gsp ? await gsp(url, locale || lang) : null
+                return util.isObject(staticProps) ? staticProps : null
+            }
+        }
+        return null
+    }
+
     getModule(filename: string): Module | null {
+        filename = '/' + util.trimPrefix(util.trimPrefix(filename, this.config.baseUrl), '/')
         if (filename.startsWith('/-/')) {
             filename = util.trimPrefix(filename, '/-/')
             if (this._deps.has(filename)) {
                 return this._deps.get(filename)!
             }
         } else {
-            filename = './' + util.trimPrefix(util.trimPrefix(filename, this.config.baseUrl), '/')
+            filename = '.' + filename
             if (this._modules.has(filename)) {
                 return this._modules.get(filename)!
             }
@@ -75,17 +93,30 @@ export class App {
         return null
     }
 
-    callAPI(req: ServerRequest, path: string) {
-        if (this._apis.has(path)) {
-            const handle = this._apis.get(path)!
-            handle(new apiRequest(req, {}), new apiResponse(req))
-        } else {
-            req.respond({
-                status: 404,
-                headers: new Headers({ 'Content-Type': 'text/plain' }),
-                body: 'not found'
-            })
+    callAPI(req: ServerRequest, location: ILocation) {
+        const { pagePath, params, query } = route(
+            this.config.baseUrl,
+            Array.from(this._apis.keys()).map(p => path.join('/api/', p)),
+            { location }
+        )
+        if (pagePath) {
+            const handle = this._apis.get(util.trimPrefix(pagePath, '/api'))!
+            handle(new apiRequest(req, params, query), new apiResponse(req))
+            return
         }
+
+        req.respond({
+            status: 404,
+            headers: new Headers({
+                'Content-Type': 'application/json'
+            }),
+            body: JSON.stringify({
+                error: {
+                    status: 404,
+                    message: 'page not found'
+                }
+            })
+        })
     }
 
     private async _init() {
@@ -99,8 +130,8 @@ export class App {
             if (name.split('.')[0] === 'app') {
                 const { default: Component, getStaticProps } = await import(fp)
                 if (Component && util.isFunction(Component)) {
-                    const gsp = Component.getStaticProps || getStaticProps
-                    if (util.isFunction(gsp)) {
+                    const gsp = [Component.getStaticProps, getStaticProps].filter(util.isFunction)[0]
+                    if (gsp) {
                         const props = await gsp()
                         if (util.isObject(props)) {
                             this._customApp.staticProps = props
@@ -170,10 +201,10 @@ export class App {
 
     private async _compile(sourceFile: string, sourceCode?: string) {
         const { baseUrl, downloadRemoteModules, rootDir, importmap } = this.config
-        const isRemote = regHttpUrl.test(sourceFile)
+        const isRemote = regHttp.test(sourceFile)
         const name = path.basename(sourceFile).replace(regModuleExt, '')
-        const moduleName = sourceFile.replace(regHttpUrl, '').replace(regModuleExt, '') + '.js'
-        const cacheDir = path.join(rootDir, '.postjs', path.dirname(isRemote ? sourceFile.replace(regHttpUrl, 'deps/') : this.mode + sourceFile.slice(1)))
+        const moduleName = sourceFile.replace(regHttp, '').replace(regModuleExt, '') + '.js'
+        const cacheDir = path.join(rootDir, '.postjs', path.dirname(isRemote ? sourceFile.replace(regHttp, 'deps/') : this.mode + sourceFile.slice(1)))
         const metaCacheFile = path.join(cacheDir, `${name}.meta.json`)
         const jsCacheFile = path.join(cacheDir, `${name}.js`)
         const sourceMapCacheFile = path.join(cacheDir, `${name}.js.map`)
@@ -185,7 +216,7 @@ export class App {
         let source = ''
         let sourceHash = ''
         let deps: Array<string> = []
-        let compiledJs: string = ''
+        let js: string = ''
         let sourceMap: string = ''
 
         if (existsSync(metaCacheFile) && existsSync(jsCacheFile) && existsSync(sourceMapCacheFile)) {
@@ -196,13 +227,13 @@ export class App {
                     if (util.isNEArray(_deps)) {
                         deps = _deps
                     }
-                    compiledJs = Deno.readTextFileSync(jsCacheFile)
+                    js = Deno.readTextFileSync(jsCacheFile)
                     sourceMap = Deno.readTextFileSync(sourceMapCacheFile)
                 }
             } catch (err) {
                 sourceHash = ''
                 deps = []
-                compiledJs = ''
+                js = ''
                 sourceMap = ''
             }
         }
@@ -274,14 +305,14 @@ export class App {
 
         if (source !== '') {
             deps = []
-            compiledJs = ''
+            js = ''
             sourceMap = ''
 
             const rewriteImportPath = (importPath: string): string => {
                 let newImportPath: string
-                if (regHttpUrl.test(importPath)) {
+                if (regHttp.test(importPath)) {
                     if (downloadRemoteModules || /\.(jsx|tsx?)$/i.test(importPath)) {
-                        newImportPath = path.join(baseUrl, importPath.replace(regHttpUrl, '-/'))
+                        newImportPath = path.join(baseUrl, importPath.replace(regHttp, '-/'))
                     } else {
                         return importPath
                     }
@@ -297,7 +328,7 @@ export class App {
                         newImportPath = path.resolve(baseUrl, path.dirname(sourceFile), importPath)
                     }
                 }
-                if (regHttpUrl.test(importPath)) {
+                if (regHttp.test(importPath)) {
                     deps.push(importPath)
                 } else {
                     if (isRemote) {
@@ -320,7 +351,7 @@ export class App {
                 return
             }
 
-            compiledJs = outputText
+            js = outputText
             sourceMap = sourceMapText!
 
             if (!existsSync(cacheDir)) {
@@ -339,7 +370,7 @@ export class App {
             log.debug(`${sourceFile} compiled in ${(performance.now() - t).toFixed(3)}ms`)
         }
 
-        const mod = { compiledJs, sourceFile, sourceHash, sourceMap }
+        const mod = { js, sourceFile, sourceHash, sourceMap }
         if (isRemote) {
             this._deps.set(moduleName, mod)
         } else {
@@ -355,49 +386,59 @@ export class App {
 
     }
 
-    async renderPage(uri: URI) {
-        let code = 404
-        let head = ['<title>404 - page not found</title>']
-        let body = '<p><strong><code>404</code></strong><small> - </small><span>page not found</span></p>'
-        let ssrData: Record<string, any> = { uri }
-        if (this._pagePaths.has(uri.pagePath)) {
+    async renderPage(url: RouterURL, locale = 'en') {
+        const ret = {
+            code: 404,
+            head: ['<title>404 - page not found</title>'],
+            body: '<p><strong><code>404</code></strong><small> - </small><span>page not found</span></p>',
+            ssrData: { url, locale, staticProps: null as any },
+        }
+        if (this._pagePaths.has(url.pagePath)) {
             try {
-                const pageModule = this._modules.get(this._pagePaths.get(uri.pagePath)!)
-                const { Component: App, staticProps: appStaticProps } = this._customApp
-                const { default: Page, getStaticProps } = await import(path.join(this.srcDir, pageModule!.sourceFile))
+                const pageModule = this._modules.get(this._pagePaths.get(url.pagePath)!)!
+                const { default: Page, getStaticProps } = await import(path.join(this.srcDir, pageModule.sourceFile))
                 if (util.isFunction(Page)) {
-                    const gsp = Page.getStaticProps || getStaticProps
-                    const staticProps = util.isFunction(gsp) ? await gsp(uri) : null
-                    const ret = ReactDomServer.renderToString(
+                    const gsp = [Page.getStaticProps, getStaticProps].filter(util.isFunction)[0]
+                    const staticProps = gsp ? await gsp(url, locale) : null
+                    const html = ReactDomServer.renderToString(
                         React.createElement(
-                            RouterContext.Provider,
-                            { value: new RouterState(uri) },
+                            AppContext.Provider,
+                            {
+                                value: {
+                                    locale
+                                }
+                            },
                             React.createElement(
-                                App,
-                                appStaticProps,
+                                RouterContext.Provider,
+                                { value: url },
                                 React.createElement(
-                                    Page,
-                                    util.isObject(staticProps) ? staticProps : null
+                                    this._customApp.Component,
+                                    this._customApp.staticProps,
+                                    React.createElement(
+                                        Page,
+                                        util.isObject(staticProps) ? staticProps : null
+                                    )
                                 )
                             )
                         )
                     )
-                    code = 200
-                    head = renderToTags()
-                    body = `<main>${ret}</main>`
-                    ssrData['staticProps'] = util.isObject(staticProps) ? staticProps : null
+                    ret.code = 200
+                    ret.head = renderToTags()
+                    ret.body = `<main>${html}</main>`
+                    ret.ssrData.staticProps = util.isObject(staticProps) ? staticProps : null
                 } else {
-                    code = 500
-                    head = ['<title>500 - render error</title>']
-                    body = `<p><strong><code>500</code></strong><small> - </small><span>render error: bad page component</span></p>`
+                    ret.code = 500
+                    ret.head = ['<title>500 - render error</title>']
+                    ret.body = `<p><strong><code>500</code></strong><small> - </small><span>render error: bad page component</span></p>`
                 }
             } catch (err) {
-                code = 500
-                head = ['<title>500 - render error</title>']
-                body = `<p><strong><code>500</code></strong><small> - </small><span>render error: <pre>${err.message}</pre></span></p>`
+                ret.code = 500
+                ret.head = ['<title>500 - render error</title>']
+                ret.body = `<p><strong><code>500</code></strong><small> - </small><span>render error: <pre>${err.message}</pre></span></p>` // todo: ansi2html
                 log.error(err.message)
+                console.log(err)
             }
         }
-        return { code, head, body, ssrData }
+        return ret
     }
 }
