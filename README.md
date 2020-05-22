@@ -1,8 +1,8 @@
-# Postjs
-The radical new Front-End Framework with [deno](https://deno.land).
+# postjs
+The radical new Front-End Framework in [deno](https://deno.land).
 
-## Documentation
+### Documentation
 Please visit https://postjs.io/docs to view the documentation.
 
-## Contributing
+### Contributing
 Please read the [CONTRIBUTING.md](CONTRIBUTING.md).
