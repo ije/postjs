@@ -1,4 +1,5 @@
-import { typescript as ts } from '../deps.ts'
+// @deno-types="../npm/typescript/typescript.d.ts"
+import ts from '../npm/typescript/typescript.js'
 
 export interface Transform {
     (sf: ts.SourceFile, node: ts.Node, ...args: any[]): ts.VisitResult<ts.Node> | null
@@ -10,7 +11,8 @@ function isDynamicImport(node: ts.Node): node is ts.CallExpression {
 
 /**
  * TS AST transformer to rewrite import path
- * @ref https://github.com/dropbox/ts-transform-import-path-rewrite
+ *
+ * @link https://github.com/dropbox/ts-transform-import-path-rewrite
  */
 export function transformImportPathRewrite(sf: ts.SourceFile, node: ts.Node, rewriteImportPath?: (importPath: string) => string): ts.VisitResult<ts.Node> | null {
     if (rewriteImportPath) {
@@ -22,9 +24,9 @@ export function transformImportPathRewrite(sf: ts.SourceFile, node: ts.Node, rew
             const importPathWithQuotes = node.moduleSpecifier.getText(sf)
             importPath = importPathWithQuotes.substr(1, importPathWithQuotes.length - 2)
         } else if (isDynamicImport(node)) {
-            const arg0Node = node.arguments[0]
-            if (ts.isStringLiteral(arg0Node)) {
-                const importPathWithQuotes = arg0Node.getText(sf)
+            const arg0 = node.arguments[0]
+            if (ts.isStringLiteral(arg0)) {
+                const importPathWithQuotes = arg0.getText(sf)
                 importPath = importPathWithQuotes.substr(1, importPathWithQuotes.length - 2)
             }
         } else if (
@@ -57,7 +59,8 @@ export function transformImportPathRewrite(sf: ts.SourceFile, node: ts.Node, rew
 
 /**
  * TypeScript AST Transformer that adds source file and line number to JSX elements.
- * @ref https://github.com/dropbox/ts-transform-react-jsx-source
+ *
+ * @link https://github.com/dropbox/ts-transform-react-jsx-source
  */
 export function transformReactJsxSource(sf: ts.SourceFile, node: ts.Node): ts.VisitResult<ts.Node> | null {
     if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {

@@ -1,4 +1,5 @@
-import { typescript as ts } from '../deps.ts'
+// @deno-types="../npm/typescript/typescript.d.ts"
+import ts from '../npm/typescript/typescript.js'
 import { CreateTransformer, transformImportPathRewrite, transformReactJsxSource } from './transformer.ts'
 
 export interface CompileOptions {
@@ -18,6 +19,7 @@ export function compile(fileName: string, source: string, { mode, rewriteImportP
     if (rewriteImportPath) {
         transformers.after!.push(CreateTransformer(transformImportPathRewrite, rewriteImportPath))
     }
+
     return ts.transpileModule(source, {
         reportDiagnostics: true,
         fileName,
