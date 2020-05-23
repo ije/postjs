@@ -1,4 +1,4 @@
-import React from 'https://cdn.pika.dev/react';
+import React from 'react';
 /** @license React v16.13.1
  * react-dom-server.browser.production.min.js
  *

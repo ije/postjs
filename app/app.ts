@@ -1,4 +1,4 @@
-import React from 'https://cdn.pika.dev/react'
+import React from 'react'
 import { APIHandle } from '../api.ts'
 import { AppContext } from '../app.ts'
 import { colors, existsSync, path, ServerRequest, Sha1, walk } from '../deps.ts'
@@ -25,6 +25,7 @@ interface Module {
 export class App {
     readonly config: AppConfig
     readonly mode: 'development' | 'production'
+    readonly ready: Promise<void>
 
     private _apis: Map<string, APIHandle> = new Map()
     private _deps: Map<string, Module> = new Map()
@@ -35,7 +36,9 @@ export class App {
     constructor(appDir: string, mode: 'development' | 'production') {
         this.mode = mode
         this.config = loadAppConfig(appDir)
-        this._init()
+        this.ready = new Promise((resolve, reject) => {
+            this._init().then(resolve).catch(reject)
+        })
     }
 
     get isDev() {
@@ -45,6 +48,11 @@ export class App {
     get srcDir() {
         const { rootDir, srcDir } = this.config
         return path.join(rootDir, srcDir)
+    }
+
+
+    async build() {
+
     }
 
     async getPageHtml(location: ILocation, locale?: string): Promise<[number, string]> {
@@ -108,9 +116,7 @@ export class App {
 
         req.respond({
             status: 404,
-            headers: new Headers({
-                'Content-Type': 'application/json'
-            }),
+            headers: new Headers({ 'Content-Type': 'application/json' }),
             body: JSON.stringify({
                 error: {
                     status: 404,
@@ -128,7 +134,7 @@ export class App {
 
         for await (const { path: fp } of w1) {
             const name = path.basename(fp)
-            if (name.split('.')[0] === 'app') {
+            if (name.replace(regModuleExt, '') === 'app') {
                 const { default: Component, getStaticProps } = await import(fp)
                 if (Component && util.isFunction(Component)) {
                     const gsp = [Component.getStaticProps, getStaticProps].filter(util.isFunction)[0]
@@ -140,8 +146,8 @@ export class App {
                     }
                     this._customApp.Component = Component
                 }
+                await this._compile('./' + name)
             }
-            await this._compile('./' + name)
         }
 
         for await (const { path: fp } of w2) {
@@ -172,11 +178,11 @@ export class App {
 
         log.info(colors.bold('Pages'))
         for (const path in this._pageModules) {
-            log.info(`▲ ${path}`, path == '/' ? '(home)' : '')
+            const index = path == '/'
+            log.info(index ? '⚑' : '▲', path, index ? colors.dim('(index)') : '')
         }
-        log.info(colors.bold('APIs'))
         for (const path of this._apis.keys()) {
-            log.info(`λ /api${path}`)
+            log.info('λ', `/api${path}`)
         }
 
         if (this.isDev) {
@@ -186,7 +192,7 @@ export class App {
 
     private async _watch() {
         const w = Deno.watchFs(this.srcDir, { recursive: true })
-        log.info('Start watching code changes.')
+        log.info('Start watching code changes...')
         for await (const event of w) {
             for (const p of event.paths) {
                 const rp = util.trimPrefix(util.trimPrefix(p, this.config.rootDir), '/')
@@ -238,16 +244,14 @@ export class App {
 
         if (isRemote) {
             let url = sourceFile
-            if (importMap) {
-                for (const path in importMap.imports) {
-                    const alias = importMap.imports[path]
-                    if (path === url) {
-                        url = alias
-                        break
-                    } else if (path.endsWith('/') && url.startsWith(path)) {
-                        url = util.trimSuffix(alias, '/') + '/' + util.trimPrefix(url, path)
-                        break
-                    }
+            for (const path in importMap.imports) {
+                const alias = importMap.imports[path]
+                if (path === url) {
+                    url = alias
+                    break
+                } else if (path.endsWith('/') && url.startsWith(path)) {
+                    url = util.trimSuffix(alias, '/') + '/' + util.trimPrefix(url, path)
+                    break
                 }
             }
             if (sourceHash === '') {
@@ -308,6 +312,9 @@ export class App {
 
             const rewriteImportPath = (importPath: string): string => {
                 let newImportPath: string
+                if (importPath in importMap.imports) {
+                    importPath = importMap.imports[importPath]
+                }
                 if (regHttp.test(importPath)) {
                     if (cacheDeps || /\.(jsx|tsx?)$/i.test(importPath)) {
                         newImportPath = path.join(baseUrl, importPath.replace(regHttp, '-/'))
@@ -375,16 +382,12 @@ export class App {
             this._modules.set(moduleName, mod)
         }
 
-        for (const path of deps) {
+        for (let path of deps) {
             await this._compile(path)
         }
     }
 
-    async build() {
-
-    }
-
-    async _renderPage(url: RouterURL, locale = 'en') {
+    private async _renderPage(url: RouterURL, locale: string) {
         const ret = {
             code: 404,
             head: ['<title>404 - page not found</title>'],
@@ -432,9 +435,8 @@ export class App {
             } catch (err) {
                 ret.code = 500
                 ret.head = ['<title>500 - render error</title>']
-                ret.body = `<p><strong><code>500</code></strong><small> - </small><span>render error: <pre>${err.message}</pre></span></p>` // todo: ansi2html
+                ret.body = `<pre>${err.message}</pre>`
                 log.error(err.message)
-                console.log(err)
             }
         }
         return ret

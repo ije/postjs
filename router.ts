@@ -1,4 +1,4 @@
-import React from 'https://cdn.pika.dev/react'
+import React from 'react'
 import util from './util.ts'
 
 export interface RouterURL {

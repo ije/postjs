@@ -1,5 +1,5 @@
-import React from 'https://cdn.pika.dev/react'
-import { hydrate } from 'https://cdn.pika.dev/react-dom'
+import React from 'react'
+import { hydrate } from 'react-dom'
 import { EventEmitter } from './events.ts'
 import { route, RouterContext, RouterURL, withRouter } from './router.ts'
 import util from './util.ts'
@@ -194,8 +194,8 @@ export async function redirect(url: string, replace: boolean) {
             if (ssrData && 'url' in ssrData) {
                 const { url: { pagePath: initialPagePath } } = ssrData
                 location.href = location.href.replace(
-                    '/' + (util.trimPrefix(initialPagePath, '/') || 'index') + '.html',
-                    '/' + (util.trimPrefix(url, '/') || 'index') + '.html'
+                    `/${util.trimPrefix(initialPagePath, '/') || 'index'}.html`,
+                    `/${util.trimPrefix(url, '/') || 'index'}.html`
                 )
             }
         }

@@ -4,7 +4,7 @@ import log from './log.ts'
 import { getContentType } from './server/mime.ts'
 import { version } from './version.ts'
 
-const commands = ['dev', 'build', 'start', 'export', 'fetch']
+const commands = ['init', 'dev', 'build', 'start', 'export', 'fetch']
 const helpMessage = `postjs v${version}
 The radical new Front-End Framework with deno.
 

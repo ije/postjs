@@ -1,4 +1,4 @@
-import React, { Fragment, PropsWithChildren } from 'https://cdn.pika.dev/react'
+import React, { Fragment, PropsWithChildren } from 'react'
 
 export default function App({ children }: PropsWithChildren<{}>) {
     return (

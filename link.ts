@@ -1,4 +1,4 @@
-import React, { Children, cloneElement, isValidElement, useCallback, useEffect, useMemo, useRef } from 'https://cdn.pika.dev/react'
+import React, { Children, cloneElement, CSSProperties, isValidElement, MouseEvent, PropsWithChildren, useCallback, useEffect, useMemo, useRef } from 'react'
 import { prefetchPage, redirect } from './app.ts'
 import { useRouter } from './router.ts'
 import util from './util.ts'
@@ -8,7 +8,7 @@ interface LinkProps {
     replace?: boolean
     prefetch?: boolean
     className?: string
-    style?: React.CSSProperties
+    style?: CSSProperties
 }
 
 export default function Link({
@@ -18,7 +18,7 @@ export default function Link({
     className,
     style,
     children
-}: React.PropsWithChildren<LinkProps>) {
+}: PropsWithChildren<LinkProps>) {
     const { asPath: currentPath, query: currentQuery } = useRouter()
     const currentHref = useMemo(() => {
         return [currentPath, Object.entries(currentQuery).map(([key, value]) => {
@@ -33,23 +33,24 @@ export default function Link({
             return to
         }
         let [pathname, search] = util.splitBy(to, '?')
-        if (to.startsWith('/')) {
+        if (pathname.startsWith('/')) {
             pathname = util.cleanPath(pathname)
         } else {
             pathname = util.cleanPath(currentPath + '/' + pathname)
         }
         return [pathname, search].filter(Boolean).join('?')
     }, [currentPath, to])
-    const prefetchStatus = useRef(0)
+    const prefetchStatus = useRef('')
     const prefetch = useCallback(() => {
-        if (prefetchStatus.current == 0 && !util.isHttpUrl(href) && href !== currentHref) {
-            prefetchStatus.current = 1
+        if (prefetchStatus.current != href && !util.isHttpUrl(href) && href !== currentHref) {
+            prefetchStatus.current = href
             prefetchPage(href)
         }
     }, [href, currentHref])
-    const onClick = useCallback((e: React.MouseEvent) => {
+    const onClick = useCallback((e: MouseEvent) => {
         e.preventDefault()
         if (href !== currentHref) {
+            // todo: add loading progress ui
             redirect(href, replace)
         }
     }, [href, currentHref, replace])
@@ -70,7 +71,7 @@ export default function Link({
                 style: Object.assign({}, style, props.style),
                 href,
                 'aria-current': props['aria-current'] || 'page',
-                onClick: (e: React.MouseEvent) => {
+                onClick: (e: MouseEvent) => {
                     if (util.isFunction(props.onClick)) {
                         props.onClick(e)
                     }
@@ -78,7 +79,7 @@ export default function Link({
                         onClick(e)
                     }
                 },
-                onMouseEnter: (e: React.MouseEvent) => {
+                onMouseEnter: (e: MouseEvent) => {
                     if (util.isFunction(props.onMouseEnter)) {
                         props.onMouseEnter(e)
                     }

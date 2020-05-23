@@ -1,5 +1,5 @@
-import React from 'https://cdn.pika.dev/react'
 import { Link } from 'https://postjs.io/mod.ts'
+import React from 'react'
 import Logo from '../components/logo.tsx'
 import { useServerTime } from '../shared/hooks.ts'
 

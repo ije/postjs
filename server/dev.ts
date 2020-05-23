@@ -1,5 +1,5 @@
 import { App } from '../app/app.ts'
-import { existsSync, path, serve } from '../deps.ts'
+import { existsSync, path, serve, ws } from '../deps.ts'
 import { createHtml } from '../html.ts'
 import log from '../log.ts'
 import util from '../util.ts'
@@ -7,15 +7,25 @@ import { getContentType } from './mime.ts'
 
 export async function start(appDir: string, port: number) {
     const app = new App(appDir, 'development')
+    await app.ready
+
     const s = serve({ port })
-
     log.info(`Server ready on http://localhost:${port}`)
-
     for await (const req of s) {
         let [pathname, search] = util.splitBy(req.url, '?')
         pathname = util.cleanPath(pathname)
 
         try {
+            if (pathname.startsWith('/_hmr')) {
+                const socket = ws.createWebSocket({ conn: req.conn })
+                for await (const e of socket) {
+                    if (ws.isWebSocketCloseEvent(e)) {
+
+                    }
+                }
+                continue
+            }
+
             //serve apis
             if (pathname.startsWith('/api/')) {
                 app.callAPI(req, { pathname, search })
@@ -53,9 +63,7 @@ export async function start(appDir: string, port: number) {
                     const body = await Deno.readFile(filePath)
                     req.respond({
                         status: 200,
-                        headers: new Headers({
-                            'Content-Type': getContentType(filePath)
-                        }),
+                        headers: new Headers({ 'Content-Type': getContentType(filePath) }),
                         body
                     })
                     continue
@@ -65,9 +73,7 @@ export async function start(appDir: string, port: number) {
             const [status, html] = await app.getPageHtml({ pathname, search })
             req.respond({
                 status,
-                headers: new Headers({
-                    'Content-Type': 'text/html'
-                }),
+                headers: new Headers({ 'Content-Type': 'text/html' }),
                 body: html
             })
         } catch (err) {
@@ -75,7 +81,7 @@ export async function start(appDir: string, port: number) {
                 status: 500,
                 headers: new Headers({ 'Content-Type': 'text/html' }),
                 body: createHtml({
-                    lang: app.config.lang,
+                    lang: 'en',
                     head: ['<title>500 - internal server error</title>'],
                     body: `<p><strong><code>500</code></strong><small> - </small><span>${err.message}</span></p>`
                 })
