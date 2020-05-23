@@ -1,4 +1,4 @@
-import React, { Children, cloneElement, isValidElement, useCallback, useEffect, useMemo } from 'https://cdn.pika.dev/react'
+import React, { Children, cloneElement, isValidElement, useCallback, useEffect, useMemo, useRef } from 'https://cdn.pika.dev/react'
 import { prefetchPage, redirect } from './app.ts'
 import { useRouter } from './router.ts'
 import util from './util.ts'
@@ -14,38 +14,51 @@ interface LinkProps {
 export default function Link({
     to,
     replace = false,
-    prefetch: isPrefetch = false,
+    prefetch: shouldPrefetch = false,
     className,
     style,
     children
 }: React.PropsWithChildren<LinkProps>) {
-    const { asPath: currentPath } = useRouter()
+    const { asPath: currentPath, query: currentQuery } = useRouter()
+    const currentHref = useMemo(() => {
+        return [currentPath, Object.entries(currentQuery).map(([key, value]) => {
+            if (util.isArray(value)) {
+                return value.map(v => `${key}=${v}`).join('&')
+            }
+            return `${key}=${value}`
+        }).join('&')].filter(Boolean).join('?')
+    }, [currentPath, currentQuery])
     const href = useMemo(() => {
         if (util.isHttpUrl(to)) {
             return to
         }
+        let [pathname, search] = util.splitBy(to, '?')
         if (to.startsWith('/')) {
-            return util.cleanPath(to)
+            pathname = util.cleanPath(pathname)
+        } else {
+            pathname = util.cleanPath(currentPath + '/' + pathname)
         }
-        return util.cleanPath(currentPath + '/' + to)
+        return [pathname, search].filter(Boolean).join('?')
     }, [currentPath, to])
-    const onClick = useCallback((e: React.MouseEvent) => {
-        e.preventDefault()
-        if (href !== currentPath) {
-            redirect(href, replace)
-        }
-    }, [href, currentPath, replace])
+    const prefetchStatus = useRef(0)
     const prefetch = useCallback(() => {
-        if (href.startsWith('/') && href !== currentPath) {
+        if (prefetchStatus.current == 0 && !util.isHttpUrl(href) && href !== currentHref) {
+            prefetchStatus.current = 1
             prefetchPage(href)
         }
-    }, [href, currentPath])
+    }, [href, currentHref])
+    const onClick = useCallback((e: React.MouseEvent) => {
+        e.preventDefault()
+        if (href !== currentHref) {
+            redirect(href, replace)
+        }
+    }, [href, currentHref, replace])
 
     useEffect(() => {
-        if (isPrefetch) {
+        if (shouldPrefetch) {
             prefetch()
         }
-    }, [isPrefetch, prefetch])
+    }, [shouldPrefetch, prefetch])
 
     if (Children.count(children) === 1) {
         const child = Children.toArray(children)[0]
