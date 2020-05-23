@@ -6,5 +6,4 @@ export { Sha256 } from 'https://deno.land/std@v0.52.0/hash/sha256.ts'
 export * from 'https://deno.land/std@v0.52.0/http/server.ts'
 export * as path from 'https://deno.land/std@v0.52.0/path/mod.ts'
 export * as ws from 'https://deno.land/std@v0.52.0/ws/mod.ts'
-export * as base64 from 'https://deno.land/x/base64@v0.2.0/mod.ts'
 

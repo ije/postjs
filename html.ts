@@ -1,4 +1,3 @@
-import { base64, Sha256 } from './deps.ts'
 import util from './util.ts'
 
 export function createHtml({
@@ -10,7 +9,7 @@ export function createHtml({
 }: {
     lang?: string,
     head?: string[],
-    scripts?: (string | { type?: string, id?: string, src?: string, async?: boolean, innerText?: string, preload?: boolean })[],
+    scripts?: (string | { id?: string, type?: string, src?: string, innerText?: string, async?: boolean, preload?: boolean })[],
     body: string,
     minify?: boolean
 }) {
@@ -29,7 +28,7 @@ export function createHtml({
         })).filter(Boolean)
     const scriptTags = scripts.map(v => {
         if (util.isString(v)) {
-            return `<script integrity="${genIntegrity(v)}">${v}</script>`
+            return `<script>${v}</script>`
         } else if (util.isNEString(v.innerText)) {
             const { innerText, ...rest } = v
             return `<script${toAttrs(rest)}>${innerText}</script>`
@@ -57,10 +56,4 @@ export function createHtml({
 
 function toAttrs(v: any): string {
     return Object.keys(v).map(k => ` ${k}=${JSON.stringify(String(v[k]))}`).join('')
-}
-
-function genIntegrity(v: string): string {
-    const sha256 = new Sha256()
-    const arr = new Uint8Array(sha256.update(v).digest())
-    return 'sha256-' + base64.fromUint8Array(arr)
 }
