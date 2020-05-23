@@ -155,6 +155,7 @@ export class App {
             import { bootstrap } from 'https://postjs.io/app.ts'
             bootstrap({
                 baseUrl: ${JSON.stringify(this.config.baseUrl)},
+                locales: ${JSON.stringify(this.config.locales)},
                 pageModules: ${JSON.stringify(this._pageModules)},
                 hmr: ${this.isDev}
             })

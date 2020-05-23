@@ -9,7 +9,7 @@ export interface AppConfig {
     readonly cacheDeps: boolean
     readonly baseUrl: string
     readonly defaultLocale: string
-    readonly locales: Map<string, Map<string, string>>
+    readonly locales: Record<string, Record<string, string>>
     readonly importMap?: {
         imports: Record<string, string>
     }
@@ -23,7 +23,7 @@ export function loadAppConfig(appDir: string) {
         cacheDeps: true,
         baseUrl: '/',
         defaultLocale: 'en',
-        locales: new Map()
+        locales: {}
     }
 
     const { POSTJS_IMPORT_MAP } = globalThis as any
@@ -87,13 +87,13 @@ export function loadAppConfig(appDir: string) {
                 try {
                     const dict = JSON.parse(Deno.readTextFileSync(fp))
                     if (util.isObject(dict)) {
-                        const dictMap = new Map<string, string>()
+                        const dictMap: Record<string, string> = {}
                         Object.entries(dict).forEach(([key, text]) => {
                             if (util.isNEString(text)) {
-                                dictMap.set(key, text)
+                                dictMap[key] = text
                             }
                         })
-                        config.locales.set(locale, dictMap)
+                        config.locales[locale] = dictMap
                     }
                 } catch (error) {
                     log.error(`bad locale(${locale}):`, error)
