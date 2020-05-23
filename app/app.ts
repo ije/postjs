@@ -5,6 +5,7 @@ import { colors, existsSync, path, ServerRequest, Sha1, walk } from '../deps.ts'
 import { renderToTags } from '../head.ts'
 import { createHtml } from '../html.ts'
 import log from '../log.ts'
+import AnsiUp from '../npm/ansi_up/ansi_up.ts'
 import ReactDomServer from '../npm/react-dom/react-dom-server.js'
 import { ILocation, route, RouterContext, RouterURL } from '../router.ts'
 import { compile } from '../ts/compile.ts'
@@ -435,7 +436,7 @@ export class App {
             } catch (err) {
                 ret.code = 500
                 ret.head = ['<title>500 - render error</title>']
-                ret.body = `<pre>${err.message}</pre>`
+                ret.body = `<pre>${AnsiUp.ansi_to_html(err.message)}</pre>`
                 log.error(err.message)
             }
         }
