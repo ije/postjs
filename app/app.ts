@@ -26,10 +26,10 @@ export class App {
     readonly config: AppConfig
     readonly mode: 'development' | 'production'
 
+    private _apis: Map<string, APIHandle> = new Map()
     private _deps: Map<string, Module> = new Map()
     private _modules: Map<string, Module> = new Map()
-    private _apis: Map<string, APIHandle> = new Map()
-    private _pagePaths: Map<string, string> = new Map()
+    private _pageModules: Record<string, string> = {}
     private _customApp: { Component: React.ComponentType, staticProps: any } = { Component: React.Fragment, staticProps: null }
 
     constructor(appDir: string, mode: 'development' | 'production') {
@@ -48,11 +48,11 @@ export class App {
     }
 
     async getPageHtml(location: ILocation, locale?: string): Promise<[number, string]> {
-        const { lang, baseUrl } = this.config
-        const url = route(baseUrl, Array.from(this._pagePaths.keys()), { location, fallback: '/404' })
-        const { code, head, body, ssrData } = await this.renderPage(url, locale || lang)
+        const { defaultLocale, baseUrl } = this.config
+        const url = route(baseUrl, Object.keys(this._pageModules), { location, fallback: '/404' })
+        const { code, head, body, ssrData } = await this._renderPage(url, locale || defaultLocale)
         const html = createHtml({
-            lang: locale || lang,
+            lang: locale || defaultLocale,
             head: head.concat(`<meta name="postjs-head-size" content="${head.length}" />`),
             scripts: [
                 { type: 'application/json', id: 'ssr-data', innerText: JSON.stringify(ssrData) },
@@ -64,14 +64,14 @@ export class App {
     }
 
     async getPageStaticProps(location: ILocation, locale?: string): Promise<any> {
-        const { lang, baseUrl } = this.config
-        const url = route(baseUrl, Array.from(this._pagePaths.keys()), { location, fallback: '/404' })
-        if (this._pagePaths.has(url.pagePath)) {
-            const pageModule = this._modules.get(this._pagePaths.get(url.pagePath)!)!
+        const { defaultLocale, baseUrl } = this.config
+        const url = route(baseUrl, Object.keys(this._pageModules), { location, fallback: '/404' })
+        if (url.pagePath in this._pageModules) {
+            const pageModule = this._modules.get(this._pageModules[url.pagePath])!
             const { default: Page, getStaticProps } = await import(path.join(this.srcDir, pageModule.sourceFile))
             if (util.isFunction(Page)) {
                 const gsp = [Page.getStaticProps, getStaticProps].filter(util.isFunction)[0]
-                const staticProps = gsp ? await gsp(url, locale || lang) : null
+                const staticProps = gsp ? await gsp(url, locale || defaultLocale) : null
                 return util.isObject(staticProps) ? staticProps : null
             }
         }
@@ -147,19 +147,15 @@ export class App {
         for await (const { path: fp } of w2) {
             const name = path.basename(fp)
             const pagePath = '/' + name.replace(regModuleExt, '').replace(/\s+/g, '-').replace(/\/?index$/i, '')
-            this._pagePaths.set(pagePath, './pages/' + name.replace(regModuleExt, '') + '.js')
+            this._pageModules[pagePath] = './pages/' + name.replace(regModuleExt, '') + '.js'
             await this._compile('./pages/' + name)
         }
 
-        const pagePaths = Array.from(this._pagePaths.keys()).reduce((m, pagePath) => {
-            m[pagePath] = this._pagePaths.get(pagePath)!
-            return m
-        }, {} as Record<string, string>)
         await this._compile('./main.js', `
             import { bootstrap } from 'https://postjs.io/app.ts'
             bootstrap({
                 baseUrl: ${JSON.stringify(this.config.baseUrl)},
-                pagePaths: ${JSON.stringify(pagePaths)},
+                pageModules: ${JSON.stringify(this._pageModules)},
                 hmr: ${this.isDev}
             })
         `)
@@ -174,7 +170,7 @@ export class App {
         }
 
         log.info(colors.bold('Pages'))
-        for (const path of this._pagePaths.keys()) {
+        for (const path in this._pageModules) {
             log.info(`▲ ${path}`, path == '/' ? '(home)' : '')
         }
         log.info(colors.bold('APIs'))
@@ -201,7 +197,7 @@ export class App {
     }
 
     private async _compile(sourceFile: string, sourceCode?: string) {
-        const { baseUrl, downloadRemoteModules, rootDir, importmap } = this.config
+        const { baseUrl, cacheDeps, rootDir, importMap } = this.config
         const isRemote = regHttp.test(sourceFile)
         const name = path.basename(sourceFile).replace(regModuleExt, '')
         const moduleName = sourceFile.replace(regHttp, '').replace(regModuleExt, '') + '.js'
@@ -241,9 +237,9 @@ export class App {
 
         if (isRemote) {
             let url = sourceFile
-            if (importmap) {
-                for (const path in importmap.imports) {
-                    const alias = importmap.imports[path]
+            if (importMap) {
+                for (const path in importMap.imports) {
+                    const alias = importMap.imports[path]
                     if (path === url) {
                         url = alias
                         break
@@ -312,7 +308,7 @@ export class App {
             const rewriteImportPath = (importPath: string): string => {
                 let newImportPath: string
                 if (regHttp.test(importPath)) {
-                    if (downloadRemoteModules || /\.(jsx|tsx?)$/i.test(importPath)) {
+                    if (cacheDeps || /\.(jsx|tsx?)$/i.test(importPath)) {
                         newImportPath = path.join(baseUrl, importPath.replace(regHttp, '-/'))
                     } else {
                         return importPath
@@ -387,16 +383,16 @@ export class App {
 
     }
 
-    async renderPage(url: RouterURL, locale = 'en') {
+    async _renderPage(url: RouterURL, locale = 'en') {
         const ret = {
             code: 404,
             head: ['<title>404 - page not found</title>'],
             body: '<p><strong><code>404</code></strong><small> - </small><span>page not found</span></p>',
             ssrData: { url, locale, staticProps: null as any },
         }
-        if (this._pagePaths.has(url.pagePath)) {
+        if (url.pagePath in this._pageModules) {
             try {
-                const pageModule = this._modules.get(this._pagePaths.get(url.pagePath)!)!
+                const pageModule = this._modules.get(this._pageModules[url.pagePath])!
                 const { default: Page, getStaticProps } = await import(path.join(this.srcDir, pageModule.sourceFile))
                 if (util.isFunction(Page)) {
                     const gsp = [Page.getStaticProps, getStaticProps].filter(util.isFunction)[0]

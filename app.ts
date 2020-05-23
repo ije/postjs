@@ -6,14 +6,14 @@ import util from './util.ts'
 
 interface Runtime {
     baseUrl: string
-    pagePaths: Record<string, string>
-    pageComponents: Record<string, React.ComponentType>,
+    pageModules: Record<string, string>
+    pageComponents: Record<string, React.ComponentType<any>>,
     ssrData: Record<string, { staticProps: any }>,
     hmr: boolean
 }
 const runtime: Runtime = {
     baseUrl: '/',
-    pagePaths: {},
+    pageModules: {},
     pageComponents: {},
     ssrData: {},
     hmr: false,
@@ -32,11 +32,11 @@ events.setMaxListeners(1 << 10)
 
 export async function bootstrap({
     baseUrl = '/',
-    pagePaths = {},
+    pageModules = {},
     hmr = false
 }: {
     baseUrl?: string
-    pagePaths?: Record<string, string>
+    pageModules?: Record<string, string>
     hmr?: boolean
 }) {
     const { document } = window as any
@@ -44,15 +44,15 @@ export async function bootstrap({
 
     if (el) {
         const ssrData = JSON.parse(el.innerHTML)
-        if (ssrData && 'url' in ssrData && ssrData.url.pagePath in pagePaths) {
+        if (ssrData && 'url' in ssrData && ssrData.url.pagePath in pageModules) {
             const { url: initialUrl, staticProps } = ssrData
-            const InitialPageModulePath = util.cleanPath(baseUrl + pagePaths[initialUrl.pagePath])
+            const InitialPageModulePath = util.cleanPath(baseUrl + pageModules[initialUrl.pagePath])
             const { default: InitialPageComponent } = await import(InitialPageModulePath)
 
             InitialPageComponent.hasStaticProps = staticProps !== null
             Object.assign(runtime, {
                 baseUrl,
-                pagePaths,
+                pageModules,
                 pageComponents: {
                     [initialUrl.pagePath]: InitialPageComponent,
                 },
@@ -75,7 +75,7 @@ export async function bootstrap({
                         {
                             baseUrl,
                             initialUrl,
-                            pagePaths: Object.keys(pagePaths)
+                            pagePaths: Object.keys(pageModules)
                         },
                         React.createElement(withRouter(AppLoader))
                     )
@@ -119,25 +119,25 @@ function AppRouter({
 }
 
 function AppLoader({ router: { pagePath, asPath } }: { router: RouterURL }) {
-    const Component = React.useMemo(() => {
+    const page = React.useMemo(() => {
         const { pageComponents } = runtime
-        return pageComponents[pagePath]
+        return { Component: pageComponents[pagePath] }
     }, [pagePath])
     const staticProps = React.useMemo(() => {
         const { ssrData } = runtime
         return ssrData[asPath]?.staticProps
     }, [asPath])
 
-    return React.createElement(Component, staticProps)
+    return React.createElement(page.Component, staticProps)
 }
 
 async function importPageComponent(pagePath: string) {
-    const { baseUrl, pagePaths, pageComponents } = runtime
-    if (!(pagePath in pagePaths)) {
+    const { baseUrl, pageModules, pageComponents } = runtime
+    if (!(pagePath in pageModules)) {
         throw new Error(`invalid pagePath '${pagePath}'`)
     }
 
-    const importPath = util.cleanPath(baseUrl + pagePaths[pagePath])
+    const importPath = util.cleanPath(baseUrl + pageModules[pagePath])
     const { default: Component, getStaticProps } = await import(importPath)
     const gsp = [Component.getStaticProps, getStaticProps].filter(util.isFunction)
     Component.hasStaticProps = gsp.length > 0
@@ -146,20 +146,20 @@ async function importPageComponent(pagePath: string) {
 }
 
 export async function prefetchPage(url: string) {
-    const { baseUrl, pagePaths, pageComponents, ssrData } = runtime
+    const { baseUrl, pageModules, pageComponents, ssrData } = runtime
 
     if (!url.startsWith('/')) {
         return false
     }
 
     const [pathname] = url.split('?', 1)
-    const { pagePath, asPath } = route(baseUrl, Object.keys(pagePaths), { location: { pathname } })
+    const { pagePath, asPath } = route(baseUrl, Object.keys(pageModules), { location: { pathname } })
     if (pagePath === '') {
         return false
     }
 
     let hasStaticProps = false
-    if (pagePath in pagePaths) {
+    if (pagePath in pageModules) {
         let Component: any
         if (!(pagePath in pageComponents)) {
             Component = await importPageComponent(pagePath)
@@ -170,7 +170,8 @@ export async function prefetchPage(url: string) {
     }
 
     if (hasStaticProps && !(asPath in ssrData)) {
-        const staticProps = await fetch(asPath + '/ssr-data.json').then(resp => resp.json())
+        const dataUrl = '/data/' + (util.trimPrefix(asPath, '/') || 'index') + '.json'
+        const staticProps = await fetch(dataUrl).then(resp => resp.json())
         ssrData[asPath] = { staticProps }
     }
 

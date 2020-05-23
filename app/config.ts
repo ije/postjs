@@ -1,38 +1,36 @@
-import { existsSync, path } from '../deps.ts'
+import { existsSync, path, walk } from '../deps.ts'
 import log from '../log.ts'
 import util from '../util.ts'
 
 export interface AppConfig {
-    readonly framework: 'react' | 'preact' | 'vue'
     readonly rootDir: string
     readonly srcDir: string
     readonly outputDir: string
-    readonly downloadRemoteModules: boolean
+    readonly cacheDeps: boolean
     readonly baseUrl: string
-    readonly lang: string
+    readonly defaultLocale: string
     readonly locales: Map<string, Map<string, string>>
-    readonly importmap?: {
+    readonly importMap?: {
         imports: Record<string, string>
     }
 }
 
 export function loadAppConfig(appDir: string) {
     const config: AppConfig = {
-        framework: 'react',
         rootDir: path.resolve(appDir),
         srcDir: '/',
         outputDir: '/out',
-        downloadRemoteModules: true,
+        cacheDeps: true,
         baseUrl: '/',
-        lang: 'en',
+        defaultLocale: 'en',
         locales: new Map()
     }
 
     const { POSTJS_IMPORT_MAP } = globalThis as any
-    if (POSTJS_IMPORT_MAP && POSTJS_IMPORT_MAP.imports) {
+    if (POSTJS_IMPORT_MAP) {
         try {
             const { imports } = POSTJS_IMPORT_MAP
-            Object.assign(config, { importmap: { imports: Object.assign({}, config.importmap?.imports, imports) } })
+            Object.assign(config, { importMap: { imports: Object.assign({}, config.importMap?.imports, imports) } })
         } catch (err) {
             log.error('bad POSTJS_IMPORT_MAP: ', err)
         }
@@ -42,7 +40,7 @@ export function loadAppConfig(appDir: string) {
         const mapFile = path.join(appDir, 'import_map.json')
         if (existsSync(mapFile)) {
             const { imports } = JSON.parse(Deno.readTextFileSync(mapFile))
-            Object.assign(config, { importmap: { imports: Object.assign({}, config.importmap?.imports, imports) } })
+            Object.assign(config, { importMap: { imports: Object.assign({}, config.importMap?.imports, imports) } })
         }
     } catch (err) {
         log.error('bad import_map.json:', err)
@@ -55,9 +53,8 @@ export function loadAppConfig(appDir: string) {
                 srcDir,
                 ouputDir,
                 baseUrl,
-                downloadRemoteModules,
-                lang,
-                locales,
+                cacheDeps,
+                lang
             } = JSON.parse(Deno.readTextFileSync(configFile))
             if (util.isNEString(srcDir)) {
                 Object.assign(config, { srcDir: util.cleanPath(srcDir) })
@@ -69,28 +66,41 @@ export function loadAppConfig(appDir: string) {
                 Object.assign(config, { baseUrl: util.cleanPath(encodeURI(baseUrl)) })
             }
             if (util.isNEString(lang)) {
-                Object.assign(config, { lang })
+                Object.assign(config, { defaultLocale: lang })
             }
-            if (downloadRemoteModules === false) {
-                Object.assign(config, { downloadRemoteModules: false })
+            if (typeof cacheDeps === 'boolean') {
+                Object.assign(config, { cacheDeps })
             }
-            if (util.isObject(locales)) {
-                Object.keys(locales).forEach(locale => {
-                    const value = locales[locale]
-                    if (util.isObject(value)) {
+        }
+    } catch (err) {
+        log.error('bad app config: ', err)
+    }
+
+    const i18nDir = path.join(config.rootDir, 'i18n')
+    if (existsSync(i18nDir)) {
+        const w = walk(i18nDir, { includeDirs: false, exts: ['.json'], maxDepth: 1 })
+        for await (const { path: fp } of w) {
+            const name = util.trimSuffix(path.basename(fp), '.json')
+            if (/^[a-z]{2}(\-[a-z0-9]+)?$/i.test(name)) {
+                const [l, c] = util.splitBy(name, '-')
+                const locale = [l.toLowerCase(), c.toUpperCase()].filter(Boolean).join('-')
+                try {
+                    const dict = JSON.parse(Deno.readTextFileSync(fp))
+                    if (util.isObject(dict)) {
                         const dictMap = new Map<string, string>()
-                        Object.entries(value).forEach(([key, text]) => {
+                        Object.entries(dict).forEach(([key, text]) => {
                             if (util.isNEString(text)) {
                                 dictMap.set(key, text)
                             }
                         })
                         config.locales.set(locale, dictMap)
                     }
-                })
+                } catch (error) {
+                    log.error(`bad locale(${locale}):`, error)
+                }
             }
         }
-    } catch (err) {
-        log.error('bad app config: ', err)
     }
+
     return config
 }
