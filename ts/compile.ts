@@ -1,5 +1,5 @@
-// @deno-types="../npm/typescript/typescript.d.ts"
-import ts from '../npm/typescript/typescript.js'
+// @deno-types="../vendor/typescript/typescript.d.ts"
+import ts from '../vendor/typescript/typescript.js'
 import { CreateTransformer, transformImportPathRewrite, transformReactJsxSource } from './transformer.ts'
 
 export interface CompileOptions {
