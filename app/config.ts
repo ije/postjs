@@ -82,8 +82,10 @@ export function loadAppConfig(appDir: string) {
     const i18nDir = path.join(config.rootDir, 'i18n')
     if (existsSync(i18nDir)) {
         const w = walkSync(i18nDir, { includeDirs: false, exts: ['.json'], maxDepth: 1 })
-        for (const { path: fp, name } of w) {
-            if (/^[a-z]{2}(\-[a-z0-9]+)?\.json$/i.test(name)) {
+        for (const { path: fp, name, isDirectory } of w) {
+            if (isDirectory) {
+                // todo: find i18n files(json)
+            } else if (/^[a-z]{2}(\-[a-z0-9]+)?\.json$/i.test(name)) {
                 const [l, c] = util.splitBy(util.trimSuffix(name, '.json'), '-')
                 const locale = [l.toLowerCase(), c.toUpperCase()].filter(Boolean).join('-')
                 try {
