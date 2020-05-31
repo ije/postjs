@@ -33,6 +33,7 @@ export class App {
     private _modules: Map<string, Module> = new Map()
     private _pageModules: Record<string, string> = {}
     private _customApp: { Component: React.ComponentType, staticProps: any } = { Component: React.Fragment, staticProps: null }
+    private _fsWatchQueue: Map<string, any> = new Map()
 
     constructor(appDir: string, mode: 'development' | 'production') {
         this.mode = mode
@@ -158,15 +159,17 @@ export class App {
             await this._compile('./pages/' + name)
         }
 
-        await this._compile('./main.js', `
-            import { bootstrap } from 'https://postjs.io/app.ts'
-            bootstrap({
-                baseUrl: ${JSON.stringify(this.config.baseUrl)},
-                locales: ${JSON.stringify(this.config.locales)},
-                pageModules: ${JSON.stringify(this._pageModules)},
-                hmr: ${this.isDev}
-            })
-        `)
+        await this._compile('./main.js', {
+            sourceCode: `
+                import { bootstrap } from 'https://postjs.io/app.ts'
+                bootstrap({
+                    baseUrl: ${JSON.stringify(this.config.baseUrl)},
+                    locales: ${JSON.stringify(this.config.locales)},
+                    pageModules: ${JSON.stringify(this._pageModules)},
+                    hmr: ${this.isDev}
+                })
+            `
+        })
 
         for await (const { path: fp } of w3) {
             const name = path.basename(fp)
@@ -197,14 +200,41 @@ export class App {
         for await (const event of w) {
             for (const p of event.paths) {
                 const rp = util.trimPrefix(util.trimPrefix(p, this.config.rootDir), '/')
-                if (regModuleExt.test(rp) && !rp.startsWith('.postjs') && !rp.startsWith(this.config.outputDir.slice(1))) {
-                    console.log(event.kind, './' + rp)
+
+                if (regModuleExt.test(rp) && !rp.startsWith('.postjs/') && !rp.startsWith(this.config.outputDir.slice(1))) {
+                    const moduleName = `./${rp.replace(regModuleExt, '')}.js`
+
+                    if (this._fsWatchQueue.has(moduleName)) {
+                        clearTimeout(this._fsWatchQueue.get(moduleName)!)
+                    }
+                    this._fsWatchQueue.set(moduleName, setTimeout(() => {
+                        this._fsWatchQueue.delete(moduleName)
+                        if (rp.startsWith('api/')) {
+                            // todo: import api
+                            return
+                        }
+                        if (rp.split('.', 1)[0] === 'app') {
+                            // todo: import custom app
+                        }
+                        if (existsSync(p)) {
+                            this._compile('./' + rp, { transpileOnly: true })
+                            if (this._modules.has(moduleName)) {
+                                log.info('modify', './' + rp)
+                            } else {
+                                log.info('add', './' + rp)
+                            }
+                        } else if (this._modules.has(moduleName)) {
+                            this._modules.delete(moduleName)
+                            log.info('remove', './' + rp)
+                        }
+
+                    }, 150))
                 }
             }
         }
     }
 
-    private async _compile(sourceFile: string, sourceCode?: string) {
+    private async _compile(sourceFile: string, options?: { sourceCode?: string, transpileOnly?: boolean }) {
         const { baseUrl, cacheDeps, rootDir, importMap } = this.config
         const isRemote = regHttp.test(sourceFile)
         const name = path.basename(sourceFile).replace(regModuleExt, '')
@@ -214,7 +244,13 @@ export class App {
         const jsCacheFile = path.join(cacheDir, `${name}.js`)
         const sourceMapCacheFile = path.join(cacheDir, `${name}.js.map`)
 
-        if ((isRemote && this._deps.has(moduleName)) || this._modules.has(moduleName)) {
+        // compile the deps only once
+        if (isRemote && this._deps.has(moduleName)) {
+            return
+        }
+
+        // do not re-compile when not transpileOnly
+        if (!isRemote && this._modules.has(moduleName) && !options?.transpileOnly) {
             return
         }
 
@@ -282,10 +318,10 @@ export class App {
                     sourceHash = hash
                 }
             }
-        } else if (sourceCode) {
-            const hash = (new Sha1()).update(sourceCode).hex()
+        } else if (options?.sourceCode) {
+            const hash = (new Sha1()).update(options?.sourceCode).hex()
             if (sourceHash === '' || sourceHash !== hash) {
-                source = sourceCode
+                source = options?.sourceCode
                 sourceHash = hash
             }
         } else {
@@ -383,8 +419,10 @@ export class App {
             this._modules.set(moduleName, mod)
         }
 
-        for (let path of deps) {
-            await this._compile(path)
+        if (!options?.transpileOnly) {
+            for (let path of deps) {
+                await this._compile(path)
+            }
         }
     }
 
@@ -398,6 +436,7 @@ export class App {
         if (url.pagePath in this._pageModules) {
             try {
                 const pageModule = this._modules.get(this._pageModules[url.pagePath])!
+                // todo: use standalone render to avoid dynamic import cacheß
                 const { default: Page, getStaticProps } = await import(path.join(this.srcDir, pageModule.sourceFile))
                 if (util.isFunction(Page)) {
                     const gsp = [Page.getStaticProps, getStaticProps].filter(util.isFunction)[0]
