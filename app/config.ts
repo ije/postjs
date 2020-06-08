@@ -1,7 +1,7 @@
-import { walkSync } from "https://deno.land/std@v0.52.0/fs/walk.ts"
-import { existsSync, path } from '../deps.ts'
+import { existsSync, path, walkSync } from '../deps.ts'
 import log from '../log.ts'
 import util from '../util.ts'
+
 export interface AppConfig {
     readonly rootDir: string
     readonly srcDir: string
@@ -15,7 +15,7 @@ export interface AppConfig {
     }
 }
 
-export function loadAppConfig(appDir: string) {
+export function loadAppConfigSync(appDir: string) {
     const config: AppConfig = {
         rootDir: path.resolve(appDir),
         srcDir: '/',
@@ -40,13 +40,13 @@ export function loadAppConfig(appDir: string) {
     }
 
     try {
-        const mapFile = path.join(appDir, 'import_map.json')
+        const mapFile = path.join(appDir, 'importmap.json')
         if (existsSync(mapFile)) {
             const { imports } = JSON.parse(Deno.readTextFileSync(mapFile))
             Object.assign(config.importMap, { imports: Object.assign({}, config.importMap.imports, imports) })
         }
     } catch (err) {
-        log.error('bad import_map.json:', err)
+        log.error('bad importmap.json:', err)
     }
 
     try {

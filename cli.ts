@@ -67,8 +67,8 @@ function main() {
         Deno.exit(0)
     }
 
-    if (existsSync('./import_map.json')) {
-        const { imports } = JSON.parse(Deno.readTextFileSync('./import_map.json'))
+    if (existsSync('./importmap.json')) {
+        const { imports } = JSON.parse(Deno.readTextFileSync('./importmap.json'))
         Object.assign(globalThis, { POSTJS_IMPORT_MAP: { imports } })
         if (imports['https://postjs.io/']) {
             const match = String(imports['https://postjs.io/']).match(/^http:\/\/(localhost|127.0.0.1):(\d+)\/$/)
