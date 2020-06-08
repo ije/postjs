@@ -11,10 +11,10 @@ import util from '../util.ts'
 import AnsiUp from '../vendor/ansi_up/ansi_up.ts'
 import ReactDomServer from '../vendor/react-dom/react-dom-server.js'
 import { apiRequest, apiResponse } from './api.ts'
-import { AppConfig, loadAppConfig } from './config.ts'
+import { AppConfig, loadAppConfigSync } from './config.ts'
 
-const regHttp = /^https?:\/\//i
-const regModuleExt = /\.(m?jsx?|tsx?)$/i
+const reHttp = /^https?:\/\//i
+const reModuleExt = /\.(m?jsx?|tsx?)$/i
 
 interface Module {
     sourceFile: string
@@ -37,7 +37,7 @@ export class App {
 
     constructor(appDir: string, mode: 'development' | 'production') {
         this.mode = mode
-        this.config = loadAppConfig(appDir)
+        this.config = loadAppConfigSync(appDir)
         this.ready = new Promise((resolve, reject) => {
             this._init().then(resolve).catch(reject)
         })
@@ -136,7 +136,7 @@ export class App {
 
         for await (const { path: fp } of w1) {
             const name = path.basename(fp)
-            if (name.replace(regModuleExt, '') === 'app') {
+            if (name.replace(reModuleExt, '') === 'app') {
                 const { default: Component, getStaticProps } = await import(fp)
                 if (Component && util.isFunction(Component)) {
                     const gsp = [Component.getStaticProps, getStaticProps].filter(util.isFunction)[0]
@@ -154,8 +154,8 @@ export class App {
 
         for await (const { path: fp } of w2) {
             const name = path.basename(fp)
-            const pagePath = '/' + name.replace(regModuleExt, '').replace(/\s+/g, '-').replace(/\/?index$/i, '')
-            this._pageModules[pagePath] = './pages/' + name.replace(regModuleExt, '') + '.js'
+            const pagePath = '/' + name.replace(reModuleExt, '').replace(/\s+/g, '-').replace(/\/?index$/i, '')
+            this._pageModules[pagePath] = './pages/' + name.replace(reModuleExt, '') + '.js'
             await this._compile('./pages/' + name)
         }
 
@@ -173,7 +173,7 @@ export class App {
 
         for await (const { path: fp } of w3) {
             const name = path.basename(fp)
-            const apiPath = '/' + name.replace(regModuleExt, '').replace(/\s+/g, '-')
+            const apiPath = '/' + name.replace(reModuleExt, '').replace(/\s+/g, '-')
             const { default: handle } = await import(fp)
             if (util.isFunction(handle)) {
                 this._apis.set(apiPath, handle)
@@ -182,8 +182,8 @@ export class App {
 
         log.info(colors.bold('Pages'))
         for (const path in this._pageModules) {
-            const index = path == '/'
-            log.info(index ? '⚑' : '▲', path, index ? colors.dim('(index)') : '')
+            const isIndex = path == '/'
+            log.info(isIndex ? '⚑' : '▲', path, isIndex ? colors.dim('(index)') : '')
         }
         for (const path of this._apis.keys()) {
             log.info('λ', `/api${path}`)
@@ -201,8 +201,8 @@ export class App {
             for (const p of event.paths) {
                 const rp = util.trimPrefix(util.trimPrefix(p, this.config.rootDir), '/')
 
-                if (regModuleExt.test(rp) && !rp.startsWith('.postjs/') && !rp.startsWith(this.config.outputDir.slice(1))) {
-                    const moduleName = `./${rp.replace(regModuleExt, '')}.js`
+                if (reModuleExt.test(rp) && !rp.startsWith('.postjs/') && !rp.startsWith(this.config.outputDir.slice(1))) {
+                    const moduleName = `./${rp.replace(reModuleExt, '')}.js`
 
                     if (this._fsWatchQueue.has(moduleName)) {
                         clearTimeout(this._fsWatchQueue.get(moduleName)!)
@@ -236,10 +236,11 @@ export class App {
 
     private async _compile(sourceFile: string, options?: { sourceCode?: string, transpileOnly?: boolean }) {
         const { baseUrl, cacheDeps, rootDir, importMap } = this.config
-        const isRemote = regHttp.test(sourceFile)
-        const name = path.basename(sourceFile).replace(regModuleExt, '')
-        const moduleName = sourceFile.replace(regHttp, '').replace(regModuleExt, '') + '.js'
-        const cacheDir = path.join(rootDir, '.postjs', path.dirname(isRemote ? sourceFile.replace(regHttp, 'deps/') : this.mode + sourceFile.slice(1)))
+        const isRemote = reHttp.test(sourceFile) || (sourceFile in importMap.imports && reHttp.test(importMap.imports[sourceFile]))
+        const sourceFileExt = path.extname(sourceFile)
+        const name = util.trimSuffix(path.basename(sourceFile), sourceFileExt)
+        const moduleName = util.trimSuffix(sourceFile, sourceFileExt).replace(reHttp, '') + '.js'
+        const cacheDir = path.join(rootDir, '.postjs', path.dirname(isRemote ? sourceFile.replace(reHttp, 'deps/') : this.mode + sourceFile.slice(1)))
         const metaCacheFile = path.join(cacheDir, `${name}.meta.json`)
         const jsCacheFile = path.join(cacheDir, `${name}.js`)
         const sourceMapCacheFile = path.join(cacheDir, `${name}.js.map`)
@@ -249,7 +250,7 @@ export class App {
             return
         }
 
-        // do not re-compile when not transpileOnly
+        // do not re-compile the local modules when not transpileOnly
         if (!isRemote && this._modules.has(moduleName) && !options?.transpileOnly) {
             return
         }
@@ -281,13 +282,13 @@ export class App {
 
         if (isRemote) {
             let url = sourceFile
-            for (const path in importMap.imports) {
-                const alias = importMap.imports[path]
-                if (path === url) {
+            for (const importPath in importMap.imports) {
+                const alias = importMap.imports[importPath]
+                if (importPath === url) {
                     url = alias
                     break
-                } else if (path.endsWith('/') && url.startsWith(path)) {
-                    url = util.trimSuffix(alias, '/') + '/' + util.trimPrefix(url, path)
+                } else if (importPath.endsWith('/') && url.startsWith(importPath)) {
+                    url = util.trimSuffix(alias, '/') + '/' + util.trimPrefix(url, importPath)
                     break
                 }
             }
@@ -352,9 +353,9 @@ export class App {
                 if (importPath in importMap.imports) {
                     importPath = importMap.imports[importPath]
                 }
-                if (regHttp.test(importPath)) {
+                if (reHttp.test(importPath)) {
                     if (cacheDeps || /\.(jsx|tsx?)$/i.test(importPath)) {
-                        newImportPath = path.join(baseUrl, importPath.replace(regHttp, '-/'))
+                        newImportPath = path.join(baseUrl, importPath.replace(reHttp, '-/'))
                     } else {
                         return importPath
                     }
@@ -370,7 +371,7 @@ export class App {
                         newImportPath = path.resolve(baseUrl, path.dirname(sourceFile), importPath)
                     }
                 }
-                if (regHttp.test(importPath)) {
+                if (reHttp.test(importPath)) {
                     deps.push(importPath)
                 } else {
                     if (isRemote) {
@@ -384,7 +385,7 @@ export class App {
                         deps.push('.' + path.resolve('/', path.dirname(sourceFile), importPath))
                     }
                 }
-                return newImportPath.replace(regModuleExt, '') + '.js'
+                return newImportPath.replace(reModuleExt, '') + '.js'
             }
             const t = performance.now()
             const { diagnostics, outputText, sourceMapText } = compile(sourceFile, source, { mode: this.mode, rewriteImportPath })
@@ -393,21 +394,18 @@ export class App {
                 return
             }
 
-            js = outputText
-            sourceMap = sourceMapText!
-
-            if (!existsSync(cacheDir)) {
-                await Deno.mkdir(cacheDir, { recursive: true })
-            }
             await Promise.all([
-                Deno.writeTextFile(metaCacheFile, JSON.stringify({
+                this._writeTextFile(metaCacheFile, JSON.stringify({
                     sourceFile,
                     sourceHash,
                     deps: deps
                 })),
-                Deno.writeTextFile(jsCacheFile, outputText),
-                Deno.writeTextFile(sourceMapCacheFile, sourceMapText!)
+                this._writeTextFile(jsCacheFile, outputText),
+                this._writeTextFile(sourceMapCacheFile, sourceMapText!)
             ])
+
+            js = outputText
+            sourceMap = sourceMapText!
 
             log.debug(`${sourceFile} compiled in ${(performance.now() - t).toFixed(3)}ms`)
         }
@@ -436,7 +434,7 @@ export class App {
         if (url.pagePath in this._pageModules) {
             try {
                 const pageModule = this._modules.get(this._pageModules[url.pagePath])!
-                // todo: use standalone render to avoid dynamic import cacheß
+                // todo: use standalone render to avoid dynamic import cache
                 const { default: Page, getStaticProps } = await import(path.join(this.srcDir, pageModule.sourceFile))
                 if (util.isFunction(Page)) {
                     const gsp = [Page.getStaticProps, getStaticProps].filter(util.isFunction)[0]
@@ -480,5 +478,13 @@ export class App {
             }
         }
         return ret
+    }
+
+    private async _writeTextFile(filepath: string, content: string) {
+        const dir = path.dirname(filepath)
+        if (!existsSync(dir)) {
+            await Deno.mkdir(dir, { recursive: true })
+        }
+        await Deno.writeTextFile(filepath, content)
     }
 }

@@ -1,7 +1,7 @@
 // @deno-types="../vendor/typescript/typescript.d.ts"
 import ts from '../vendor/typescript/typescript.js'
 
-export interface Transform {
+export interface TSTransform {
     (sf: ts.SourceFile, node: ts.Node, ...args: any[]): ts.VisitResult<ts.Node> | null
 }
 
@@ -98,7 +98,7 @@ export function transformReactJsxSource(sf: ts.SourceFile, node: ts.Node): ts.Vi
     return null
 }
 
-export function CreateTransformer(transform: Transform, ...args: any[]): ts.TransformerFactory<ts.SourceFile> {
+export function CreateTransformer(transform: TSTransform, ...args: any[]): ts.TransformerFactory<ts.SourceFile> {
     function nodeVisitor(ctx: ts.TransformationContext, sf: ts.SourceFile) {
         const visitor: ts.Visitor = node => {
             const ret = transform(sf, node, ...args)
