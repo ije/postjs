@@ -136,7 +136,7 @@ export class DevWatcher {
     async getPageHtml(pathname: string): Promise<[number, string]> {
         if (!this.isWatched) {
             return [501, createHtml({
-                lang: this._app.config.lang,
+                lang: this._app.config.defaultLocale,
                 head: ['<title>501 - First compilation not ready</title>'],
                 body: '<p style="margin: 50px"><strong><code>501</code></strong><small>&nbsp;-&nbsp;</small><span>First compilation not ready</span></p>'
             })]
@@ -159,7 +159,7 @@ export class DevWatcher {
                 const { staticProps, html, head, styledTags, css } = pageChunk.rendered[asPath]
                 const baseUrl = this._app.config.baseUrl.replace(/\/+$/, '')
                 return [code, createHtml({
-                    lang: this._app.config.lang,
+                    lang: this._app.config.defaultLocale,
                     head: head.concat('<meta name="post-head-end" content="true" />'),
                     styles: [
                         { 'data-post-style': pageChunk.name, content: css || '' },
@@ -177,7 +177,7 @@ export class DevWatcher {
         }
 
         return [404, createHtml({
-            lang: this._app.config.lang,
+            lang: this._app.config.defaultLocale,
             head: ['<title>404 - Page not found</title>'],
             body: '<p style="margin: 50px"><strong><code>404</code></strong><small>&nbsp;-&nbsp;</small><span>Page not found</span></p>'
         })]

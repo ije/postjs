@@ -20,8 +20,7 @@ export function LazyComponent({ is: name, props, children }: PropsWithChildren<L
     useEffect(() => {
         const {
             __POST_COMPONENTS: components = {},
-            __POST_BUILD_MANIFEST: buildManifest = {},
-            __post_loadScriptBaseUrl: loadScriptBaseUrl = ''
+            __POST_BUILD_MANIFEST: buildManifest = {}
         } = window as any
         const buildInfo = (buildManifest.components || {})[name]
         if (buildInfo !== undefined) {
@@ -29,7 +28,7 @@ export function LazyComponent({ is: name, props, children }: PropsWithChildren<L
                 setIsLoading(false)
             } else {
                 const script = document.createElement('script')
-                script.src = `${loadScriptBaseUrl}_post/components/${name}.js?v=${buildInfo.hash}`
+                script.src = `/_post/components/${name}.js?v=${buildInfo.hash}`
                 script.async = false
                 script.onload = () => {
                     setIsLoading(false)

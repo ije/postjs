@@ -6,7 +6,7 @@ import { renderToString } from 'react-dom/server'
 import { colorful } from '../../shared/colorful'
 import { callGetStaticProps, createHtml, matchPath, runJS } from '../utils'
 import { Compiler } from '../webpack'
-import { AppConfig, loadAppConfig } from './config'
+import { AppConfig, loadAppConfigSync } from './config'
 import './router'
 
 const activatedLazyComponents = new Set<string>()
@@ -17,7 +17,7 @@ export class App {
     config: AppConfig
 
     constructor(appDir: string) {
-        this.config = loadAppConfig(appDir)
+        this.config = loadAppConfigSync(appDir)
     }
 
     get srcDir() {
@@ -52,13 +52,9 @@ export class App {
                 if (dataEl) {
                     const ssrData = JSON.parse(dataEl.innerHTML)
                     if (ssrData && 'url' in ssrData) {
-                        const preloadEl = document.head.querySelector('link[href*="_post/"][rel="preload"][as="script"]');
                         const { url, staticProps } = ssrData
 
                         // inject global variables
-                        if (preloadEl) {
-                            window['__post_loadScriptBaseUrl'] = preloadEl.getAttribute('href').split('_post/')[0]
-                        }
                         { (window['__POST_APP'] =  window['__POST_APP'] || {}).config = ${JSON.stringify(this._publicConfig)} }
                         { (window['__POST_SSR_DATA'] =  window['__POST_SSR_DATA'] || {})[url.asPath] = { staticProps } }
 
@@ -94,8 +90,8 @@ export class App {
     }
 
     private get _publicConfig() {
-        const { lang, locales, baseUrl } = this.config
-        return { lang, locales, baseUrl }
+        const { defaultLocale, locales, baseUrl } = this.config
+        return { defaultLocale, locales, baseUrl }
     }
 
     private get _peerDependencies() {
@@ -111,7 +107,7 @@ export class App {
     }
 
     async build() {
-        const { rootDir, lang, useSass, useStyledComponents, browserslist, polyfillsMode } = this.config
+        const { rootDir, defaultLocale, useSass, useStyledComponents, browserslist, polyfillsMode } = this.config
         const { customApp, pages: ssrPages, lazyComponents } = await this.renderAll()
         const compiler = new Compiler(
             this.srcDir,
@@ -185,12 +181,11 @@ export class App {
                 const { url, staticProps, html, head, styledTags } = ssrPage
                 const { asPath } = url
                 const asName = asPath.replace(/^\/+/, '') || 'index'
-                const depth = asName.split('/').length - 1
                 const htmlFile = path.join(buildDir, asName + '.html')
                 const exposedChunks = Array.from(chunks.values()).filter(({ name }) => !(/^(pages|components)\//.test(name)) || name === 'pages/' + pageName)
                 await fs.ensureDir(path.dirname(htmlFile))
                 await fs.writeFile(htmlFile, createHtml({
-                    lang,
+                    lang: defaultLocale,
                     head: head.concat('<meta name="post-head-end" content="true" />'),
                     styles: [
                         ...exposedChunks.map(({ name, css }) => ({ 'data-post-style': name, content: css || '' })),
@@ -198,8 +193,8 @@ export class App {
                     ],
                     scripts: [
                         { type: 'application/json', id: 'ssr-data', innerText: JSON.stringify({ url, staticProps }) },
-                        { src: '../'.repeat(depth) + `_post/build-manifest.js?v=${hash}`, async: true },
-                        ...exposedChunks.map(({ name, hash }) => ({ src: '../'.repeat(depth) + `_post/${name}.js?v=${hash}`, async: true }))
+                        { src: `/_post/build-manifest.js?v=${hash}`, async: true },
+                        ...exposedChunks.map(({ name, hash }) => ({ src: `/_post/${name}.js?v=${hash}`, async: true }))
                     ],
                     body: html
                 }))
@@ -374,7 +369,6 @@ export class App {
         PageComponent: React.ComponentType,
         url: URL
     ) {
-        const { lang, locales, baseUrl } = this.config
         const pageStaticProps: any = await callGetStaticProps(PageComponent, url)
         const sheet = (() => {
             if (this.config.useStyledComponents) {
@@ -390,7 +384,7 @@ export class App {
             AppContext.Provider,
             {
                 value: {
-                    config: { lang, locales, baseUrl },
+                    config: this._publicConfig,
                     staticProps: appStaticProps
                 }
             },

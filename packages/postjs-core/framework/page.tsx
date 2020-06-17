@@ -9,8 +9,7 @@ export async function fetchPage(pagePath: string, asPath: string) {
 
     const {
         __POST_PAGES: pages = {},
-        __POST_BUILD_MANIFEST: buildManifest,
-        __post_loadScriptBaseUrl: loadScriptBaseUrl = ''
+        __POST_BUILD_MANIFEST: buildManifest
     } = window as any
 
     if (buildManifest === undefined) {
@@ -51,7 +50,7 @@ export async function fetchPage(pagePath: string, asPath: string) {
     pages[pagePath] = { fetching: true }
     return new Promise<void>((resolve, reject) => {
         const script = document.createElement('script')
-        script.src = `${loadScriptBaseUrl}_post/pages/${buildInfo.name}.js?v=${buildInfo.hash}`
+        script.src = `/_post/pages/${buildInfo.name}.js?v=${buildInfo.hash}`
         script.async = false
         script.onload = () => {
             const page = pages[pagePath]
@@ -72,14 +71,13 @@ export async function fetchPage(pagePath: string, asPath: string) {
 
 async function fetchPageData(page: any, asPath: string, hash: string): Promise<void> {
     const {
-        __POST_SSR_DATA: ssrData = {},
-        __post_loadScriptBaseUrl: loadScriptBaseUrl = ''
+        __POST_SSR_DATA: ssrData = {}
     } = window as any
 
     if (page.Component.hasGetStaticPropsMethod === true) {
         try {
             const asName = asPath.replace(/^\/+/, '') || 'index'
-            const data = await fetch(`${loadScriptBaseUrl}_post/pages/${asName}.json?v=${hash}`).then(resp => resp.json())
+            const data = await fetch(`/_post/pages/${asName}.json?v=${hash}`).then(resp => resp.json())
             ssrData[asPath] = data
         } catch (error) {
             return Promise.reject(new Error('load page data failed'))

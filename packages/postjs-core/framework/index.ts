@@ -10,8 +10,7 @@ export * from './transition'
 export * from './utils'
 
 export interface AppConfig {
-    lang?: string                      // default is 'en'
-    locales?: Record<string, any>      // default is {}
+    defaultLocale?: string             // default is the first key of locales or 'en'
     baseUrl?: string                   // default is '/'
     srcDir?: string                    // default is '/'
     outputDir?: string                 // default is '/dist'
@@ -22,17 +21,14 @@ export interface AppConfig {
 
 type AppContextProps = {
     config: {
-        lang: string
-        locales: Map<string, Map<string, string>>
+        defaultLocale: string
+        locales: Record<string, Record<string, string>>
         baseUrl: string
     }
     staticProps: Record<string, any>
 }
 
-export const AppContext = createContext<AppContextProps>({
-    config: { lang: 'en', locales: new Map(), baseUrl: '/' },
-    staticProps: {}
-})
+export const AppContext = createContext<AppContextProps>({ config: { defaultLocale: 'en', locales: {}, baseUrl: '/' }, staticProps: {} })
 AppContext.displayName = 'AppContext'
 
 export function useAppConfig() {
@@ -40,7 +36,7 @@ export function useAppConfig() {
     return config
 }
 
-export function useAppStaticProps() {
+export function useAppStaticProps<T = Record<string, any>>(): T {
     const { staticProps } = useContext(AppContext)
-    return staticProps
+    return staticProps as T
 }
