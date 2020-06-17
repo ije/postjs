@@ -47,7 +47,7 @@ export async function redirect(href: string, replace?: boolean, transition?: Pag
         } else {
             history.pushState({ transition }, '', href)
         }
-        hotEmitter.emit('popstate', { type: 'popstate', state: { transition } })
+        hotEmitter.emit('popstate', { type: 'popstate', resetScroll: true, state: { transition } })
         return
     }
 
@@ -59,7 +59,7 @@ export async function redirect(href: string, replace?: boolean, transition?: Pag
             } else {
                 history.pushState({ transition }, '', href)
             }
-            hotEmitter.emit('popstate', { type: 'popstate', state: { transition } })
+            hotEmitter.emit('popstate', { type: 'popstate', resetScroll: true, state: { transition } })
             if (redirectMark !== null) {
                 redirectMark = null
             }
@@ -76,7 +76,7 @@ export async function redirect(href: string, replace?: boolean, transition?: Pag
             } else {
                 history.pushState({ transition }, '', redirectMark)
             }
-            hotEmitter.emit('popstate', { type: 'popstate', state: { transition } })
+            hotEmitter.emit('popstate', { type: 'popstate', resetScroll: true, state: { transition } })
             redirectMark = null
         }
     })

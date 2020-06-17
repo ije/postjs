@@ -8,7 +8,7 @@ export function AppRouter({ baseUrl, initialUrl }: { baseUrl: string, initialUrl
 
     useEffect(() => {
         const buildManifest = window['__POST_BUILD_MANIFEST'] || {}
-        const onpopstate = ({ state }) => {
+        const onpopstate = e => {
             const url = route(baseUrl, Object.keys(buildManifest.pages), { fallback: '/_404' })
             setUrl(prevUrl => {
                 const { current } = prevUrl
@@ -17,7 +17,10 @@ export function AppRouter({ baseUrl, initialUrl }: { baseUrl: string, initialUrl
                 }
                 return { current: url, prev: current }
             })
-            setSideEffect({ transition: state?.transition })
+            setSideEffect({ transition: e.state?.transition })
+            if (e.resetScroll) {
+                window.scrollTo({ top: 0, left: 0 })
+            }
         }
 
         if (process.env.NODE_ENV === 'development') {
