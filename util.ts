@@ -51,7 +51,7 @@ export default {
         }
         return [s, '']
     },
-    walkPath(path: string): string[] {
+    splitPath(path: string): string[] {
         return path
             .split('/')
             .map(p => p.trim())
@@ -66,6 +66,6 @@ export default {
             }, [] as Array<string>)
     },
     cleanPath(path: string): string {
-        return '/' + this.walkPath(path).join('/')
+        return '/' + this.splitPath(path).join('/')
     }
 }

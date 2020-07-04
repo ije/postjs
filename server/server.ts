@@ -5,7 +5,7 @@ import log from '../log.ts'
 import util from '../util.ts'
 import { getContentType } from './mime.ts'
 
-export async function start(appDir: string, port: number) {
+export async function start(appDir: string, port: number, isDev = false) {
     const app = new App(appDir, 'development')
     await app.ready
 

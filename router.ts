@@ -8,12 +8,13 @@ export interface RouterURL {
     query: Record<string, string | string[]>
 }
 
-export const RouterContext = React.createContext<RouterURL>({ pagePath: '/', asPath: '/', params: {}, query: {} })
+export const RouterContext = React.createContext<RouterURL>({
+    pagePath: '/',
+    asPath: '/',
+    params: {},
+    query: {}
+})
 RouterContext.displayName = 'RouterContext'
-
-export function useRouter() {
-    return React.useContext(RouterContext)
-}
 
 export function withRouter(Component: React.ComponentType<{ router: RouterURL }>) {
     function WithRouter() {
@@ -21,6 +22,10 @@ export function withRouter(Component: React.ComponentType<{ router: RouterURL }>
         return React.createElement(Component, { router })
     }
     return WithRouter
+}
+
+export function useRouter() {
+    return React.useContext(RouterContext)
 }
 
 export interface ILocation {
@@ -53,7 +58,7 @@ export function route(base: string, pagePaths: string[], options?: { location?: 
     let pagePath = ''
     let params: Record<string, string> = {}
 
-    // todo: sort pagePaths to improve preformance
+    // todo: sort pagePaths to improve router preformance
     for (const routePath of pagePaths) {
         const [p, ok] = matchPath(routePath, asPath)
         if (ok) {
@@ -71,8 +76,8 @@ export function route(base: string, pagePaths: string[], options?: { location?: 
 }
 
 function matchPath(routePath: string, locPath: string): [Record<string, string>, boolean] {
-    const routeSegments = util.walkPath(routePath)
-    const locSegments = util.walkPath(locPath)
+    const routeSegments = util.splitPath(routePath)
+    const locSegments = util.splitPath(locPath)
     const max = Math.max(routeSegments.length, locSegments.length)
     const params: Record<string, string> = {}
 

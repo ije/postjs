@@ -9,7 +9,7 @@ import { ILocation, route, RouterContext, RouterURL } from '../router.ts'
 import { compile } from '../ts/compile.ts'
 import util from '../util.ts'
 import AnsiUp from '../vendor/ansi_up/ansi_up.ts'
-import ReactDomServer from '../vendor/react-dom/react-dom-server.js'
+import ReactDomServer from '../vendor/react-dom-server/react-dom-server.js'
 import { apiRequest, apiResponse } from './api.ts'
 import { AppConfig, loadAppConfigSync } from './config.ts'
 
@@ -57,13 +57,13 @@ export class App {
 
     }
 
-    async getPageHtml(location: ILocation, locale?: string): Promise<[number, string]> {
-        const { defaultLocale, baseUrl } = this.config
+    async getPageHtml(location: ILocation, locale = this.config.defaultLocale): Promise<[number, string]> {
+        const { baseUrl } = this.config
         const url = route(baseUrl, Object.keys(this._pageModules), { location, fallback: '/404' })
-        const { code, head, body, ssrData } = await this._renderPage(url, locale || defaultLocale)
+        const { code, head, body, ssrData } = await this._renderPage(url, locale)
         const html = createHtml({
-            lang: locale || defaultLocale,
-            head: head.concat(`<meta name="postjs-head-size" content="${head.length}" />`),
+            lang: locale,
+            head: [...head, `<meta name="postjs-head-end" content="end" />`],
             scripts: [
                 { type: 'application/json', id: 'ssr-data', innerText: JSON.stringify(ssrData) },
                 { src: path.join(baseUrl, 'main.js') + `?t=${performance.now()}`, type: 'module' },
@@ -130,6 +130,12 @@ export class App {
 
     private async _init() {
         const walkOptions = { includeDirs: false, exts: ['.js', '.jsx', '.mjs', '.ts', '.tsx'], skip: [/\.d\.ts$/i] }
+        const { baseUrl, defaultLocale, locales } = this.config
+        const bootstrapConfig = {
+            baseUrl, defaultLocale, locales,
+            pageModules: this._pageModules,
+            hmr: this.isDev
+        }
         const w1 = walk(path.join(this.srcDir), { ...walkOptions, maxDepth: 1 })
         const w2 = walk(path.join(this.srcDir, 'pages'), walkOptions)
         const w3 = walk(path.join(this.srcDir, 'api'), walkOptions)
@@ -162,12 +168,7 @@ export class App {
         await this._compile('./main.js', {
             sourceCode: `
                 import { bootstrap } from 'https://postjs.io/app.ts'
-                bootstrap({
-                    baseUrl: ${JSON.stringify(this.config.baseUrl)},
-                    locales: ${JSON.stringify(this.config.locales)},
-                    pageModules: ${JSON.stringify(this._pageModules)},
-                    hmr: ${this.isDev}
-                })
+                bootstrap(${JSON.stringify(bootstrapConfig)})
             `
         })
 
@@ -178,12 +179,13 @@ export class App {
             if (util.isFunction(handle)) {
                 this._apis.set(apiPath, handle)
             }
+            await this._compile('./api/' + name)
         }
 
         log.info(colors.bold('Pages'))
         for (const path in this._pageModules) {
             const isIndex = path == '/'
-            log.info(isIndex ? '⚑' : '▲', path, isIndex ? colors.dim('(index)') : '')
+            log.info('○', path, isIndex ? colors.dim('(index)') : '')
         }
         for (const path of this._apis.keys()) {
             log.info('λ', `/api${path}`)
@@ -199,22 +201,22 @@ export class App {
         log.info('Start watching code changes...')
         for await (const event of w) {
             for (const p of event.paths) {
-                const rp = util.trimPrefix(util.trimPrefix(p, this.config.rootDir), '/')
-
-                if (reModuleExt.test(rp) && !rp.startsWith('.postjs/') && !rp.startsWith(this.config.outputDir.slice(1))) {
+                const { rootDir, outputDir } = this.config
+                const rp = util.trimPrefix(util.trimPrefix(p, rootDir), '/')
+                if (reModuleExt.test(rp) && !rp.startsWith('.postjs/') && !rp.startsWith(outputDir.slice(1))) {
                     const moduleName = `./${rp.replace(reModuleExt, '')}.js`
-
                     if (this._fsWatchQueue.has(moduleName)) {
                         clearTimeout(this._fsWatchQueue.get(moduleName)!)
                     }
                     this._fsWatchQueue.set(moduleName, setTimeout(() => {
                         this._fsWatchQueue.delete(moduleName)
                         if (rp.startsWith('api/')) {
-                            // todo: import api
+                            console.log(rp)
+                            // todo: re-import api
                             return
                         }
                         if (rp.split('.', 1)[0] === 'app') {
-                            // todo: import custom app
+                            // todo: re-import custom app
                         }
                         if (existsSync(p)) {
                             this._compile('./' + rp, { transpileOnly: true })
@@ -227,7 +229,6 @@ export class App {
                             this._modules.delete(moduleName)
                             log.info('remove', './' + rp)
                         }
-
                     }, 150))
                 }
             }

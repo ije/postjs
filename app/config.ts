@@ -40,13 +40,13 @@ export function loadAppConfigSync(appDir: string) {
     }
 
     try {
-        const mapFile = path.join(appDir, 'importmap.json')
+        const mapFile = path.join(appDir, 'import_map.json')
         if (existsSync(mapFile)) {
             const { imports } = JSON.parse(Deno.readTextFileSync(mapFile))
             Object.assign(config.importMap, { imports: Object.assign({}, config.importMap.imports, imports) })
         }
     } catch (err) {
-        log.error('bad importmap.json:', err)
+        log.error('bad import_map.json:', err)
     }
 
     try {
@@ -81,13 +81,13 @@ export function loadAppConfigSync(appDir: string) {
 
     const i18nDir = path.join(config.rootDir, 'i18n')
     if (existsSync(i18nDir)) {
-        const w = walkSync(i18nDir, { includeDirs: false, exts: ['.json'], maxDepth: 1 })
+        const w = walkSync(i18nDir, { maxDepth: 1 })
         for (const { path: fp, name, isDirectory } of w) {
             if (isDirectory) {
                 // todo: find i18n files(json)
             } else if (/^[a-z]{2}(\-[a-z0-9]+)?\.json$/i.test(name)) {
-                const [l, c] = util.splitBy(util.trimSuffix(name, '.json'), '-')
-                const locale = [l.toLowerCase(), c.toUpperCase()].filter(Boolean).join('-')
+                const [lang, ccode] = util.splitBy(util.trimSuffix(name, '.json'), '-')
+                const locale = [lang.toLowerCase(), ccode.toUpperCase()].filter(Boolean).join('-')
                 try {
                     const dict = JSON.parse(Deno.readTextFileSync(fp))
                     if (util.isObject(dict)) {

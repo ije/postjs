@@ -2,6 +2,7 @@ import { existsSync, listenAndServe, path, ServerRequest } from './deps.ts'
 import { createHtml } from './html.ts'
 import log from './log.ts'
 import { getContentType } from './server/mime.ts'
+import util from './util.ts'
 import { version } from './version.ts'
 
 const commands = ['init', 'dev', 'build', 'start', 'export', 'fetch']
@@ -62,13 +63,25 @@ function main() {
 
     // prints help message
     const hasCommand = args.length > 0 && commands.includes(args[0])
-    if (!hasCommand && (argOptions.h || argOptions.help)) {
-        console.log(helpMessage)
-        Deno.exit(0)
+    if (argOptions.h || argOptions.help) {
+        if (hasCommand) {
+            import(`./cli/${args.shift()}.ts`).then(({ helpMessage }) => {
+                console.log(`postjs v${version}`)
+                if (util.isNEString(helpMessage)) {
+                    console.log(helpMessage)
+                }
+                Deno.exit(0)
+            })
+            return
+        } else {
+            console.log(helpMessage)
+            Deno.exit(0)
+        }
     }
 
-    if (existsSync('./importmap.json')) {
-        const { imports } = JSON.parse(Deno.readTextFileSync('./importmap.json'))
+    // proxy postjs.io
+    if (existsSync('./import_map.json')) {
+        const { imports } = JSON.parse(Deno.readTextFileSync('./import_map.json'))
         Object.assign(globalThis, { POSTJS_IMPORT_MAP: { imports } })
         if (imports['https://postjs.io/']) {
             const match = String(imports['https://postjs.io/']).match(/^http:\/\/(localhost|127.0.0.1):(\d+)\/$/)
@@ -83,7 +96,7 @@ function main() {
                             const items: string[] = []
                             for await (const item of r) {
                                 if (!item.name.startsWith('.')) {
-                                    items.push(`<li><a href="${path.join(req.url, encodeURI(item.name))}">${item.name}${item.isDirectory ? '/' : ''}<a></li>`)
+                                    items.push(`<li><a href='${path.join(req.url, encodeURI(item.name))}'>${item.name}${item.isDirectory ? '/' : ''}<a></li>`)
                                 }
                             }
                             req.respond({
@@ -129,10 +142,10 @@ function main() {
 
     // execute command
     const command = hasCommand ? args.shift() : 'dev'
-    import(`./cli-${command}.ts`).then(({ default: cmd }) => {
+    import(`./cli/${command}.ts`).then(({ default: cmd }) => {
         const appDir = path.resolve(args[0] || '.')
         if (!existsSync(appDir)) {
-            log.error("No such app directory:", appDir)
+            log.error('No such app directory:', appDir)
             return
         }
         cmd(appDir, argOptions)
