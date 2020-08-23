@@ -1,6 +1,6 @@
 import React from 'react'
 import { hydrate } from 'react-dom'
-import { EventEmitter } from './events.ts'
+import { EventEmitter } from './deps.ts'
 import { route, RouterContext, RouterURL, withRouter } from './router.ts'
 import util from './util.ts'
 
