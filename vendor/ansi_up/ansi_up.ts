@@ -48,7 +48,7 @@ interface TextPacket {
 //
 
 class AnsiUp {
-    VERSION = "4.0.3";
+    VERSION = "4.0.4";
 
     //
     // *** SEE README ON GITHUB FOR PUBLIC API ***
@@ -56,8 +56,8 @@ class AnsiUp {
 
     // 256 Colors Palette
     // CSS RGB strings - ex. "255, 255, 255"
-    private ansi_colors: AU_Color[][] = [];
-    private palette_256: AU_Color[] = [];
+    private ansi_colors: AU_Color[][];
+    private palette_256: AU_Color[];
 
     private fg: AU_Color | null;
     private bg: AU_Color | null;
@@ -75,19 +75,20 @@ class AnsiUp {
     private _buffer: string;
 
     constructor() {
-        // All construction occurs here
+        this.ansi_colors = []
+        this.palette_256 = []
         this.setup_palettes();
-
-        this.fg = null;
-        this.bg = null;
-        this.bold = false;
-
         this._use_classes = false;
         this._escape_for_html = true;
 
+        this.fg = this.bg = null;
+        this.bold = false;
+
         this._csi_regex = rgx`
             ^                           # beginning of line
-            (?:                         # legal sequence (First attempt)
+                                        #
+                                        # First attempt
+            (?:                         # legal sequence
                 \x1b\[                      # CSI
                 ([\x3c-\x3f]?)              # private-mode char
                 ([\d;]*)                    # any digits or semicolons
@@ -118,6 +119,7 @@ class AnsiUp {
         `;
         this._osc_regex = rgx`
             ^                           # beginning of line
+                                        #
             \x1b\]8;                    # OSC Hyperlink
             [\x20-\x3a\x3c-\x7e]*       # params (excluding ;)
             ;                           # end of params
@@ -231,15 +233,12 @@ class AnsiUp {
     }
 
     private append_buffer(txt: string) {
-
         var str = this._buffer + txt;
         this._buffer = str;
     }
 
     private get_next_packet(): TextPacket {
-
-        var pkt =
-        {
+        var pkt = {
             kind: PacketKind.EOS,
             text: '',
             url: ''
@@ -471,6 +470,7 @@ class AnsiUp {
                 return pkt;
             }
         }
+
         return pkt;
     }
 
