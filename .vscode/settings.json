@@ -5,21 +5,18 @@
         "**/.git": true,
         "**/.DS_Store": true,
         "**/Thumbs.db": true,
-        "**/dist/": true,
-    },
-    "editor.formatOnSave": true,
-    "editor.formatOnPaste": true,
-    "editor.codeActionsOnSave": {
-        "source.organizeImports": true,
+        "/out/": true,
     },
     "[javascript]": {
         "editor.defaultFormatter": "vscode.typescript-language-features",
     },
     "[typescript]": {
         "editor.defaultFormatter": "vscode.typescript-language-features",
-    },
-    "[typescriptreact]": {
-        "editor.defaultFormatter": "vscode.typescript-language-features",
+        "editor.formatOnSave": true,
+        "editor.formatOnPaste": true,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": true,
+        },
     },
     "deno.enable": true,
     "deno.unstable": true,
