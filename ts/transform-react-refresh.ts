@@ -1,5 +1,4 @@
-// @deno-types="../vendor/typescript/typescript.d.ts"
-import ts from '../vendor/typescript/typescript.js';
+import ts from '../vendor/typescript/typescript.ts'
 
 /**
  * TypeScript AST Transformer to support react refresh.

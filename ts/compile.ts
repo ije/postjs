@@ -1,5 +1,4 @@
-// @deno-types="../vendor/typescript/typescript.d.ts"
-import ts from '../vendor/typescript/typescript.js'
+import ts from '../vendor/typescript/typescript.ts'
 import transformImportPathRewrite from './transform-import-path-rewrite.ts'
 import transformReactJsxSource from './transform-react-jsx-source.ts'
 import { CreateTransformer } from './transformer.ts'

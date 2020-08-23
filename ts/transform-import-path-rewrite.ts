@@ -1,5 +1,4 @@
-// @deno-types="../vendor/typescript/typescript.d.ts"
-import ts from '../vendor/typescript/typescript.js'
+import ts from '../vendor/typescript/typescript.ts'
 
 /**
  * TS AST transformer to rewrite import path.
@@ -34,11 +33,11 @@ export default function transformImportPathRewrite(sf: ts.SourceFile, node: ts.N
         if (rewrittenPath !== importPath) {
             const newNode = ts.getMutableClone(node)
             if (ts.isImportDeclaration(newNode) || ts.isExportDeclaration(newNode)) {
-                newNode.moduleSpecifier = ts.createLiteral(rewrittenPath)
+                Object.assign(newNode, { moduleSpecifier: ts.createLiteral(rewrittenPath) })
             } else if (isDynamicImport(newNode)) {
-                newNode.arguments = ts.createNodeArray([ts.createStringLiteral(rewrittenPath)])
+                Object.assign(newNode, { arguments: ts.createNodeArray([ts.createStringLiteral(rewrittenPath)]) })
             } else if (ts.isImportTypeNode(newNode)) {
-                newNode.argument = ts.createLiteralTypeNode(ts.createStringLiteral(rewrittenPath))
+                Object.assign(newNode, { argument: ts.createLiteralTypeNode(ts.createStringLiteral(rewrittenPath)) })
             }
             return newNode
         }

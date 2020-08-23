@@ -1,5 +1,4 @@
-// @deno-types="../vendor/typescript/typescript.d.ts"
-import ts from '../vendor/typescript/typescript.js'
+import ts from '../vendor/typescript/typescript.ts'
 
 export interface TSTransform {
     (sf: ts.SourceFile, node: ts.Node, ...args: any[]): ts.VisitResult<ts.Node> | null

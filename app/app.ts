@@ -9,7 +9,7 @@ import { ILocation, route, RouterContext, RouterURL } from '../router.ts'
 import { compile } from '../ts/compile.ts'
 import util from '../util.ts'
 import AnsiUp from '../vendor/ansi-up/ansi-up.ts'
-import ReactDomServer from '../vendor/react-dom-server/react-dom-server.js'
+import ReactDomServer from '../vendor/react-dom/server.js'
 import { apiRequest, apiResponse } from './api.ts'
 import { AppConfig, loadAppConfigSync } from './config.ts'
 
@@ -192,7 +192,7 @@ export class App {
         }
 
         if (this.isDev) {
-            this._watch()
+            // this._watch()
         }
     }
 
