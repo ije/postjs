@@ -3,6 +3,7 @@ import { hydrate } from 'react-dom'
 import { EventEmitter } from './events.ts'
 import { route, RouterContext, RouterURL, withRouter } from './router.ts'
 import util from './util.ts'
+import ReactDomServer from './vendor/react-dom/server.js'
 
 const runtime: {
     baseUrl: string
@@ -18,22 +19,35 @@ const runtime: {
     hmr: false,
 }
 
-export const AppContext = React.createContext<{
-    readonly locale: string
-}>({
-    locale: 'en'
-})
-AppContext.displayName = 'AppContext'
-
 export const events = new EventEmitter()
 events.setMaxListeners(1 << 10)
 
+export function renderPage(
+    url: RouterURL,
+    Page: { Component: React.ComponentType, staticProps: any },
+    App?: { Component: React.ComponentType, staticProps: any }
+) {
+    const PageEl = React.createElement(Page.Component, Page.staticProps)
+    const html = ReactDomServer.renderToString(
+        React.createElement(
+            RouterContext.Provider,
+            { value: url },
+            App ? React.createElement(App.Component, App.staticProps, PageEl) : PageEl
+        )
+    )
+    return html
+}
+
 export async function bootstrap({
     baseUrl = '/',
+    defaultLocale = 'en',
+    locales = {},
     pageModules = {},
     hmr = false
 }: {
     baseUrl?: string
+    defaultLocale?: string
+    locales: Record<string, Record<string, string>>
     pageModules?: Record<string, string>
     hmr?: boolean
 }) {
@@ -60,24 +74,14 @@ export async function bootstrap({
                 hmr
             } as typeof runtime)
 
-            hydrate((
-                React.createElement(
-                    AppContext.Provider,
-                    {
-                        value: {
-                            locale: 'en'
-                        }
-                    },
-                    React.createElement(
-                        AppRouter,
-                        {
-                            baseUrl,
-                            initialUrl,
-                            pagePaths: Object.keys(pageModules)
-                        },
-                        React.createElement(withRouter(AppLoader))
-                    )
-                )
+            hydrate(React.createElement(
+                AppRouter,
+                {
+                    baseUrl,
+                    initialUrl,
+                    pagePaths: Object.keys(pageModules)
+                },
+                React.createElement(withRouter(AppLoader))
             ), document.querySelector('main'))
         }
     }

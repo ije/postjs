@@ -4,6 +4,7 @@ import util from './util.ts'
 export interface RouterURL {
     pagePath: string
     asPath: string
+    locale: string
     params: Record<string, string>
     query: Record<string, string | string[]>
 }
@@ -12,7 +13,8 @@ export const RouterContext = React.createContext<RouterURL>({
     pagePath: '/',
     asPath: '/',
     params: {},
-    query: {}
+    query: {},
+    locale: ''
 })
 RouterContext.displayName = 'RouterContext'
 
@@ -72,7 +74,7 @@ export function route(base: string, pagePaths: string[], options?: { location?: 
         pagePath = options?.fallback
     }
 
-    return { pagePath, asPath, params, query }
+    return { pagePath, asPath, params, query, locale: '' }
 }
 
 function matchPath(routePath: string, locPath: string): [Record<string, string>, boolean] {

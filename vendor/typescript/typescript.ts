@@ -1,3 +1,4 @@
 // @deno-types="./lib/typescript.d.ts"
-export { default } from './lib/typescript.js';
+import TS from './lib/typescript.js'
 
+export default TS

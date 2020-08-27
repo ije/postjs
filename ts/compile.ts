@@ -32,6 +32,7 @@ export function compile(fileName: string, source: string, { mode, rewriteImportP
             experimentalDecorators: true,
             alwaysStrict: true,
             sourceMap: true,
+            inlineSources: true,
         },
         transformers,
     })
