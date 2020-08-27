@@ -80,32 +80,26 @@ export function route(base: string, pagePaths: string[], options?: { location?: 
 function matchPath(routePath: string, locPath: string): [Record<string, string>, boolean] {
     const routeSegments = util.splitPath(routePath)
     const locSegments = util.splitPath(locPath)
-    const max = Math.max(routeSegments.length, locSegments.length)
+    const depth = Math.max(routeSegments.length, locSegments.length)
     const params: Record<string, string> = {}
 
-    let ok = true
-
-    for (let i = 0; i < max; i++) {
+    for (let i = 0; i < depth; i++) {
         const routeSeg = routeSegments[i]
         const locSeg = locSegments[i]
 
         if (locSeg === undefined || routeSeg === undefined) {
-            ok = false
-            break
+            return [{}, false]
         }
 
-        if (routeSeg === '*') {
-            params['*'] = locSegments.slice(i).map(decodeURIComponent).join('/')
-            break
-        }
-
-        if (routeSeg.startsWith('$')) {
+        if (routeSeg.startsWith('$') && routeSeg.length > 1) {
             params[routeSeg.slice(1)] = decodeURIComponent(locSeg)
-        } else if (routeSeg !== locSeg) {
-            ok = false
+        } else if (routeSeg.startsWith('*') && routeSeg.length > 1 && i === routeSegments.length - 1) {
+            params[routeSeg.slice(1)] = locSegments.slice(i).map(decodeURIComponent).join('/')
             break
+        } else if (routeSeg !== locSeg) {
+            return [{}, false]
         }
     }
 
-    return [params, ok]
+    return [params, true]
 }
