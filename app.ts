@@ -7,9 +7,8 @@ import ReactDomServer from './vendor/react-dom/server.js'
 
 interface Runtime {
     baseUrl: string
-    AppComponent?: React.ComponentType<any>
-    pageModules: Record<string, string>
-    pageComponents: Record<string, React.ComponentType<any>>
+    appModule: { Component?: React.ComponentType<any> }
+    pageModules: Record<string, { path: string, Component?: React.ComponentType<any> }>
     ssrData: {
         app: { staticProps: any }
         pages: Record<string, { staticProps: any }>
@@ -18,8 +17,8 @@ interface Runtime {
 }
 const runtime: Runtime = {
     baseUrl: '/',
+    appModule: {},
     pageModules: {},
-    pageComponents: {},
     ssrData: { app: { staticProps: null }, pages: {} },
     hmr: false,
 }
@@ -37,30 +36,28 @@ export async function bootstrap({
     baseUrl?: string
     defaultLocale?: string
     appModule?: { hash: string }
-    pageModules?: Record<string, string>
+    pageModules?: Record<string, { path: string, Component?: React.ComponentType<any> }>
     hmr?: boolean
 }) {
     const { document } = window as any
     const el = document.getElementById('ssr-data')
 
     if (el) {
-        const ssrData = JSON.parse(el.innerHTML)
-        if (ssrData && 'url' in ssrData && ssrData.url.pagePath in pageModules) {
-            const { url: initialUrl, staticProps, appStaticProps } = ssrData
-            const InitialPageModulePath = util.cleanPath(baseUrl + pageModules[initialUrl.pagePath])
+        const initialSSRData = JSON.parse(el.innerHTML)
+        if (initialSSRData && 'url' in initialSSRData && initialSSRData.url.pagePath in pageModules) {
+            const { url: initialUrl, staticProps, appStaticProps } = initialSSRData
+            const InitialPageModulePath = util.cleanPath(baseUrl + pageModules[initialUrl.pagePath]!.path)
             const [{ default: AppComponent }, { default: InitialPageComponent }] = await Promise.all([
                 appModule ? import(util.cleanPath(baseUrl + `./app.${appModule.hash}.js`)) : async () => ({}),
                 import(InitialPageModulePath),
             ])
 
             InitialPageComponent.hasStaticProps = staticProps !== null
+            pageModules[initialUrl.pagePath]!.Component = InitialPageComponent
             Object.assign(runtime, {
                 baseUrl,
-                pageModules,
                 AppComponent,
-                pageComponents: {
-                    [initialUrl.pagePath]: InitialPageComponent,
-                },
+                pageModules,
                 ssrData: {
                     app: { staticProps: util.isObject(appStaticProps) ? appStaticProps : null },
                     pages: { [initialUrl.asPath]: { staticProps } }
@@ -75,8 +72,8 @@ export async function bootstrap({
 
 function App({ initialUrl }: { initialUrl: RouterURL }) {
     const AppComponent = React.useMemo(() => {
-        const { AppComponent } = runtime
-        return AppComponent
+        const { appModule } = runtime
+        return appModule.Component
     }, [])
     const appStaticProps = React.useMemo(() => {
         const { ssrData } = runtime
@@ -110,8 +107,12 @@ function AppRouter({
     initialUrl: RouterURL
 }>) {
     const [state, setState] = React.useState<RouterURL>(() => initialUrl)
-    const onPopstate = React.useCallback(() => {
+    const onPopstate = React.useCallback(async () => {
+        const { pageModules } = runtime
         const next = route(baseUrl, pagePaths, { fallback: '/404' })
+        if (!pageModules[next.pagePath] || !pageModules[next.pagePath].Component) {
+            await prefetchPage(next.pagePath)
+        }
         setState(next)
     }, [baseUrl, pagePaths])
 
@@ -134,8 +135,8 @@ function AppRouter({
 
 function PageLoader({ router: { pagePath, asPath } }: { router: RouterURL }) {
     const page = React.useMemo(() => {
-        const { pageComponents } = runtime
-        return { Component: pageComponents[pagePath] }
+        const { pageModules } = runtime
+        return { Component: pageModules[pagePath]?.Component || (() => React.createElement('p', undefined, 'page not found')) }
     }, [pagePath])
     const staticProps = React.useMemo(() => {
         const { ssrData } = runtime
@@ -200,7 +201,7 @@ export async function redirect(url: string, replace: boolean) {
 }
 
 export async function prefetchPage(url: string) {
-    const { baseUrl, pageModules, pageComponents, ssrData } = runtime
+    const { baseUrl, pageModules, ssrData } = runtime
 
     if (!url.startsWith('/')) {
         return false
@@ -214,16 +215,11 @@ export async function prefetchPage(url: string) {
 
     let hasStaticProps = false
     if (pagePath in pageModules) {
-        let Component: any
-        if (!(pagePath in pageComponents)) {
-            Component = await importPageComponent(pagePath)
-        } else {
-            Component = pageComponents[pagePath]
-        }
+        const Component = pageModules[pagePath].Component || await importPageComponent(pagePath)
         hasStaticProps = !!Component.hasStaticProps
     }
 
-    if (hasStaticProps && !(asPath in ssrData)) {
+    if (hasStaticProps) {
         const dataUrl = '/data/' + (util.trimPrefix(asPath, '/') || 'index') + '.json'
         const staticProps = await fetch(dataUrl).then(resp => resp.json())
         ssrData.pages[asPath] = { staticProps }
@@ -233,15 +229,15 @@ export async function prefetchPage(url: string) {
 }
 
 async function importPageComponent(pagePath: string) {
-    const { baseUrl, pageModules, pageComponents } = runtime
+    const { baseUrl, pageModules } = runtime
     if (!(pagePath in pageModules)) {
         throw new Error(`invalid pagePath '${pagePath}'`)
     }
 
-    const importPath = util.cleanPath(baseUrl + pageModules[pagePath])
+    const importPath = util.cleanPath(baseUrl + pageModules[pagePath]!.path)
     const { default: Component, getStaticProps } = await import(importPath)
     const gsp = [Component.getStaticProps, getStaticProps].filter(util.isFunction)
     Component.hasStaticProps = gsp.length > 0
-    pageComponents[pagePath] = Component
+    pageModules[pagePath]!.Component = Component
     return Component
 }

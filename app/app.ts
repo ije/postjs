@@ -138,7 +138,7 @@ export class App {
         const bootstrapConfig: Record<string, any> = {
             baseUrl,
             defaultLocale,
-            pageModules: this._pageModules,
+            pageModules: {},
             hmr: this.isDev
         }
         const w1 = walk(path.join(this.srcDir), { ...walkOptions, maxDepth: 1 })
@@ -160,6 +160,11 @@ export class App {
             await this._compile('./pages/' + name)
         }
 
+        for (const p in this._pageModules) {
+            bootstrapConfig.pageModules[p] = {
+                path: this._pageModules[p]
+            }
+        }
         await this._compile('./main.js', {
             sourceCode: `
                 import { bootstrap } from 'https://postjs.io/app.ts'
