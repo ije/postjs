@@ -5,49 +5,38 @@ import { route, RouterContext, RouterURL, withRouter } from './router.ts'
 import util from './util.ts'
 import ReactDomServer from './vendor/react-dom/server.js'
 
-const runtime: {
+interface Runtime {
     baseUrl: string
+    AppComponent?: React.ComponentType<any>
     pageModules: Record<string, string>
-    pageComponents: Record<string, React.ComponentType<any>>,
-    ssrData: Record<string, { staticProps: any }>,
+    pageComponents: Record<string, React.ComponentType<any>>
+    ssrData: {
+        app: { staticProps: any }
+        pages: Record<string, { staticProps: any }>
+    }
     hmr: boolean
-} = {
+}
+const runtime: Runtime = {
     baseUrl: '/',
     pageModules: {},
     pageComponents: {},
-    ssrData: {},
+    ssrData: { app: { staticProps: null }, pages: {} },
     hmr: false,
 }
 
 export const events = new EventEmitter()
 events.setMaxListeners(1 << 10)
 
-export function renderPage(
-    url: RouterURL,
-    Page: { Component: React.ComponentType, staticProps: any },
-    App?: { Component: React.ComponentType, staticProps: any }
-) {
-    const PageEl = React.createElement(Page.Component, Page.staticProps)
-    const html = ReactDomServer.renderToString(
-        React.createElement(
-            RouterContext.Provider,
-            { value: url },
-            App ? React.createElement(App.Component, App.staticProps, PageEl) : PageEl
-        )
-    )
-    return html
-}
-
 export async function bootstrap({
     baseUrl = '/',
     defaultLocale = 'en',
-    locales = {},
+    appModule,
     pageModules = {},
     hmr = false
 }: {
     baseUrl?: string
     defaultLocale?: string
-    locales: Record<string, Record<string, string>>
+    appModule?: { hash: string }
     pageModules?: Record<string, string>
     hmr?: boolean
 }) {
@@ -57,34 +46,57 @@ export async function bootstrap({
     if (el) {
         const ssrData = JSON.parse(el.innerHTML)
         if (ssrData && 'url' in ssrData && ssrData.url.pagePath in pageModules) {
-            const { url: initialUrl, staticProps } = ssrData
+            const { url: initialUrl, staticProps, appStaticProps } = ssrData
             const InitialPageModulePath = util.cleanPath(baseUrl + pageModules[initialUrl.pagePath])
-            const { default: InitialPageComponent } = await import(InitialPageModulePath)
+            const [{ default: AppComponent }, { default: InitialPageComponent }] = await Promise.all([
+                appModule ? import(util.cleanPath(baseUrl + `./app.${appModule.hash}.js`)) : async () => ({}),
+                import(InitialPageModulePath),
+            ])
 
             InitialPageComponent.hasStaticProps = staticProps !== null
             Object.assign(runtime, {
                 baseUrl,
                 pageModules,
+                AppComponent,
                 pageComponents: {
                     [initialUrl.pagePath]: InitialPageComponent,
                 },
                 ssrData: {
-                    [initialUrl.asPath]: { staticProps }
+                    app: { staticProps: util.isObject(appStaticProps) ? appStaticProps : null },
+                    pages: { [initialUrl.asPath]: { staticProps } }
                 },
                 hmr
-            } as typeof runtime)
+            } as Partial<Runtime>)
 
-            hydrate(React.createElement(
-                AppRouter,
-                {
-                    baseUrl,
-                    initialUrl,
-                    pagePaths: Object.keys(pageModules)
-                },
-                React.createElement(withRouter(AppLoader))
-            ), document.querySelector('main'))
+            hydrate(React.createElement(App, { initialUrl }), document.querySelector('main'))
         }
     }
+}
+
+function App({ initialUrl }: { initialUrl: RouterURL }) {
+    const AppComponent = React.useMemo(() => {
+        const { AppComponent } = runtime
+        return AppComponent
+    }, [])
+    const appStaticProps = React.useMemo(() => {
+        const { ssrData } = runtime
+        return ssrData.app.staticProps
+    }, [])
+    const pagePaths = React.useMemo(() => {
+        const { pageModules } = runtime
+        return Object.keys(pageModules)
+    }, [])
+
+    const pageEl = React.createElement(withRouter(PageLoader))
+    return React.createElement(
+        AppRouter,
+        {
+            baseUrl: runtime.baseUrl,
+            initialUrl,
+            pagePaths
+        },
+        AppComponent ? React.createElement(AppComponent, appStaticProps, pageEl) : pageEl
+    )
 }
 
 function AppRouter({
@@ -120,17 +132,34 @@ function AppRouter({
     )
 }
 
-function AppLoader({ router: { pagePath, asPath } }: { router: RouterURL }) {
+function PageLoader({ router: { pagePath, asPath } }: { router: RouterURL }) {
     const page = React.useMemo(() => {
         const { pageComponents } = runtime
         return { Component: pageComponents[pagePath] }
     }, [pagePath])
     const staticProps = React.useMemo(() => {
         const { ssrData } = runtime
-        return ssrData[asPath]?.staticProps
+        return ssrData.pages[asPath]?.staticProps
     }, [asPath])
 
     return React.createElement(page.Component, staticProps)
+}
+
+export function renderPage(
+    url: RouterURL,
+    App: { Component: React.ComponentType, staticProps: any } | undefined,
+    Page: { Component: React.ComponentType, staticProps: any },
+) {
+    const El = React.createElement(
+        RouterContext.Provider,
+        { value: url },
+        React.createElement(
+            Page.Component,
+            Page.staticProps
+        )
+    )
+    const html = ReactDomServer.renderToString(App ? React.createElement(App.Component, App.staticProps, El) : El)
+    return html
 }
 
 export async function redirect(url: string, replace: boolean) {
@@ -197,7 +226,7 @@ export async function prefetchPage(url: string) {
     if (hasStaticProps && !(asPath in ssrData)) {
         const dataUrl = '/data/' + (util.trimPrefix(asPath, '/') || 'index') + '.json'
         const staticProps = await fetch(dataUrl).then(resp => resp.json())
-        ssrData[asPath] = { staticProps }
+        ssrData.pages[asPath] = { staticProps }
     }
 
     return true

@@ -1,4 +1,4 @@
-import { existsSync, path, walkSync } from '../deps.ts'
+import { existsSync, path } from '../deps.ts'
 import log from '../log.ts'
 import util from '../util.ts'
 
@@ -9,7 +9,6 @@ export interface AppConfig {
     readonly cacheDeps: boolean
     readonly baseUrl: string
     readonly defaultLocale: string
-    readonly locales: Record<string, Record<string, string>>
     readonly importMap: {
         imports: Record<string, string>
     }
@@ -23,7 +22,6 @@ export function loadAppConfigSync(appDir: string) {
         cacheDeps: true,
         baseUrl: '/',
         defaultLocale: 'en',
-        locales: {},
         importMap: {
             imports: {}
         }
@@ -77,33 +75,6 @@ export function loadAppConfigSync(appDir: string) {
         }
     } catch (err) {
         log.error('bad app config: ', err)
-    }
-
-    const i18nDir = path.join(config.rootDir, 'i18n')
-    if (existsSync(i18nDir)) {
-        const w = walkSync(i18nDir, { maxDepth: 1 })
-        for (const { path: fp, name, isDirectory } of w) {
-            if (isDirectory) {
-                // todo: find i18n files(json)
-            } else if (/^[a-z]{2}(\-[a-z0-9]+)?\.json$/i.test(name)) {
-                const [lang, ccode] = util.splitBy(util.trimSuffix(name, '.json'), '-')
-                const locale = [lang.toLowerCase(), ccode.toUpperCase()].filter(Boolean).join('-')
-                try {
-                    const dict = JSON.parse(Deno.readTextFileSync(fp))
-                    if (util.isObject(dict)) {
-                        const dictMap: Record<string, string> = {}
-                        Object.entries(dict).forEach(([key, text]) => {
-                            if (util.isNEString(text)) {
-                                dictMap[key] = text
-                            }
-                        })
-                        config.locales[locale] = dictMap
-                    }
-                } catch (error) {
-                    log.error(`bad locale(${locale}):`, error)
-                }
-            }
-        }
     }
 
     return config
