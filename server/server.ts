@@ -37,8 +37,8 @@ export async function start(appDir: string, port: number, isDev = false) {
                 const requestMap = pathname.endsWith('.js.map')
                 const mod = app.getModule(requestMap ? pathname.slice(0, -4) : pathname)
                 if (mod) {
-                    const inm = req.headers.get('If-None-Match')
-                    if (inm && inm === mod.sourceHash) {
+                    const etag = req.headers.get('If-None-Match')
+                    if (etag && etag === mod.hash) {
                         req.respond({
                             status: 304
                         })
@@ -48,7 +48,7 @@ export async function start(appDir: string, port: number, isDev = false) {
                         status: 200,
                         headers: new Headers({
                             'Content-Type': `application/${requestMap ? 'json' : 'javascript'}; charset=utf-8`,
-                            'ETag': mod.sourceHash
+                            'ETag': mod.hash
                         }),
                         body: requestMap ? mod.sourceMap : mod.js
                     })

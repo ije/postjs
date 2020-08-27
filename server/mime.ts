@@ -1,6 +1,5 @@
 const mimeTypes: Record<string, string[]> = {
     'application/javascript': ['js', 'mjs'],
-    'application/node': ['cjs'],
     'application/wasm': ['wasm'],
     'application/json': ['json', 'map'],
     'application/json5': ['json5'],
@@ -12,7 +11,7 @@ const mimeTypes: Record<string, string[]> = {
     'text/css': ['css'],
     'text/less': ['less'],
     'text/stylus': ['stylus', 'styl'],
-    'text/html': ['html', 'htm', 'shtml'],
+    'text/html': ['html', 'htm'],
     'text/markdown': ['markdown', 'md'],
     'text/mdx': ['mdx'],
     'text/csv': ['csv'],
