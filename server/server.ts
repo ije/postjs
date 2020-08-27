@@ -28,7 +28,7 @@ export async function start(appDir: string, port: number, isDev = false) {
 
             //serve apis
             if (pathname.startsWith('/api/')) {
-                app.callAPI(req, { pathname, search })
+                await app.callAPI(req, { pathname, search })
                 continue
             }
 

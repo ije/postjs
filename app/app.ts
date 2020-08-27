@@ -1,5 +1,4 @@
 import React from 'react'
-import { APIHandle } from '../api.ts'
 import { colors, existsSync, path, ServerRequest, Sha1, walk } from '../deps.ts'
 import { renderToTags } from '../head.ts'
 import { createHtml } from '../html.ts'
@@ -8,7 +7,7 @@ import { ILocation, route, RouterURL } from '../router.ts'
 import { compile } from '../ts/compile.ts'
 import util from '../util.ts'
 import AnsiUp from '../vendor/ansi-up/ansi-up.ts'
-import { apiRequest, apiResponse } from './api.ts'
+import { PostAPIRequest, PostAPIResponse } from './api.ts'
 import { AppConfig, loadAppConfigSync } from './config.ts'
 
 const reHttp = /^https?:\/\//i
@@ -29,7 +28,6 @@ export class App {
     readonly mode: 'development' | 'production'
     readonly ready: Promise<void>
 
-    private _apis: Map<string, APIHandle> = new Map()
     private _deps: Map<string, Module> = new Map()
     private _modules: Map<string, Module> = new Map()
     private _pageModules: Record<string, string> = {}
@@ -52,7 +50,6 @@ export class App {
         const { rootDir, srcDir } = this.config
         return path.join(rootDir, srcDir)
     }
-
 
     async build() {
 
@@ -110,16 +107,19 @@ export class App {
         return null
     }
 
-    callAPI(req: ServerRequest, location: ILocation) {
+    async callAPI(req: ServerRequest, location: ILocation) {
         const { pagePath, params, query } = route(
             this.config.baseUrl,
-            Array.from(this._apis.keys()).map(p => path.join('/api/', p)),
+            Array.from(this._modules.keys()).filter(p => p.startsWith('./api/')).map(p => p.slice(1).replace(reModuleExt, '')),
             { location }
         )
         if (pagePath) {
-            const handle = this._apis.get(util.trimPrefix(pagePath, '/api'))!
-            handle(new apiRequest(req, params, query), new apiResponse(req))
-            return
+            const importPath = '.' + pagePath + '.js'
+            if (this._modules.has(importPath)) {
+                const { default: handle } = await import(this._modules.get(importPath)!.jsFile)
+                handle(new PostAPIRequest(req, params, query), new PostAPIResponse(req))
+                return
+            }
         }
 
         req.respond({
@@ -166,8 +166,8 @@ export class App {
             }
         }
 
-        for await (const { path: fp } of w2) {
-            const name = path.basename(fp)
+        for await (const { path: p } of w2) {
+            const name = path.basename(p)
             const pagePath = '/' + name.replace(reModuleExt, '').replace(/\s+/g, '-').replace(/\/?index$/i, '')
             this._pageModules[pagePath] = './pages/' + name.replace(reModuleExt, '') + '.js'
             await this._compile('./pages/' + name)
@@ -186,13 +186,8 @@ export class App {
             `
         })
 
-        for await (const { path: fp } of w3) {
-            const name = path.basename(fp)
-            const apiPath = '/' + name.replace(reModuleExt, '').replace(/\s+/g, '-')
-            const { default: handle } = await import(fp)
-            if (util.isFunction(handle)) {
-                this._apis.set(apiPath, handle)
-            }
+        for await (const { path: p } of w3) {
+            const name = path.basename(p)
             await this._compile('./api/' + name)
         }
 
@@ -201,8 +196,10 @@ export class App {
             const isIndex = path == '/'
             log.info('○', path, isIndex ? colors.dim('(index)') : '')
         }
-        for (const path of this._apis.keys()) {
-            log.info('λ', `/api${path}`)
+        for (const path of this._modules.keys()) {
+            if (path.startsWith('./api/')) {
+                log.info('λ', path.slice(1))
+            }
         }
 
         if (this.isDev) {
@@ -505,7 +502,7 @@ export class App {
                     { default: Page, getStaticProps }
                 ] = await Promise.all([
                     import(this._modules.get('./renderer.js')!.jsFile),
-                    await import(this._modules.get(this._pageModules[url.pagePath])!.jsFile)
+                    import(this._modules.get(this._pageModules[url.pagePath])!.jsFile)
                 ])
                 if (util.isFunction(Page)) {
                     const fn = [Page.getStaticProps, getStaticProps].filter(util.isFunction)[0]

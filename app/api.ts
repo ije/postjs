@@ -1,7 +1,7 @@
 import { APIRequest, APIResponse } from '../api.ts'
 import { ServerRequest } from '../deps.ts'
 
-export class apiRequest implements APIRequest {
+export class PostAPIRequest implements APIRequest {
     private _req: ServerRequest
 
     cookies: ReadonlyMap<string, string>
@@ -48,7 +48,7 @@ export class apiRequest implements APIRequest {
     }
 }
 
-export class apiResponse implements APIResponse {
+export class PostAPIResponse implements APIResponse {
     private _req: ServerRequest
     private _headers: Headers
     private _status: number
