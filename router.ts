@@ -93,7 +93,7 @@ function matchPath(routePath: string, locPath: string): [Record<string, string>,
 
         if (routeSeg.startsWith('$') && routeSeg.length > 1) {
             params[routeSeg.slice(1)] = decodeURIComponent(locSeg)
-        } else if (routeSeg.startsWith('*') && routeSeg.length > 1 && i === routeSegments.length - 1) {
+        } else if (routeSeg.startsWith('~') && routeSeg.length > 1 && i === routeSegments.length - 1) {
             params[routeSeg.slice(1)] = locSegments.slice(i).map(decodeURIComponent).join('/')
             break
         } else if (routeSeg !== locSeg) {
