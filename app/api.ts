@@ -1,5 +1,5 @@
 import { APIRequest, APIResponse } from '../api.ts'
-import { ServerRequest } from '../deps.ts'
+import { ServerRequest } from '../std.ts'
 
 export class PostAPIRequest implements APIRequest {
     private _req: ServerRequest
@@ -79,23 +79,23 @@ export class PostAPIResponse implements APIResponse {
         return this
     }
 
-    send(data: string | Uint8Array | ArrayBuffer): void {
+    send(data: string | Uint8Array | ArrayBuffer) {
         let body: string | Uint8Array
         if (data instanceof ArrayBuffer) {
             body = new Uint8Array(data)
         } else {
             body = data
         }
-        this._req.respond({
+        return this._req.respond({
             status: this._status,
             headers: this._headers,
             body
         })
     }
 
-    json(data: any): void {
+    json(data: any) {
         this._headers.set('Content-Type', 'application/json')
-        this._req.respond({
+        return this._req.respond({
             status: this._status,
             headers: this._headers,
             body: JSON.stringify(data)

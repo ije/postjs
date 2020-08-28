@@ -15,8 +15,8 @@ export interface APIResponse {
     addHeader(key: string, value: string): this
     setHeader(key: string, value: string): this
     removeHeader(key: string): this
-    send(data: string | Uint8Array | ArrayBuffer): void
-    json(data: any): void
+    send(data: string | Uint8Array | ArrayBuffer): Promise<void>
+    json(data: any): Promise<void>
 }
 
 export interface APIHandle {
