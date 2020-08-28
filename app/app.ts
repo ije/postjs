@@ -1,8 +1,8 @@
-import { colors, existsSync, path, ServerRequest, Sha1, walk } from '../deps.ts'
 import { renderToTags } from '../head.ts'
 import { createHtml } from '../html.ts'
 import log from '../log.ts'
 import { ILocation, route, RouterURL } from '../router.ts'
+import { colors, existsSync, path, ServerRequest, Sha1, walk } from '../std.ts'
 import { compile } from '../ts/compile.ts'
 import util from '../util.ts'
 import AnsiUp from '../vendor/ansi-up/ansi-up.ts'
@@ -53,13 +53,21 @@ export class App {
 
     }
 
-    async getPageHtml(location: ILocation, locale = this.config.defaultLocale): Promise<[number, string]> {
-        const { baseUrl } = this.config
-        const url = route(baseUrl, Object.keys(this._pageModules), { location, fallback: '/404' })
+    async getPageHtml(location: ILocation): Promise<[number, string]> {
+        const { baseUrl, defaultLocale } = this.config
+        const url = route(
+            baseUrl,
+            Object.keys(this._pageModules),
+            {
+                location,
+                defaultLocale,
+                fallback: '/404'
+            }
+        )
         const { code, head, body, ssrData } = await this._renderPage(url)
         const html = createHtml({
-            lang: locale,
-            head: [...head, `<meta name="postjs-head-end" content="end" />`],
+            lang: url.locale,
+            head: head,
             scripts: [
                 { type: 'application/json', id: 'ssr-data', innerText: JSON.stringify(ssrData) },
                 { src: path.join(baseUrl, 'main.js') + `?t=${Date.now()}`, type: 'module' },
@@ -69,16 +77,21 @@ export class App {
         return [code, html]
     }
 
-    async getPageStaticProps(location: ILocation, locale?: string): Promise<any> {
-        const { defaultLocale, baseUrl } = this.config
-        const url = route(baseUrl, Object.keys(this._pageModules), { location, fallback: '/404' })
+    async getPageStaticProps(location: ILocation) {
+        const { baseUrl, defaultLocale } = this.config
+        const url = route(
+            baseUrl,
+            Object.keys(this._pageModules),
+            {
+                location,
+                defaultLocale,
+                fallback: '/404'
+            }
+        )
         if (url.pagePath in this._pageModules) {
-            const pageModule = this._modules.get(this._pageModules[url.pagePath])!
-            const { default: Page, getStaticProps } = await import(path.join(this.srcDir, pageModule.sourceFile))
-            if (util.isFunction(Page)) {
-                const gsp = [Page.getStaticProps, getStaticProps].filter(util.isFunction)[0]
-                const staticProps = gsp ? await gsp(url, locale || defaultLocale) : null
-                return util.isObject(staticProps) ? staticProps : null
+            const { staticProps } = await this._loadComponentModule(this._pageModules[url.pagePath])
+            if (staticProps) {
+                return staticProps
             }
         }
         return null

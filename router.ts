@@ -2,11 +2,16 @@ import React from 'react'
 import util from './util.ts'
 
 export interface RouterURL {
-    pagePath: string
-    asPath: string
     locale: string
+    asPath: string
+    pagePath: string
     params: Record<string, string>
     query: Record<string, string | string[]>
+}
+
+export interface ILocation {
+    pathname: string
+    search?: string
 }
 
 export const RouterContext = React.createContext<RouterURL>({
@@ -30,14 +35,8 @@ export function useRouter() {
     return React.useContext(RouterContext)
 }
 
-export interface ILocation {
-    pathname: string
-    search?: string
-}
-
-export function route(base: string, pagePaths: string[], options?: { location?: ILocation, fallback?: string }): RouterURL {
+export function route(base: string, pagePaths: string[], options?: { location?: ILocation, fallback?: string, defaultLocale?: string, locales?: string[] }): RouterURL {
     const { pathname, search }: ILocation = (options?.location || (window as any).location || { pathname: '/' })
-    const asPath = util.cleanPath(util.trimPrefix(pathname, base))
     const query: Record<string, string | string[]> = {}
 
     if (search) {
@@ -57,10 +56,17 @@ export function route(base: string, pagePaths: string[], options?: { location?: 
         })
     }
 
+    let locale = options?.defaultLocale || 'en'
+    let asPath = util.cleanPath(util.trimPrefix(pathname, base))
     let pagePath = ''
     let params: Record<string, string> = {}
 
-    // todo: sort pagePaths to improve router preformance
+    const a = asPath.slice(1).split('/')
+    if (options?.locales?.includes(a[0])) {
+        locale = a[0]
+        asPath = '/' + a.slice(1).join('/')
+    }
+
     for (const routePath of pagePaths) {
         const [p, ok] = matchPath(routePath, asPath)
         if (ok) {
@@ -74,7 +80,7 @@ export function route(base: string, pagePaths: string[], options?: { location?: 
         pagePath = options?.fallback
     }
 
-    return { pagePath, asPath, params, query, locale: '' }
+    return { locale, asPath, pagePath, params, query }
 }
 
 function matchPath(routePath: string, locPath: string): [Record<string, string>, boolean] {
