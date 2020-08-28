@@ -1,5 +1,5 @@
-import { existsSync, path } from '../deps.ts'
 import log from '../log.ts'
+import { existsSync, path } from '../std.ts'
 import util from '../util.ts'
 
 export interface AppConfig {

@@ -1,7 +1,7 @@
 import { App } from '../app/app.ts'
-import { existsSync, path, serve, ws } from '../deps.ts'
 import { createHtml } from '../html.ts'
 import log from '../log.ts'
+import { existsSync, path, serve, ws } from '../std.ts'
 import util from '../util.ts'
 import { getContentType } from './mime.ts'
 
