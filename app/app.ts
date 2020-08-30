@@ -98,7 +98,7 @@ export class App {
     }
 
     getModule(filename: string): Module | null {
-        filename = '/' + util.trimPrefix(util.trimPrefix(filename, this.config.baseUrl), '/')
+        filename = util.cleanPath(util.trimPrefix(filename, this.config.baseUrl))
         if (filename.startsWith('/-/')) {
             filename = util.trimPrefix(filename, '/-/')
             if (this._deps.has(filename)) {
@@ -108,11 +108,10 @@ export class App {
             filename = '.' + filename
             if (this._modules.has(filename)) {
                 return this._modules.get(filename)!
-            } else {
-                filename = filename.replace(/\.[0-9a-f]{40}\.js$/, '.js')
-                if (this._modules.has(filename)) {
-                    return this._modules.get(filename)!
-                }
+            }
+            filename = filename.replace(/\.[0-9a-f]{40}\.js$/, '.js')
+            if (this._modules.has(filename)) {
+                return this._modules.get(filename)!
             }
         }
         return null
@@ -158,8 +157,8 @@ export class App {
         const w2 = walk(path.join(this.srcDir, 'pages'), walkOptions)
         const w3 = walk(path.join(this.srcDir, 'api'), walkOptions)
 
-        for await (const { path: fp } of w1) {
-            const name = path.basename(fp)
+        for await (const { path: p } of w1) {
+            const name = path.basename(p)
             if (name.replace(reModuleExt, '') === 'app') {
                 const mod = await this._compile('./' + name)
                 bootstrapConfig.appModule = { hash: mod.hash }
@@ -254,7 +253,7 @@ export class App {
     private async _compile(sourceFile: string, options?: { sourceCode?: string, transpileOnly?: boolean }) {
         const { cacheDeps, rootDir, importMap } = this.config
         const isRemoteMoule = reHttp.test(sourceFile) || (sourceFile in importMap.imports && reHttp.test(importMap.imports[sourceFile]))
-        const sourceFileExt = reModuleExt.test(sourceFile) ? path.extname(sourceFile) : '.js'
+        const sourceFileExt = reModuleExt.test(sourceFile) ? path.extname(sourceFile).replace('mjs', 'js') : '.js'
         const moduleName = util.trimSuffix(sourceFile, sourceFileExt).replace(reHttp, '') + '.js'
 
         // compile the deps only once

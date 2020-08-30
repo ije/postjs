@@ -1,11 +1,12 @@
-import ts from '../vendor/typescript/typescript.ts'
+// @deno-types="../vendor/typescript/lib/typescript.d.ts"
+import ts from '../vendor/typescript/lib/typescript.js'
 
 /**
  * TypeScript AST Transformer that adds source file and line number to JSX elements.
  *
  * @ref https://github.com/dropbox/ts-transform-react-jsx-source
  */
-export default function transformReactJsxSource(sf: ts.SourceFile, node: ts.Node): ts.VisitResult<ts.Node> | null {
+export default function transformReactJsxSource(sf: ts.SourceFile, node: ts.Node): ts.VisitResult<ts.Node> {
     if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
         const fileNameAttr = ts.createPropertyAssignment(
             'fileName',
@@ -38,6 +39,4 @@ export default function transformReactJsxSource(sf: ts.SourceFile, node: ts.Node
             )
         }
     }
-    return null
 }
-

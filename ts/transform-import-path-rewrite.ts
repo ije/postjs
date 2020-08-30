@@ -1,11 +1,12 @@
-import ts from '../vendor/typescript/typescript.ts'
+// @deno-types="../vendor/typescript/lib/typescript.d.ts"
+import ts from '../vendor/typescript/lib/typescript.js'
 
 /**
  * TS AST transformer to rewrite import path.
  *
  * @ref https://github.com/dropbox/ts-transform-import-path-rewrite
  */
-export default function transformImportPathRewrite(sf: ts.SourceFile, node: ts.Node, rewriteImportPath: (importPath: string) => string): ts.VisitResult<ts.Node> | null {
+export default function transformImportPathRewrite(sf: ts.SourceFile, node: ts.Node, options: { rewriteImportPath(importPath: string): string }): ts.VisitResult<ts.Node> {
     let importPath = ''
     if (
         (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
@@ -29,7 +30,7 @@ export default function transformImportPathRewrite(sf: ts.SourceFile, node: ts.N
     }
 
     if (importPath) {
-        const rewrittenPath = rewriteImportPath(importPath)
+        const rewrittenPath = options.rewriteImportPath(importPath)
         if (rewrittenPath !== importPath) {
             const newNode = ts.getMutableClone(node)
             if (ts.isImportDeclaration(newNode) || ts.isExportDeclaration(newNode)) {
@@ -42,8 +43,6 @@ export default function transformImportPathRewrite(sf: ts.SourceFile, node: ts.N
             return newNode
         }
     }
-
-    return null
 }
 
 function isDynamicImport(node: ts.Node): node is ts.CallExpression {

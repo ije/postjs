@@ -1,7 +1,9 @@
-import ts from '../vendor/typescript/typescript.ts'
+// @deno-types="../vendor/typescript/lib/typescript.d.ts"
+import ts from '../vendor/typescript/lib/typescript.js'
 import transformImportPathRewrite from './transform-import-path-rewrite.ts'
 import transformReactJsxSource from './transform-react-jsx-source.ts'
-import { CreateTransformer } from './transformer.ts'
+import transformReactRefresh from './transform-react-refresh.ts'
+import { CreatePlainTransformer, CreateTransformer } from './transformer.ts'
 
 export interface CompileOptions {
     mode?: 'development' | 'production'
@@ -15,10 +17,11 @@ export function compile(fileName: string, source: string, { mode, rewriteImportP
         after: []
     }
     if (mode === 'development') {
-        transformers.before!.push(CreateTransformer(transformReactJsxSource))
+        transformers.before!.push(CreatePlainTransformer(transformReactJsxSource))
+        transformers.after!.push(CreateTransformer(transformReactRefresh))
     }
     if (rewriteImportPath) {
-        transformers.after!.push(CreateTransformer(transformImportPathRewrite, rewriteImportPath))
+        transformers.after!.push(CreatePlainTransformer(transformImportPathRewrite, rewriteImportPath))
     }
 
     return ts.transpileModule(source, {
