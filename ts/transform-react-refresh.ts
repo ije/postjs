@@ -7,17 +7,27 @@ interface IHookCall {
     key: string
 }
 
-const refreshReg = '$RefreshReg$'
 const refreshSig = '$RefreshSig$'
+const refreshReg = '$RefreshReg$'
 
 /**
  * TypeScript AST Transformer for react refresh.
  * @ref https://github.com/facebook/react/issues/16604#issuecomment-528663101
  * @ref https://github.com/facebook/react/blob/master/packages/react-refresh/src/ReactFreshBabelPlugin.js
  */
-export default function transformReactRefresh(_ctx: ts.TransformationContext, sf: ts.SourceFile): ts.SourceFile {
-    const ctx = new TransformContext(sf)
-    return sf
+export default function transformReactRefresh(ctx: ts.TransformationContext, sf: ts.SourceFile): ts.SourceFile {
+    const t = new RefreshTransformer(sf)
+    return ts.updateSourceFileNode(
+        sf,
+        ts.setTextRange(
+            ts.createNodeArray([
+                // $RefreshSig$
+                ...t.statements
+                // $RefreshReg$
+            ]),
+            sf.statements
+        )
+    )
 }
 
 function isComponentishName(name: string) {
@@ -210,14 +220,20 @@ function traverse(node: ts.Node, callback: (node: ts.Node) => void) {
     ts.forEachChild(node, c => traverse(c, callback))
 }
 
-export class TransformContext {
+export class RefreshTransformer {
+    private _sf: ts.SourceFile
     private _hookCalls: WeakMap<ts.FunctionDeclaration | ts.FunctionExpression | ts.ArrowFunction, IHookCall[]>
     private _seenForRegistration: WeakSet<ts.Node>
 
     constructor(sf: ts.SourceFile) {
+        this._sf = sf
         this._hookCalls = new WeakMap()
         this._seenForRegistration = new WeakSet()
         this._traverse(sf)
+    }
+
+    get statements(): ts.NodeArray<ts.Statement> {
+        return this._sf.statements
     }
 
     hasRegistration(node: ts.Node) {
