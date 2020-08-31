@@ -51,7 +51,7 @@ export async function start(appDir: string, port: number, isDev = false) {
                                 'Content-Type': `application/${requestMap ? 'json' : 'javascript'}; charset=utf-8`,
                                 'ETag': mod.hash
                             }),
-                            body: requestMap ? mod.sourceMap : mod.js
+                            body: requestMap ? mod.sourceMap : mod.jsContent
                         })
                         continue
                     }

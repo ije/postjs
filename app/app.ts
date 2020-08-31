@@ -3,7 +3,9 @@ import { createHtml } from '../html.ts'
 import log from '../log.ts'
 import { ILocation, route, RouterURL } from '../router.ts'
 import { colors, existsSync, path, ServerRequest, Sha1, walk } from '../std.ts'
-import { compile } from '../ts/compile.ts'
+import { compile, createSourceFile } from '../ts/compile.ts'
+import transformImportPathRewrite from '../ts/transform-import-path-rewrite.ts'
+import { traverse } from '../ts/traverse.ts'
 import util from '../util.ts'
 import AnsiUp from '../vendor/ansi-up/ansi-up.ts'
 import { PostAPIRequest, PostAPIResponse } from './api.ts'
@@ -13,12 +15,16 @@ const reHttp = /^https?:\/\//i
 const reModuleExt = /\.(m?jsx?|tsx?)$/i
 
 interface Module {
+    name: string
     sourceFile: string
+    sourceType: string
     sourceHash: string
     sourceMap: string
+    sourceContent: string
+    isRemote: boolean
     deps: { path: string, hash: string }[]
     jsFile: string
-    js: string
+    jsContent: string
     hash: string
 }
 
@@ -252,50 +258,48 @@ export class App {
 
     private async _compile(sourceFile: string, options?: { sourceCode?: string, transpileOnly?: boolean }) {
         const { cacheDeps, rootDir, importMap } = this.config
-        const isRemoteMoule = reHttp.test(sourceFile) || (sourceFile in importMap.imports && reHttp.test(importMap.imports[sourceFile]))
-        const sourceFileExt = reModuleExt.test(sourceFile) ? path.extname(sourceFile).replace('mjs', 'js') : '.js'
-        const moduleName = util.trimSuffix(sourceFile, sourceFileExt).replace(reHttp, '') + '.js'
-
-        // compile the deps only once
-        if (isRemoteMoule && this._deps.has(moduleName)) {
-            return this._deps.get(moduleName)!
-        }
-
-        // do not re-compile the local modules when not transpileOnly
-        if (!isRemoteMoule && this._modules.has(moduleName) && !options?.transpileOnly) {
-            return this._deps.get(moduleName)!
-        }
-
-        const saveDir = path.join(rootDir, '.postjs', path.dirname(isRemoteMoule ? sourceFile.replace(reHttp, '-/') : sourceFile))
-        const name = util.trimSuffix(path.basename(sourceFile), sourceFileExt)
-        const metaFile = path.join(saveDir, `${name}.meta.json`)
         const mod: Module = {
+            name: path.basename(sourceFile).replace(reModuleExt, ''),
             sourceFile,
+            sourceType: reModuleExt.test(sourceFile) ? path.extname(sourceFile).slice(1).replace('mjs', 'js') : 'js',
             sourceMap: '',
             sourceHash: '',
+            sourceContent: '',
+            isRemote: reHttp.test(sourceFile) || (sourceFile in importMap.imports && reHttp.test(importMap.imports[sourceFile])),
             hash: '',
             deps: [],
             jsFile: '',
-            js: '',
+            jsContent: '',
         }
-        let source = ''
-        let fsync = false
+        const moduleId = mod.sourceFile.replace(reHttp, '').replace(reModuleExt, '') + '.js'
+        const saveDir = path.join(rootDir, '.postjs', path.dirname(mod.isRemote ? sourceFile.replace(reHttp, '/-/') : sourceFile))
 
+        // compile the deps only once
+        if (mod.isRemote && this._deps.has(mod.sourceFile)) {
+            return this._deps.get(mod.sourceFile)!
+        }
+
+        // do not re-compile the local modules when not transpileOnly
+        if (!mod.isRemote && this._modules.has(mod.sourceFile) && !options?.transpileOnly) {
+            return this._deps.get(mod.sourceFile)!
+        }
+
+        const metaFile = path.join(saveDir, `${mod.name}.meta.json`)
         if (existsSync(metaFile)) {
             const { sourceHash, hash, deps } = JSON.parse(await Deno.readTextFile(metaFile))
             if (util.isNEString(sourceHash) && util.isNEString(hash) && util.isArray(deps)) {
                 mod.sourceHash = sourceHash
                 mod.hash = hash
                 mod.deps = deps
-                mod.jsFile = path.join(saveDir, name + (isRemoteMoule ? '' : `.${hash}`)) + '.js'
-                mod.js = await Deno.readTextFile(mod.jsFile)
+                mod.jsFile = path.join(saveDir, mod.name + (mod.isRemote ? '' : `.${hash}`)) + '.js'
+                mod.jsContent = await Deno.readTextFile(mod.jsFile)
                 try {
                     mod.sourceMap = await Deno.readTextFile(mod.jsFile + '.map')
                 } catch (e) { }
             }
         }
 
-        if (isRemoteMoule) {
+        if (mod.isRemote) {
             let url = sourceFile
             for (const importPath in importMap.imports) {
                 const alias = importMap.imports[importPath]
@@ -310,13 +314,21 @@ export class App {
             if (mod.sourceHash === '') {
                 log.info('Download', sourceFile, url != sourceFile ? colors.dim(`• ${url}`) : '')
                 try {
-                    source = await fetch(url).then(resp => {
+                    mod.sourceContent = await fetch(url).then(resp => {
                         if (resp.status == 200) {
+                            if (mod.sourceType === 'js') {
+                                const ct = resp.headers.get('Content-Type')
+                                if (ct === 'text/typescript') {
+                                    mod.sourceType = 'ts'
+                                } else if (ct === 'text/jsx') {
+                                    mod.sourceType = 'jsx'
+                                }
+                            }
                             return resp.text()
                         }
                         return Promise.reject(new Error(`${resp.status} - ${resp.statusText}`))
                     })
-                    mod.sourceHash = (new Sha1()).update(source).hex()
+                    mod.sourceHash = (new Sha1()).update(mod.sourceContent).hex()
                 } catch (err) {
                     throw new Error(`Download ${sourceFile}: ${err.message}`)
                 }
@@ -330,7 +342,7 @@ export class App {
                     })
                     const sourceHash = (new Sha1()).update(text).hex()
                     if (mod.sourceHash !== sourceHash) {
-                        source = text
+                        mod.sourceContent = text
                         mod.sourceHash = sourceHash
                     }
                 } catch (err) {
@@ -340,7 +352,7 @@ export class App {
         } else if (options?.sourceCode) {
             const sourceHash = (new Sha1()).update(options.sourceCode).hex()
             if (mod.sourceHash === '' || mod.sourceHash !== sourceHash) {
-                source = options.sourceCode
+                mod.sourceContent = options.sourceCode
                 mod.sourceHash = sourceHash
             }
         } else {
@@ -355,14 +367,15 @@ export class App {
             const text = await Deno.readTextFile(filepath)
             const sourceHash = (new Sha1()).update(text).hex()
             if (mod.sourceHash === '' || mod.sourceHash !== sourceHash) {
-                source = text
+                mod.sourceContent = text
                 mod.sourceHash = sourceHash
             }
         }
 
+        let fsync = false
+
         // compile source
-        if (source != '') {
-            const t = performance.now()
+        if (mod.sourceContent != '') {
             const deps: Array<{ path: string, hash: string }> = []
             const rewriteImportPath = (importPath: string): string => {
                 let rewrittenPath: string
@@ -371,7 +384,7 @@ export class App {
                 }
                 if (reHttp.test(importPath)) {
                     if (cacheDeps || /\.(jsx|tsx?)$/i.test(importPath)) {
-                        if (isRemoteMoule) {
+                        if (mod.isRemote) {
                             rewrittenPath = path.relative(
                                 path.dirname(path.resolve('/', sourceFile.replace(reHttp, '-/'))),
                                 path.resolve('/', importPath.replace(reHttp, '-/'))
@@ -386,7 +399,7 @@ export class App {
                         rewrittenPath = importPath
                     }
                 } else {
-                    if (isRemoteMoule) {
+                    if (mod.isRemote) {
                         const sourceUrl = new URL(sourceFile)
                         let pathname = importPath
                         if (!pathname.startsWith('/')) {
@@ -403,7 +416,7 @@ export class App {
                 if (reHttp.test(importPath)) {
                     deps.push({ path: importPath, hash: '' })
                 } else {
-                    if (isRemoteMoule) {
+                    if (mod.isRemote) {
                         const sourceUrl = new URL(sourceFile)
                         let pathname = importPath
                         if (!pathname.startsWith('/')) {
@@ -424,19 +437,41 @@ export class App {
                 }
                 return rewrittenPath.replace(reModuleExt, '') + '.js'
             }
-            const { diagnostics, outputText, sourceMapText } = compile(sourceFile, source, { mode: this.mode, rewriteImportPath })
-            if (diagnostics && diagnostics.length) {
-                throw new Error(`compile ${sourceFile}: ${JSON.stringify(diagnostics)}`)
+
+            if (mod.isRemote && mod.sourceType === 'js') {
+                const sf = createSourceFile(mod.sourceFile, mod.sourceContent)
+                const rewrittenPaths: Record<string, string> = {}
+                traverse(sf, node => transformImportPathRewrite(sf, node, path => {
+                    const rewrittenPath = rewriteImportPath(path)
+                    rewrittenPaths[path] = rewrittenPath
+                    return rewrittenPath
+                }))
+                mod.deps = deps
+                mod.jsContent = mod.sourceContent.replace(/ from ("|')(.+?)("|');?/g, (s, ql, importPath, qr) => {
+                    if (importPath in rewrittenPaths) {
+                        return ` from ${ql}${rewrittenPaths[importPath]}${qr};`
+                    }
+                    return s
+                })
+                mod.hash = (new Sha1()).update(mod.jsContent).hex()
+                mod.sourceMap = ''
+            } else {
+                const t = performance.now()
+                const { diagnostics, outputText, sourceMapText } = compile(sourceFile, mod.sourceContent, { mode: this.mode, rewriteImportPath })
+                if (diagnostics && diagnostics.length) {
+                    throw new Error(`compile ${sourceFile}: ${JSON.stringify(diagnostics)}`)
+                }
+                mod.deps = deps
+                mod.hash = (new Sha1()).update(outputText).hex()
+                mod.jsContent = outputText
+                mod.sourceMap = sourceMapText!
+
+                log.debug(`${sourceFile} compiled in ${(performance.now() - t).toFixed(3)}ms`)
             }
-            mod.hash = (new Sha1()).update(outputText).hex()
-            mod.deps = deps
-            mod.js = outputText
-            mod.sourceMap = sourceMapText!
+
             if (!fsync) {
                 fsync = true
             }
-
-            log.debug(`${sourceFile} compiled in ${(performance.now() - t).toFixed(3)}ms`)
         }
 
         if (!options?.transpileOnly) {
@@ -449,16 +484,16 @@ export class App {
                             path.dirname(path.resolve('/', sourceFile)),
                             path.resolve('/', dep.path.replace(reModuleExt, ''))
                         )
-                        mod.js = mod.js.replace(/ from "(.+?)";/g, (s, importPath) => {
+                        mod.jsContent = mod.jsContent.replace(/ from ("|')(.+?)("|');?/g, (s, ql, importPath, qr) => {
                             if (
                                 /\.[0-9a-fx]{40}\.js$/.test(importPath) &&
                                 importPath.slice(0, importPath.length - 44) === depImportPath
                             ) {
-                                return ` from "${depImportPath}.${dep.hash}.js";`
+                                return ` from ${ql}${depImportPath}.${dep.hash}.js${qr};`
                             }
                             return s
                         })
-                        mod.hash = (new Sha1()).update(mod.js).hex()
+                        mod.hash = (new Sha1()).update(mod.jsContent).hex()
                     }
                     if (!fsync) {
                         fsync = true
@@ -468,7 +503,7 @@ export class App {
         }
 
         if (fsync) {
-            mod.jsFile = path.join(saveDir, name + (isRemoteMoule ? '' : `.${mod.hash}`)) + '.js'
+            mod.jsFile = path.join(saveDir, mod.name + (mod.isRemote ? '' : `.${mod.hash}`)) + '.js'
             await Promise.all([
                 this._writeTextFile(metaFile, JSON.stringify({
                     sourceFile,
@@ -476,15 +511,15 @@ export class App {
                     hash: mod.hash,
                     deps: mod.deps,
                 }, undefined, 4)),
-                this._writeTextFile(mod.jsFile, mod.js),
-                this._writeTextFile(mod.jsFile + '.map', mod.sourceMap)
+                this._writeTextFile(mod.jsFile, mod.jsContent),
+                mod.sourceMap !== '' ? this._writeTextFile(mod.jsFile + '.map', mod.sourceMap) : (async () => { })()
             ])
         }
 
-        if (isRemoteMoule) {
-            this._deps.set(moduleName, mod)
+        if (mod.isRemote) {
+            this._deps.set(moduleId, mod)
         } else {
-            this._modules.set(moduleName, mod)
+            this._modules.set(moduleId, mod)
         }
 
         return mod
