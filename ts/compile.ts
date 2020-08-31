@@ -11,6 +11,14 @@ export interface CompileOptions {
     transformers?: (ts.TransformerFactory<ts.SourceFile> | ts.CustomTransformerFactory)[]
 }
 
+export function createSourceFile(fileName: string, source: string) {
+    return ts.createSourceFile(
+        fileName,
+        source,
+        ts.ScriptTarget.ES2015,
+    )
+}
+
 export function compile(fileName: string, source: string, { mode, rewriteImportPath }: CompileOptions) {
     const transformers: ts.CustomTransformers = {
         before: [],

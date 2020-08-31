@@ -6,7 +6,7 @@ import ts from '../vendor/typescript/lib/typescript.js'
  *
  * @ref https://github.com/dropbox/ts-transform-import-path-rewrite
  */
-export default function transformImportPathRewrite(sf: ts.SourceFile, node: ts.Node, options: { rewriteImportPath(importPath: string): string }): ts.VisitResult<ts.Node> {
+export default function transformImportPathRewrite(sf: ts.SourceFile, node: ts.Node, rewriteImportPath: (importPath: string) => string): ts.VisitResult<ts.Node> {
     let importPath = ''
     if (
         (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
@@ -30,7 +30,7 @@ export default function transformImportPathRewrite(sf: ts.SourceFile, node: ts.N
     }
 
     if (importPath) {
-        const rewrittenPath = options.rewriteImportPath(importPath)
+        const rewrittenPath = rewriteImportPath(importPath)
         if (rewrittenPath !== importPath) {
             const newNode = ts.getMutableClone(node)
             if (ts.isImportDeclaration(newNode) || ts.isExportDeclaration(newNode)) {
