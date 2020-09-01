@@ -23,10 +23,10 @@ export const RouterContext = React.createContext<RouterURL>({
 })
 RouterContext.displayName = 'RouterContext'
 
-export function withRouter(Component: React.ComponentType<{ router: RouterURL }>) {
+export function withRouter(Component: React.ComponentType<{ url: RouterURL }>) {
     function WithRouter() {
-        const router = useRouter()
-        return React.createElement(Component, { router })
+        const url = useRouter()
+        return React.createElement(Component, { url })
     }
     return WithRouter
 }

@@ -13,8 +13,8 @@ export function createHtml({
     body: string,
     minify?: boolean
 }) {
-    const indent = minify ? '' : ' '.repeat(4)
     const eol = minify ? '' : '\n'
+    const indent = minify ? '' : ' '.repeat(4)
     const headTags = head.map(tag => tag.trim())
         .concat(scripts.map(v => {
             if (!util.isString(v) && util.isNEString(v.src)) {

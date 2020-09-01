@@ -1,13 +1,15 @@
-import { App } from '../app/app.ts'
 import { createHtml } from '../html.ts'
 import log from '../log.ts'
+import Project from '../project.ts'
+import { route } from '../router.ts'
 import { existsSync, path, serve, ws } from '../std.ts'
 import util from '../util.ts'
+import { PostAPIRequest, PostAPIResponse } from './api.ts'
 import { getContentType } from './mime.ts'
 
 export async function start(appDir: string, port: number, isDev = false) {
-    const app = new App(appDir, 'development')
-    await app.ready
+    const project = new Project(appDir, 'development')
+    await project.ready
 
     try {
         const s = serve({ port })
@@ -29,14 +31,31 @@ export async function start(appDir: string, port: number, isDev = false) {
 
                 //serve apis
                 if (pathname.startsWith('/api/')) {
-                    await app.callAPI(req, { pathname, search })
+                    const { pagePath, params, query } = route(
+                        project.config.baseUrl,
+                        project.apiPaths,
+                        { location: { pathname, search } }
+                    )
+                    const handle = await project.getAPIHandle(pagePath)
+                    if (handle) {
+                        handle(
+                            new PostAPIRequest(req, params, query),
+                            new PostAPIResponse(req)
+                        )
+                    } else {
+                        req.respond({
+                            status: 404,
+                            headers: new Headers({ 'Content-Type': `application/javascript; charset=utf-8` }),
+                            body: 'page not found'
+                        })
+                    }
                     continue
                 }
 
                 // serve js files
                 if (pathname.endsWith('.js') || pathname.endsWith('.js.map')) {
-                    const requestMap = pathname.endsWith('.js.map')
-                    const mod = app.getModule(requestMap ? pathname.slice(0, -4) : pathname)
+                    const reqSourceMap = pathname.endsWith('.js.map')
+                    const mod = project.getModule(reqSourceMap ? pathname.slice(0, -4) : pathname)
                     if (mod) {
                         const etag = req.headers.get('If-None-Match')
                         if (etag && etag === mod.hash) {
@@ -48,10 +67,10 @@ export async function start(appDir: string, port: number, isDev = false) {
                         req.respond({
                             status: 200,
                             headers: new Headers({
-                                'Content-Type': `application/${requestMap ? 'json' : 'javascript'}; charset=utf-8`,
+                                'Content-Type': `application/${reqSourceMap ? 'json' : 'javascript'}; charset=utf-8`,
                                 'ETag': mod.hash
                             }),
-                            body: requestMap ? mod.sourceMap : mod.jsContent
+                            body: reqSourceMap ? mod.sourceMap : mod.jsContent
                         })
                         continue
                     }
@@ -59,7 +78,7 @@ export async function start(appDir: string, port: number, isDev = false) {
 
                 // serve public files
                 if (path.basename(pathname).includes('.')) {
-                    const filePath = path.join(app.config.rootDir, 'public', pathname)
+                    const filePath = path.join(project.rootDir, 'public', pathname)
                     if (existsSync(filePath)) {
                         const body = await Deno.readFile(filePath)
                         req.respond({
@@ -71,7 +90,7 @@ export async function start(appDir: string, port: number, isDev = false) {
                     }
                 }
 
-                const [status, html] = await app.getPageHtml({ pathname, search })
+                const [status, html] = await project.getPageHtml({ pathname, search })
                 req.respond({
                     status,
                     headers: new Headers({ 'Content-Type': 'text/html' }),

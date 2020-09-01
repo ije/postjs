@@ -1,5 +1,5 @@
 import React, { Children, cloneElement, CSSProperties, isValidElement, MouseEvent, PropsWithChildren, useCallback, useEffect, useMemo, useRef } from 'react'
-import { prefetchPage, redirect } from './app.ts'
+import { redirect } from './app.ts'
 import { useRouter } from './router.ts'
 import util from './util.ts'
 
@@ -14,7 +14,7 @@ interface LinkProps {
 export default function Link({
     to,
     replace = false,
-    prefetch: shouldPrefetch = false,
+    prefetch: prefetchImmediately = false,
     className,
     style,
     children
@@ -44,22 +44,21 @@ export default function Link({
     const prefetch = useCallback(() => {
         if (prefetchStatus.current != href && !util.isHttpUrl(href) && href !== currentHref) {
             prefetchStatus.current = href
-            prefetchPage(href)
+            // prefetchPage(href)
         }
     }, [href, currentHref])
     const onClick = useCallback((e: MouseEvent) => {
         e.preventDefault()
         if (href !== currentHref) {
-            // todo: add loading progress ui
             redirect(href, replace)
         }
     }, [href, currentHref, replace])
 
     useEffect(() => {
-        if (shouldPrefetch) {
+        if (prefetchImmediately) {
             prefetch()
         }
-    }, [shouldPrefetch, prefetch])
+    }, [prefetchImmediately, prefetch])
 
     if (Children.count(children) === 1) {
         const child = Children.toArray(children)[0]

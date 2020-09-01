@@ -1,15 +1,14 @@
-import { renderToTags } from '../head.ts'
-import { createHtml } from '../html.ts'
-import log from '../log.ts'
-import { ILocation, route, RouterURL } from '../router.ts'
-import { colors, existsSync, path, ServerRequest, Sha1, walk } from '../std.ts'
-import { compile, createSourceFile } from '../ts/compile.ts'
-import transformImportPathRewrite from '../ts/transform-import-path-rewrite.ts'
-import { traverse } from '../ts/traverse.ts'
-import util from '../util.ts'
-import AnsiUp from '../vendor/ansi-up/ansi-up.ts'
-import { PostAPIRequest, PostAPIResponse } from './api.ts'
-import { AppConfig, loadAppConfigSync } from './config.ts'
+import { APIHandle } from './api.ts'
+import { renderToTags } from './head.ts'
+import { createHtml } from './html.ts'
+import log from './log.ts'
+import { ILocation, route, RouterURL } from './router.ts'
+import { colors, exists, existsSync, path, Sha1, walk } from './std.ts'
+import { compile, createSourceFile } from './ts/compile.ts'
+import transformImportPathRewrite from './ts/transform-import-path-rewrite.ts'
+import { traverse } from './ts/traverse.ts'
+import util from './util.ts'
+import AnsiUp from './vendor/ansi-up/ansi-up.ts'
 
 const reHttp = /^https?:\/\//i
 const reModuleExt = /\.(m?jsx?|tsx?)$/i
@@ -28,9 +27,21 @@ interface Module {
     hash: string
 }
 
-export class App {
-    readonly config: AppConfig
+interface Config {
+    readonly rootDir: string
+    readonly srcDir: string
+    readonly outputDir: string
+    readonly baseUrl: string
+    readonly defaultLocale: string
+    readonly cacheDeps: boolean
+    readonly importMap: {
+        imports: Record<string, string>
+    }
+}
+
+export default class Project {
     readonly mode: 'development' | 'production'
+    readonly config: Config
     readonly ready: Promise<void>
 
     private _deps: Map<string, Module> = new Map()
@@ -38,9 +49,19 @@ export class App {
     private _pageModules: Record<string, string> = {}
     private _fsWatchQueue: Map<string, any> = new Map()
 
-    constructor(appDir: string, mode: 'development' | 'production') {
+    constructor(dir: string, mode: 'development' | 'production') {
         this.mode = mode
-        this.config = loadAppConfigSync(appDir)
+        this.config = {
+            rootDir: path.resolve(dir),
+            srcDir: '/',
+            outputDir: '/out',
+            cacheDeps: true,
+            baseUrl: '/',
+            defaultLocale: 'en',
+            importMap: {
+                imports: {}
+            }
+        }
         this.ready = new Promise((resolve, reject) => {
             this._init().then(resolve).catch(reject)
         })
@@ -50,13 +71,59 @@ export class App {
         return this.mode === 'development'
     }
 
+    get rootDir() {
+        return this.config.rootDir
+    }
+
     get srcDir() {
         const { rootDir, srcDir } = this.config
         return path.join(rootDir, srcDir)
     }
 
+    get apiPaths() {
+        return Array.from(this._modules.keys()).filter(p => p.startsWith('./api/')).map(p => p.slice(1).replace(reModuleExt, ''))
+    }
+
     async build() {
 
+    }
+
+    getModule(filename: string): Module | null {
+        const { baseUrl } = this.config
+        if (baseUrl !== '/') {
+            filename = util.trimPrefix(filename, baseUrl)
+        }
+        if (filename.startsWith('/_dist/')) {
+            filename = util.trimPrefix(filename, '/_dist')
+        }
+        if (filename.startsWith('/-/')) {
+            filename = util.trimPrefix(filename, '/-/')
+            if (this._deps.has(filename)) {
+                return this._deps.get(filename)!
+            }
+        } else {
+            filename = '.' + filename
+            if (this._modules.has(filename)) {
+                return this._modules.get(filename)!
+            }
+            filename = filename.replace(/\.[0-9a-f]{9}\.js$/, '.js')
+            if (this._modules.has(filename)) {
+                return this._modules.get(filename)!
+            }
+        }
+        return null
+    }
+
+    async getAPIHandle(path: string): Promise<APIHandle | null> {
+        if (path) {
+            const importPath = '.' + path + '.js'
+            if (this._modules.has(importPath)) {
+                const { default: handle } = await import(this._modules.get(importPath)!.jsFile)
+                return handle
+            }
+        }
+
+        return null
     }
 
     async getPageHtml(location: ILocation): Promise<[number, string]> {
@@ -76,7 +143,7 @@ export class App {
             head: head,
             scripts: [
                 { type: 'application/json', id: 'ssr-data', innerText: JSON.stringify(ssrData) },
-                { src: path.join(baseUrl, 'main.js') + `?t=${Date.now()}`, type: 'module' },
+                { src: path.join(baseUrl, '/_dist/main.js') + `?t=${Date.now()}`, type: 'module' },
             ],
             body
         })
@@ -103,75 +170,77 @@ export class App {
         return null
     }
 
-    getModule(filename: string): Module | null {
-        filename = util.cleanPath(util.trimPrefix(filename, this.config.baseUrl))
-        if (filename.startsWith('/-/')) {
-            filename = util.trimPrefix(filename, '/-/')
-            if (this._deps.has(filename)) {
-                return this._deps.get(filename)!
-            }
-        } else {
-            filename = '.' + filename
-            if (this._modules.has(filename)) {
-                return this._modules.get(filename)!
-            }
-            filename = filename.replace(/\.[0-9a-f]{40}\.js$/, '.js')
-            if (this._modules.has(filename)) {
-                return this._modules.get(filename)!
-            }
-        }
-        return null
-    }
-
-    async callAPI(req: ServerRequest, location: ILocation) {
-        const { pagePath, params, query } = route(
-            this.config.baseUrl,
-            Array.from(this._modules.keys()).filter(p => p.startsWith('./api/')).map(p => p.slice(1).replace(reModuleExt, '')),
-            { location }
-        )
-        if (pagePath) {
-            const importPath = '.' + pagePath + '.js'
-            if (this._modules.has(importPath)) {
-                const { default: handle } = await import(this._modules.get(importPath)!.jsFile)
-                handle(new PostAPIRequest(req, params, query), new PostAPIResponse(req))
-                return
-            }
+    private async _loadConfig() {
+        const { POSTJS_IMPORT_MAP } = globalThis as any
+        if (POSTJS_IMPORT_MAP) {
+            const { imports } = POSTJS_IMPORT_MAP
+            Object.assign(this.config.importMap, { imports: Object.assign({}, this.config.importMap.imports, imports) })
         }
 
-        req.respond({
-            status: 404,
-            headers: new Headers({ 'Content-Type': 'application/json' }),
-            body: JSON.stringify({
-                error: {
-                    status: 404,
-                    message: 'page not found'
-                }
-            })
-        })
+        const importMapFile = path.join(this.config.rootDir, 'import_map.json')
+        if (await exists(importMapFile)) {
+            const { imports } = JSON.parse(await Deno.readTextFile(importMapFile))
+            Object.assign(this.config.importMap, { imports: Object.assign({}, this.config.importMap.imports, imports) })
+        }
+
+        const configFile = path.join(this.config.rootDir, 'post.config.json')
+        if (await exists(configFile)) {
+            const {
+                srcDir,
+                ouputDir,
+                baseUrl,
+                cacheDeps,
+                lang
+            } = JSON.parse(await Deno.readTextFile(configFile))
+            if (util.isNEString(srcDir)) {
+                Object.assign(this.config, { srcDir: util.cleanPath(srcDir) })
+            }
+            if (util.isNEString(ouputDir)) {
+                Object.assign(this.config, { ouputDir: util.cleanPath(ouputDir) })
+            }
+            if (util.isNEString(baseUrl)) {
+                Object.assign(this.config, { baseUrl: util.cleanPath(encodeURI(baseUrl)) })
+            }
+            if (util.isNEString(lang)) {
+                Object.assign(this.config, { defaultLocale: lang })
+            }
+            if (typeof cacheDeps === 'boolean') {
+                Object.assign(this.config, { cacheDeps })
+            }
+        }
+
+        return this.config
     }
 
     private async _init() {
-        const walkOptions = { includeDirs: false, exts: ['.js', '.jsx', '.mjs', '.ts', '.tsx'], skip: [/\.d\.ts$/i] }
-        const { baseUrl, defaultLocale } = this.config
+        const { baseUrl, defaultLocale } = await this._loadConfig()
         const bootstrapConfig: Record<string, any> = {
             baseUrl,
             defaultLocale,
+            locales: {},
+            appModule: null,
             pageModules: {},
             hmr: this.isDev
         }
+        const walkOptions = { includeDirs: false, exts: ['.js', '.jsx', '.mjs', '.ts', '.tsx'], skip: [/\.d\.ts$/i] }
         const w1 = walk(path.join(this.srcDir), { ...walkOptions, maxDepth: 1 })
-        const w2 = walk(path.join(this.srcDir, 'pages'), walkOptions)
-        const w3 = walk(path.join(this.srcDir, 'api'), walkOptions)
+        const w2 = walk(path.join(this.srcDir, 'api'), walkOptions)
+        const w3 = walk(path.join(this.srcDir, 'pages'), walkOptions)
 
         for await (const { path: p } of w1) {
             const name = path.basename(p)
             if (name.replace(reModuleExt, '') === 'app') {
-                const mod = await this._compile('./' + name)
-                bootstrapConfig.appModule = { hash: mod.hash }
+                const { hash } = await this._compile('./' + name)
+                bootstrapConfig.appModule = { hash }
             }
         }
 
         for await (const { path: p } of w2) {
+            const name = path.basename(p)
+            await this._compile('./api/' + name)
+        }
+
+        for await (const { path: p } of w3) {
             const name = path.basename(p)
             const pagePath = '/' + name.replace(reModuleExt, '').replace(/\s+/g, '-').replace(/\/?index$/i, '')
             this._pageModules[pagePath] = './pages/' + name.replace(reModuleExt, '') + '.js'
@@ -179,37 +248,31 @@ export class App {
         }
 
         for (const p in this._pageModules) {
-            bootstrapConfig.pageModules[p] = {
-                path: this._pageModules[p]
-            }
+            const path = this._pageModules[p]
+            const { hash } = this._modules.get(path)!
+            bootstrapConfig.pageModules[p] = { path, hash }
         }
-        await this._compile('./main.js', {
-            sourceCode: `
-                import { bootstrap } from 'https://postjs.io/app.ts'
-                bootstrap(${JSON.stringify(bootstrapConfig)})
-            `
-        })
 
-        await this._compile('./renderer.js', {
-            sourceCode: `
-                export * from 'https://postjs.io/app.ts'
-            `
-        })
-
-        for await (const { path: p } of w3) {
-            const name = path.basename(p)
-            await this._compile('./api/' + name)
+        const innerModules: Record<string, string> = {
+            './main.js': [
+                `import { bootstrap } from 'https://postjs.io/app.ts'`,
+                `bootstrap(${JSON.stringify(bootstrapConfig)})`
+            ].join('\n'),
+            './renderer.js': `export { renderPage } from 'https://postjs.io/renderer.ts'`
         }
+        for (const path in innerModules) {
+            await this._compile(path, { sourceCode: innerModules[path] })
+        }
+
+        await this._compile('https://postjs.io/hmr.ts')
 
         log.info(colors.bold('Pages'))
         for (const path in this._pageModules) {
             const isIndex = path == '/'
             log.info('○', path, isIndex ? colors.dim('(index)') : '')
         }
-        for (const path of this._modules.keys()) {
-            if (path.startsWith('./api/')) {
-                log.info('λ', path.slice(1).replace(reModuleExt, ''))
-            }
+        for (const path of this.apiPaths) {
+            log.info('λ', path)
         }
 
         if (this.isDev) {
@@ -257,7 +320,7 @@ export class App {
     }
 
     private async _compile(sourceFile: string, options?: { sourceCode?: string, transpileOnly?: boolean }) {
-        const { cacheDeps, rootDir, importMap } = this.config
+        const { rootDir, importMap } = this.config
         const mod: Module = {
             name: path.basename(sourceFile).replace(reModuleExt, ''),
             sourceFile,
@@ -274,14 +337,9 @@ export class App {
         const moduleId = mod.sourceFile.replace(reHttp, '').replace(reModuleExt, '') + '.js'
         const saveDir = path.join(rootDir, '.postjs', path.dirname(mod.isRemote ? sourceFile.replace(reHttp, '/-/') : sourceFile))
 
-        // compile the deps only once
-        if (mod.isRemote && this._deps.has(mod.sourceFile)) {
-            return this._deps.get(mod.sourceFile)!
-        }
-
-        // do not re-compile the local modules when not transpileOnly
-        if (!mod.isRemote && this._modules.has(mod.sourceFile) && !options?.transpileOnly) {
-            return this._deps.get(mod.sourceFile)!
+        // only compile the remote module once
+        if (mod.isRemote && this._deps.has(moduleId)) {
+            return this._deps.get(moduleId)!
         }
 
         const metaFile = path.join(saveDir, `${mod.name}.meta.json`)
@@ -291,7 +349,7 @@ export class App {
                 mod.sourceHash = sourceHash
                 mod.hash = hash
                 mod.deps = deps
-                mod.jsFile = path.join(saveDir, mod.name + (mod.isRemote ? '' : `.${hash}`)) + '.js'
+                mod.jsFile = path.join(saveDir, mod.name + (mod.isRemote ? '' : '.' + hash.slice(0, 9))) + '.js'
                 mod.jsContent = await Deno.readTextFile(mod.jsFile)
                 try {
                     mod.sourceMap = await Deno.readTextFile(mod.jsFile + '.map')
@@ -317,10 +375,10 @@ export class App {
                     mod.sourceContent = await fetch(url).then(resp => {
                         if (resp.status == 200) {
                             if (mod.sourceType === 'js') {
-                                const ct = resp.headers.get('Content-Type')
-                                if (ct === 'text/typescript') {
+                                const t = resp.headers.get('Content-Type')
+                                if (t?.startsWith('text/typescript')) {
                                     mod.sourceType = 'ts'
-                                } else if (ct === 'text/jsx') {
+                                } else if (t?.startsWith('text/jsx')) {
                                     mod.sourceType = 'jsx'
                                 }
                             }
@@ -376,77 +434,16 @@ export class App {
 
         // compile source
         if (mod.sourceContent != '') {
-            const deps: Array<{ path: string, hash: string }> = []
-            const rewriteImportPath = (importPath: string): string => {
-                let rewrittenPath: string
-                if (importPath in importMap.imports) {
-                    importPath = importMap.imports[importPath]
-                }
-                if (reHttp.test(importPath)) {
-                    if (cacheDeps || /\.(jsx|tsx?)$/i.test(importPath)) {
-                        if (mod.isRemote) {
-                            rewrittenPath = path.relative(
-                                path.dirname(path.resolve('/', sourceFile.replace(reHttp, '-/'))),
-                                path.resolve('/', importPath.replace(reHttp, '-/'))
-                            )
-                        } else {
-                            rewrittenPath = path.relative(
-                                path.dirname(path.resolve('/', sourceFile)),
-                                '/' + importPath.replace(reHttp, '-/')
-                            )
-                        }
-                    } else {
-                        rewrittenPath = importPath
-                    }
-                } else {
-                    if (mod.isRemote) {
-                        const sourceUrl = new URL(sourceFile)
-                        let pathname = importPath
-                        if (!pathname.startsWith('/')) {
-                            pathname = path.join(path.dirname(sourceUrl.pathname), importPath)
-                        }
-                        rewrittenPath = path.relative(
-                            path.dirname(path.resolve('/', sourceFile.replace(reHttp, '-/'))),
-                            '/' + path.join('-', sourceUrl.host, pathname)
-                        )
-                    } else {
-                        rewrittenPath = importPath.replace(reModuleExt, '') + '.' + 'x'.repeat(40)
-                    }
-                }
-                if (reHttp.test(importPath)) {
-                    deps.push({ path: importPath, hash: '' })
-                } else {
-                    if (mod.isRemote) {
-                        const sourceUrl = new URL(sourceFile)
-                        let pathname = importPath
-                        if (!pathname.startsWith('/')) {
-                            pathname = path.join(path.dirname(sourceUrl.pathname), importPath)
-                        }
-                        deps.push({ path: sourceUrl.protocol + '//' + sourceUrl.host + pathname, hash: '' })
-                    } else {
-                        deps.push({ path: '.' + path.resolve('/', path.dirname(sourceFile), importPath), hash: '' })
-                    }
-                }
-
-                if (reHttp.test(rewrittenPath)) {
-                    return rewrittenPath
-                }
-
-                if (!rewrittenPath.startsWith('.')) {
-                    rewrittenPath = '.' + path.resolve('/', rewrittenPath)
-                }
-                return rewrittenPath.replace(reModuleExt, '') + '.js'
-            }
-
+            const t = performance.now()
+            mod.deps = []
             if (mod.isRemote && mod.sourceType === 'js') {
                 const sf = createSourceFile(mod.sourceFile, mod.sourceContent)
                 const rewrittenPaths: Record<string, string> = {}
                 traverse(sf, node => transformImportPathRewrite(sf, node, path => {
-                    const rewrittenPath = rewriteImportPath(path)
+                    const rewrittenPath = this._rewriteImportPath(mod, path)
                     rewrittenPaths[path] = rewrittenPath
                     return rewrittenPath
                 }))
-                mod.deps = deps
                 mod.jsContent = mod.sourceContent.replace(/ from ("|')(.+?)("|');?/g, (s, ql, importPath, qr) => {
                     if (importPath in rewrittenPaths) {
                         return ` from ${ql}${rewrittenPaths[importPath]}${qr};`
@@ -456,18 +453,19 @@ export class App {
                 mod.hash = (new Sha1()).update(mod.jsContent).hex()
                 mod.sourceMap = ''
             } else {
-                const t = performance.now()
-                const { diagnostics, outputText, sourceMapText } = compile(sourceFile, mod.sourceContent, { mode: this.mode, rewriteImportPath })
+                const compileOptions = {
+                    mode: this.mode,
+                    rewriteImportPath: (path: string) => this._rewriteImportPath(mod, path)
+                }
+                const { diagnostics, outputText, sourceMapText } = compile(mod.sourceFile, mod.sourceContent, compileOptions)
                 if (diagnostics && diagnostics.length) {
                     throw new Error(`compile ${sourceFile}: ${JSON.stringify(diagnostics)}`)
                 }
-                mod.deps = deps
                 mod.hash = (new Sha1()).update(outputText).hex()
                 mod.jsContent = outputText
                 mod.sourceMap = sourceMapText!
-
-                log.debug(`${sourceFile} compiled in ${(performance.now() - t).toFixed(3)}ms`)
             }
+            log.debug(`${sourceFile} compiled in ${(performance.now() - t).toFixed(3)}ms`)
 
             if (!fsync) {
                 fsync = true
@@ -486,10 +484,10 @@ export class App {
                         )
                         mod.jsContent = mod.jsContent.replace(/ from ("|')(.+?)("|');?/g, (s, ql, importPath, qr) => {
                             if (
-                                /\.[0-9a-fx]{40}\.js$/.test(importPath) &&
-                                importPath.slice(0, importPath.length - 44) === depImportPath
+                                /\.[0-9a-fx]{9}\.js$/.test(importPath) &&
+                                importPath.slice(0, importPath.length - 13) === depImportPath
                             ) {
-                                return ` from ${ql}${depImportPath}.${dep.hash}.js${qr};`
+                                return ` from ${ql}${depImportPath}.${dep.hash.slice(0, 9)}.js${qr};`
                             }
                             return s
                         })
@@ -503,7 +501,7 @@ export class App {
         }
 
         if (fsync) {
-            mod.jsFile = path.join(saveDir, mod.name + (mod.isRemote ? '' : `.${mod.hash}`)) + '.js'
+            mod.jsFile = path.join(saveDir, mod.name + (mod.isRemote ? '' : `.${mod.hash.slice(0, 9)}`)) + '.js'
             await Promise.all([
                 this._writeTextFile(metaFile, JSON.stringify({
                     sourceFile,
@@ -523,6 +521,68 @@ export class App {
         }
 
         return mod
+    }
+
+    private _rewriteImportPath(mod: Module, importPath: string): string {
+        const { cacheDeps, rootDir, importMap } = this.config
+        let rewrittenPath: string
+        if (importPath in importMap.imports) {
+            importPath = importMap.imports[importPath]
+        }
+        if (reHttp.test(importPath)) {
+            if (cacheDeps || /\.(jsx|tsx?)$/i.test(importPath)) {
+                if (mod.isRemote) {
+                    rewrittenPath = path.relative(
+                        path.dirname(path.resolve('/', mod.sourceFile.replace(reHttp, '-/'))),
+                        path.resolve('/', importPath.replace(reHttp, '-/'))
+                    )
+                } else {
+                    rewrittenPath = path.relative(
+                        path.dirname(path.resolve('/', mod.sourceFile)),
+                        '/' + importPath.replace(reHttp, '-/')
+                    )
+                }
+            } else {
+                rewrittenPath = importPath
+            }
+        } else {
+            if (mod.isRemote) {
+                const sourceUrl = new URL(mod.sourceFile)
+                let pathname = importPath
+                if (!pathname.startsWith('/')) {
+                    pathname = path.join(path.dirname(sourceUrl.pathname), importPath)
+                }
+                rewrittenPath = path.relative(
+                    path.dirname(path.resolve('/', mod.sourceFile.replace(reHttp, '-/'))),
+                    '/' + path.join('-', sourceUrl.host, pathname)
+                )
+            } else {
+                rewrittenPath = importPath.replace(reModuleExt, '') + '.' + 'x'.repeat(9)
+            }
+        }
+        if (reHttp.test(importPath)) {
+            mod.deps.push({ path: importPath, hash: '' })
+        } else {
+            if (mod.isRemote) {
+                const sourceUrl = new URL(mod.sourceFile)
+                let pathname = importPath
+                if (!pathname.startsWith('/')) {
+                    pathname = path.join(path.dirname(sourceUrl.pathname), importPath)
+                }
+                mod.deps.push({ path: sourceUrl.protocol + '//' + sourceUrl.host + pathname, hash: '' })
+            } else {
+                mod.deps.push({ path: '.' + path.resolve('/', path.dirname(mod.sourceFile), importPath), hash: '' })
+            }
+        }
+
+        if (reHttp.test(rewrittenPath)) {
+            return rewrittenPath
+        }
+
+        if (!rewrittenPath.startsWith('.')) {
+            rewrittenPath = '.' + path.resolve('/', rewrittenPath)
+        }
+        return rewrittenPath.replace(reModuleExt, '') + '.js'
     }
 
     private async _loadComponentModule(name: string, ...args: any[]) {
