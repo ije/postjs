@@ -39,6 +39,14 @@ interface Config {
     }
 }
 
+interface AppManifest {
+    baseUrl: string
+    defaultLocale: string
+    locales: Record<string, Record<string, string>>
+    appModule: { hash: string } | null
+    pageModules: Record<string, { path: string, hash: string }>
+}
+
 export default class Project {
     readonly mode: 'development' | 'production'
     readonly config: Config
@@ -82,6 +90,28 @@ export default class Project {
 
     get apiPaths() {
         return Array.from(this._modules.keys()).filter(p => p.startsWith('./api/')).map(p => p.slice(1).replace(reModuleExt, ''))
+    }
+
+    get manifest() {
+        const { baseUrl, defaultLocale } = this.config
+        const manifest: AppManifest = {
+            baseUrl,
+            defaultLocale,
+            locales: {},
+            appModule: null,
+            pageModules: {}
+        }
+        if (this._modules.has('./app.js')) {
+            manifest.appModule = {
+                hash: this._modules.get('./app.js')!.hash
+            }
+        }
+        for (const p in this._pageModules) {
+            const path = this._pageModules[p]
+            const { hash } = this._modules.get(path)!
+            manifest.pageModules[p] = { path, hash }
+        }
+        return manifest
     }
 
     async build() {
@@ -137,13 +167,14 @@ export default class Project {
                 fallback: '/404'
             }
         )
+        const mainMod = this._modules.get('./main.js')!
         const { code, head, body, ssrData } = await this._renderPage(url)
         const html = createHtml({
             lang: url.locale,
             head: head,
             scripts: [
                 { type: 'application/json', id: 'ssr-data', innerText: JSON.stringify(ssrData) },
-                { src: path.join(baseUrl, '/_dist/main.js') + `?t=${Date.now()}`, type: 'module' },
+                { src: path.join(baseUrl, `/_dist/main.${mainMod.hash.slice(0, 9)}.js`), type: 'module' },
             ],
             body
         })
@@ -213,15 +244,8 @@ export default class Project {
     }
 
     private async _init() {
-        const { baseUrl, defaultLocale } = await this._loadConfig()
-        const bootstrapConfig: Record<string, any> = {
-            baseUrl,
-            defaultLocale,
-            locales: {},
-            appModule: null,
-            pageModules: {},
-            hmr: this.isDev
-        }
+        await this._loadConfig()
+
         const walkOptions = { includeDirs: false, exts: ['.js', '.jsx', '.mjs', '.ts', '.tsx'], skip: [/\.d\.ts$/i] }
         const w1 = walk(path.join(this.srcDir), { ...walkOptions, maxDepth: 1 })
         const w2 = walk(path.join(this.srcDir, 'api'), walkOptions)
@@ -230,8 +254,7 @@ export default class Project {
         for await (const { path: p } of w1) {
             const name = path.basename(p)
             if (name.replace(reModuleExt, '') === 'app') {
-                const { hash } = await this._compile('./' + name)
-                bootstrapConfig.appModule = { hash }
+                await this._compile('./' + name)
             }
         }
 
@@ -247,16 +270,10 @@ export default class Project {
             await this._compile('./pages/' + name)
         }
 
-        for (const p in this._pageModules) {
-            const path = this._pageModules[p]
-            const { hash } = this._modules.get(path)!
-            bootstrapConfig.pageModules[p] = { path, hash }
-        }
-
         const innerModules: Record<string, string> = {
             './main.js': [
                 `import { bootstrap } from 'https://postjs.io/app.ts'`,
-                `bootstrap(${JSON.stringify(bootstrapConfig)})`
+                `bootstrap(${JSON.stringify(this.manifest)})`
             ].join('\n'),
             './renderer.js': `export { renderPage } from 'https://postjs.io/renderer.ts'`
         }

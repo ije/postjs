@@ -1,16 +1,15 @@
-import React, { ComponentType, useState } from 'react'
+import React, { ComponentType, createContext, useCallback, useEffect, useState } from 'react'
 import { hydrate } from 'react-dom'
 import { EventEmitter } from './events.ts'
 import { route, RouterContext, RouterURL } from './router.ts'
 import util from './util.ts'
 
-interface Runtime {
+interface AppManifest {
     baseUrl: string
     defaultLocale: string
     locales: Record<string, Record<string, string>>
     appModule: { hash: string } | null
     pageModules: Record<string, { path: string, hash: string }>
-    hmr: boolean
 }
 
 interface SSRData {
@@ -19,54 +18,30 @@ interface SSRData {
     appStaticProps?: Record<string, any>
 }
 
+export const AppManifestContext = createContext<AppManifest>({
+    baseUrl: '/',
+    defaultLocale: 'en',
+    locales: {},
+    appModule: null,
+    pageModules: {},
+})
+AppManifestContext.displayName = 'AppManifestContext'
+
 export const events = new EventEmitter()
 events.setMaxListeners(1 << 10)
 
-export async function bootstrap({
-    baseUrl = '/',
-    defaultLocale = 'en',
-    locales = {},
-    appModule = null,
-    pageModules = {},
-    hmr = false
-}: Partial<Runtime>) {
-    const { document } = window as any
-    const el = document.getElementById('ssr-data')
-
-    if (el) {
-        const ssrData = JSON.parse(el.innerHTML)
-        if (ssrData && 'url' in ssrData && ssrData.url.pagePath in pageModules) {
-            const runtime: Runtime = {
-                baseUrl,
-                defaultLocale,
-                locales,
-                appModule,
-                pageModules,
-                hmr
-            }
-            const pageModule = pageModules[ssrData.url.pagePath]!
-            const [{ default: AppComponent }, { default: PageComponent }] = await Promise.all([
-                appModule ? import(baseUrl + `_dist/app.${appModule.hash.slice(0, 9)}.js`) : async () => ({}),
-                import(baseUrl + '_dist/' + pageModule.path.replace(/\.js$/, `.${pageModule.hash.slice(0, 9)}.js`)),
-            ])
-            hydrate(React.createElement(Main, { ssrData, runtime, AppComponent, PageComponent }), document.querySelector('main'))
-        }
-    }
-}
-
 function Main({
-    runtime,
+    manifest: initialManifest,
     ssrData,
     AppComponent: initialAppComponent,
     PageComponent: initialPageComponent
 }: {
-    runtime: Runtime,
-    ssrData: SSRData,
-    AppComponent?: ComponentType<any>,
+    manifest: AppManifest
+    ssrData: SSRData
+    AppComponent?: ComponentType<any>
     PageComponent: ComponentType<any>
 }) {
-    const [baseUrl, setBaseUrl] = useState(() => runtime.baseUrl)
-    const [pageModules, setPageModules] = useState(() => runtime.pageModules)
+    const [manifest, setManifest] = useState(() => initialManifest)
     const [app, setApp] = useState(() => ({
         Component: initialAppComponent,
         staticProps: ssrData.appStaticProps
@@ -76,19 +51,28 @@ function Main({
         Component: initialPageComponent,
         staticProps: ssrData.staticProps
     }))
-    const onpopstate = React.useCallback(async () => {
-        const url = route(baseUrl, Object.keys(pageModules), { fallback: '/404' })
+    const onpopstate = useCallback(async () => {
+        const { baseUrl, pageModules, defaultLocale, locales } = manifest
+        const url = route(
+            baseUrl,
+            Object.keys(pageModules),
+            {
+                defaultLocale,
+                locales: Object.keys(locales),
+                fallback: '/404'
+            }
+        )
         if (url.pagePath in pageModules) {
             const mod = pageModules[url.pagePath]!
-            const importPath = util.cleanPath(baseUrl + mod.path.replace(/\.js$/, `.${mod.hash.slice(0, 9)}.js`))
+            const importPath = util.cleanPath(baseUrl + '_dist/' + mod.path.replace(/\.js$/, `.${mod.hash.slice(0, 9)}.js`))
             const { default: Component, staticProps } = await import(importPath)
             setPage({ url, Component, staticProps })
         } else {
             setPage({ url, Component: Default404Page, staticProps: null })
         }
-    }, [baseUrl, pageModules])
+    }, [manifest])
 
-    React.useEffect(() => {
+    useEffect(() => {
         window.addEventListener('popstate', onpopstate)
         events.on('popstate', onpopstate)
 
@@ -100,9 +84,13 @@ function Main({
 
     const pageEl = React.createElement(page.Component, page.staticProps)
     return React.createElement(
-        RouterContext.Provider,
-        { value: page.url },
-        app.Component ? React.createElement(app.Component, app.staticProps, pageEl) : pageEl
+        AppManifestContext.Provider,
+        { value: manifest },
+        React.createElement(
+            RouterContext.Provider,
+            { value: page.url },
+            app.Component ? React.createElement(app.Component, app.staticProps, pageEl) : pageEl
+        )
     )
 }
 
@@ -162,4 +150,22 @@ function Default404Page() {
             'page not found'
         )
     )
+}
+
+export async function bootstrap(manifest: AppManifest) {
+    const { document } = window as any
+    const { baseUrl, appModule, pageModules } = manifest
+    const el = document.getElementById('ssr-data')
+
+    if (el) {
+        const ssrData = JSON.parse(el.innerHTML)
+        if (ssrData && 'url' in ssrData && ssrData.url.pagePath in pageModules) {
+            const pageModule = pageModules[ssrData.url.pagePath]!
+            const [{ default: AppComponent }, { default: PageComponent }] = await Promise.all([
+                appModule ? import(baseUrl + `_dist/app.${appModule.hash.slice(0, 9)}.js`) : async () => ({}),
+                import(baseUrl + '_dist/' + pageModule.path.replace(/\.js$/, `.${pageModule.hash.slice(0, 9)}.js`)),
+            ])
+            hydrate(React.createElement(Main, { ssrData, manifest, AppComponent, PageComponent }), document.querySelector('main'))
+        }
+    }
 }
