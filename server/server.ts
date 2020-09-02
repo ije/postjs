@@ -20,12 +20,16 @@ export async function start(appDir: string, port: number, isDev = false) {
 
             try {
                 if (pathname.startsWith('/_hmr')) {
-                    const socket = ws.createWebSocket({ conn: req.conn })
-                    for await (const e of socket) {
-                        if (ws.isWebSocketCloseEvent(e)) {
+                    const { conn, r: bufReader, w: bufWriter, headers } = req;
+                    ws.acceptWebSocket({ conn, bufReader, bufWriter, headers }).then(async socket => {
+                        for await (const e of socket) {
+                            if (typeof e === 'string') {
+                                console.log(e)
+                            } else if (ws.isWebSocketCloseEvent(e)) {
 
+                            }
                         }
-                    }
+                    })
                     continue
                 }
 
@@ -87,8 +91,18 @@ export async function start(appDir: string, port: number, isDev = false) {
                         if (modname === './app.js' || modname.startsWith('./pages/')) {
                             const { staticProps } = await project.importModuleAsComponent(modname)
                             if (staticProps) {
-                                jsContent = 'export const __staticProps = ' + JSON.stringify(staticProps) + ';\n' + jsContent
+                                jsContent = 'export const __staticProps = ' + JSON.stringify(staticProps) + ';\n\n' + jsContent
                             }
+                        }
+                        if (modname === './app.js' || modname.startsWith('./pages/') || modname.startsWith('./components/')) {
+                            let hmrImportPath = path.relative(
+                                path.dirname(path.resolve('/', modname)),
+                                '/-/postjs.io/hmr.js'
+                            )
+                            if (!hmrImportPath.startsWith('.') && !hmrImportPath.startsWith('/')) {
+                                hmrImportPath = './' + hmrImportPath
+                            }
+                            jsContent = 'import { createHotContext } from ' + JSON.stringify(hmrImportPath) + ';\nimport.meta.hot = createHotContext(import.meta.url);\n\n' + jsContent
                         }
                         req.respond({
                             status: 200,

@@ -54,8 +54,8 @@ function sendSocketMessage(msg: any) {
 
 const socketURL =
   (window as any).HMR_WEBSOCKET_URL ||
-  (window.location.protocol === 'http:' ? 'ws://' : 'wss://') + location.host + '/';
-const socket = new WebSocket(socketURL, 'esm-hmr');
+  (window.location.protocol === 'http:' ? 'ws://' : 'wss://') + location.host + '/_hmr';
+const socket = new WebSocket(socketURL,/*  'esm-hmr' */);
 socket.addEventListener('open', () => {
   SOCKET_MESSAGE_QUEUE.forEach(_sendSocketMessage);
   SOCKET_MESSAGE_QUEUE = [];

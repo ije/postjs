@@ -590,8 +590,8 @@ export default class Project {
             return rewrittenPath
         }
 
-        if (!rewrittenPath.startsWith('.')) {
-            rewrittenPath = '.' + path.resolve('/', rewrittenPath)
+        if (!rewrittenPath.startsWith('.') && !rewrittenPath.startsWith('/')) {
+            rewrittenPath = './' + rewrittenPath
         }
         return rewrittenPath.replace(reModuleExt, '') + '.js'
     }
