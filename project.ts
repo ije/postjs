@@ -118,28 +118,12 @@ export default class Project {
 
     }
 
-    getModule(filename: string): Module | null {
-        const { baseUrl } = this.config
-        if (baseUrl !== '/') {
-            filename = util.trimPrefix(filename, baseUrl)
+    getModule(name: string): Module | null {
+        if (this._deps.has(name)) {
+            return this._deps.get(name)!
         }
-        if (filename.startsWith('/_dist/')) {
-            filename = util.trimPrefix(filename, '/_dist')
-        }
-        if (filename.startsWith('/-/')) {
-            filename = util.trimPrefix(filename, '/-/')
-            if (this._deps.has(filename)) {
-                return this._deps.get(filename)!
-            }
-        } else {
-            filename = '.' + filename
-            if (this._modules.has(filename)) {
-                return this._modules.get(filename)!
-            }
-            filename = filename.replace(/\.[0-9a-f]{9}\.js$/, '.js')
-            if (this._modules.has(filename)) {
-                return this._modules.get(filename)!
-            }
+        if (this._modules.has(name)) {
+            return this._modules.get(name)!
         }
         return null
     }
@@ -168,12 +152,12 @@ export default class Project {
             }
         )
         const mainMod = this._modules.get('./main.js')!
-        const { code, head, body, ssrData } = await this._renderPage(url)
+        const { code, head, body } = await this._renderPage(url)
         const html = createHtml({
             lang: url.locale,
             head: head,
             scripts: [
-                { type: 'application/json', id: 'ssr-data', innerText: JSON.stringify(ssrData) },
+                { type: 'application/json', id: 'ssr-data', innerText: JSON.stringify({ url }) },
                 { src: path.join(baseUrl, `/_dist/main.${mainMod.hash.slice(0, 9)}.js`), type: 'module' },
             ],
             body
@@ -193,12 +177,22 @@ export default class Project {
             }
         )
         if (url.pagePath in this._pageModules) {
-            const { staticProps } = await this._loadComponentModule(this._pageModules[url.pagePath])
+            const { staticProps } = await this.importModuleAsComponent(this._pageModules[url.pagePath])
             if (staticProps) {
                 return staticProps
             }
         }
         return null
+    }
+
+    async importModuleAsComponent(name: string, ...args: any[]) {
+        if (this._modules.has(name)) {
+            const { default: Component, getStaticProps } = await import(this._modules.get(name)!.jsFile)
+            const fn = [Component.getStaticProps, getStaticProps].filter(util.isFunction)[0]
+            const data = fn ? await fn(...args) : null
+            return { Component, staticProps: util.isObject(data) ? data : null }
+        }
+        return {}
     }
 
     private async _loadConfig() {
@@ -602,22 +596,11 @@ export default class Project {
         return rewrittenPath.replace(reModuleExt, '') + '.js'
     }
 
-    private async _loadComponentModule(name: string, ...args: any[]) {
-        if (this._modules.has(name)) {
-            const { default: Component, getStaticProps } = await import(this._modules.get(name)!.jsFile)
-            const fn = [Component.getStaticProps, getStaticProps].filter(util.isFunction)[0]
-            const data = fn ? await fn(...args) : null
-            return { Component, staticProps: util.isObject(data) ? data : null }
-        }
-        return {}
-    }
-
     private async _renderPage(url: RouterURL) {
         const ret = {
             code: 404,
             head: ['<title>404 - page not found</title>'],
             body: '<p><strong><code>404</code></strong><small> - </small><span>page not found</span></p>',
-            ssrData: { url, staticProps: null } as Record<string, any>,
         }
         if (url.pagePath in this._pageModules) {
             try {
@@ -627,18 +610,14 @@ export default class Project {
                     Page
                 ] = await Promise.all([
                     import(this._modules.get('./renderer.js')!.jsFile),
-                    this._loadComponentModule('./app.js'),
-                    this._loadComponentModule(this._pageModules[url.pagePath], url)
+                    this.importModuleAsComponent('./app.js'),
+                    this.importModuleAsComponent(this._pageModules[url.pagePath], url)
                 ])
                 if (util.isFunction(Page.Component)) {
                     const html = renderPage(url, util.isFunction(App.Component) ? App : undefined, Page)
                     ret.code = 200
                     ret.head = renderToTags()
                     ret.body = `<main>${html}</main>`
-                    if (util.isObject(App.staticProps)) {
-                        ret.ssrData.appStaticProps = App.staticProps
-                    }
-                    ret.ssrData.staticProps = util.isObject(Page.staticProps) ? Page.staticProps : null
                 } else {
                     ret.code = 500
                     ret.head = ['<title>500 - render error</title>']

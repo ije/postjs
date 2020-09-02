@@ -12,12 +12,6 @@ interface AppManifest {
     pageModules: Record<string, { path: string, hash: string }>
 }
 
-interface SSRData {
-    url: RouterURL
-    staticProps: Record<string, any> | null
-    appStaticProps?: Record<string, any>
-}
-
 export const AppManifestContext = createContext<AppManifest>({
     baseUrl: '/',
     defaultLocale: 'en',
@@ -32,24 +26,24 @@ events.setMaxListeners(1 << 10)
 
 function Main({
     manifest: initialManifest,
-    ssrData,
-    AppComponent: initialAppComponent,
-    PageComponent: initialPageComponent
+    url: initialUrl,
+    app: initialApp,
+    page: initialPage
 }: {
     manifest: AppManifest
-    ssrData: SSRData
-    AppComponent?: ComponentType<any>
-    PageComponent: ComponentType<any>
+    url: RouterURL
+    app?: { Component: ComponentType<any>, staticProps: any }
+    page: { Component: ComponentType<any>, staticProps: any }
 }) {
     const [manifest, setManifest] = useState(() => initialManifest)
     const [app, setApp] = useState(() => ({
-        Component: initialAppComponent,
-        staticProps: ssrData.appStaticProps
+        Component: initialApp?.Component,
+        staticProps: initialApp?.staticProps
     }))
     const [page, setPage] = useState(() => ({
-        url: ssrData.url,
-        Component: initialPageComponent,
-        staticProps: ssrData.staticProps
+        url: initialUrl,
+        Component: initialPage.Component,
+        staticProps: initialPage.staticProps
     }))
     const onpopstate = useCallback(async () => {
         const { baseUrl, pageModules, defaultLocale, locales } = manifest
@@ -65,7 +59,7 @@ function Main({
         if (url.pagePath in pageModules) {
             const mod = pageModules[url.pagePath]!
             const importPath = util.cleanPath(baseUrl + '_dist/' + mod.path.replace(/\.js$/, `.${mod.hash.slice(0, 9)}.js`))
-            const { default: Component, staticProps } = await import(importPath)
+            const { default: Component, __staticProps: staticProps } = await import(importPath)
             setPage({ url, Component, staticProps })
         } else {
             setPage({ url, Component: Default404Page, staticProps: null })
@@ -158,14 +152,26 @@ export async function bootstrap(manifest: AppManifest) {
     const el = document.getElementById('ssr-data')
 
     if (el) {
-        const ssrData = JSON.parse(el.innerHTML)
-        if (ssrData && 'url' in ssrData && ssrData.url.pagePath in pageModules) {
-            const pageModule = pageModules[ssrData.url.pagePath]!
-            const [{ default: AppComponent }, { default: PageComponent }] = await Promise.all([
+        const { url } = JSON.parse(el.innerHTML)
+        if (url && util.isNEString(url.pagePath) && url.pagePath in pageModules) {
+            const pageModule = pageModules[url.pagePath]!
+            const [
+                { default: AppComponent, __staticProps: appStaticProps },
+                { default: PageComponent, __staticProps: staticProps }
+            ] = await Promise.all([
                 appModule ? import(baseUrl + `_dist/app.${appModule.hash.slice(0, 9)}.js`) : async () => ({}),
                 import(baseUrl + '_dist/' + pageModule.path.replace(/\.js$/, `.${pageModule.hash.slice(0, 9)}.js`)),
             ])
-            hydrate(React.createElement(Main, { ssrData, manifest, AppComponent, PageComponent }), document.querySelector('main'))
+            const el = React.createElement(
+                Main,
+                {
+                    url: url,
+                    manifest,
+                    app: { Component: AppComponent, staticProps: appStaticProps },
+                    page: { Component: PageComponent, staticProps },
+                }
+            )
+            hydrate(el, document.querySelector('main'))
         }
     }
 }

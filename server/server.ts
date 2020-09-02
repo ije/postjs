@@ -55,7 +55,26 @@ export async function start(appDir: string, port: number, isDev = false) {
                 // serve js files
                 if (pathname.endsWith('.js') || pathname.endsWith('.js.map')) {
                     const reqSourceMap = pathname.endsWith('.js.map')
-                    const mod = project.getModule(reqSourceMap ? pathname.slice(0, -4) : pathname)
+                    const { baseUrl } = project.config
+                    let modname = pathname
+                    if (baseUrl !== '/') {
+                        modname = util.trimPrefix(modname, baseUrl)
+                    }
+                    if (modname.startsWith('/_dist/')) {
+                        modname = util.trimPrefix(modname, '/_dist')
+                    }
+                    if (modname.startsWith('/-/')) {
+                        modname = util.trimPrefix(modname, '/-/')
+                    } else {
+                        modname = '.' + modname
+                        if (/\.[0-9a-f]{9}\.js$/.test(modname)) {
+                            modname = modname.slice(0, modname.length - 13) + '.js'
+                        }
+                    }
+                    if (reqSourceMap) {
+                        modname = modname.slice(0, -4)
+                    }
+                    const mod = project.getModule(modname)
                     if (mod) {
                         const etag = req.headers.get('If-None-Match')
                         if (etag && etag === mod.hash) {
@@ -64,13 +83,20 @@ export async function start(appDir: string, port: number, isDev = false) {
                             })
                             continue
                         }
+                        let { jsContent } = mod
+                        if (modname === './app.js' || modname.startsWith('./pages/')) {
+                            const { staticProps } = await project.importModuleAsComponent(modname)
+                            if (staticProps) {
+                                jsContent = 'export const __staticProps = ' + JSON.stringify(staticProps) + ';\n' + jsContent
+                            }
+                        }
                         req.respond({
                             status: 200,
                             headers: new Headers({
                                 'Content-Type': `application/${reqSourceMap ? 'json' : 'javascript'}; charset=utf-8`,
                                 'ETag': mod.hash
                             }),
-                            body: reqSourceMap ? mod.sourceMap : mod.jsContent
+                            body: reqSourceMap ? mod.sourceMap : jsContent
                         })
                         continue
                     }
