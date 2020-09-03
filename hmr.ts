@@ -1,6 +1,19 @@
 /**
+ * React Refresh
+ * @link https://github.com/facebook/react/issues/16604#issuecomment-528663101
+ */
+import util from './util.ts'
+import runtime from './vendor/react-refresh/runtime.js'
+runtime.injectIntoGlobalHook(window)
+window.$RefreshReg$ = () => { }
+window.$RefreshSig$ = () => (type: any) => type
+export const performReactRefresh = util.debounce(runtime.performReactRefresh, 30)
+export const RefreshRuntime = runtime
+
+/**
  * esm-hmr/client.ts
  * A client-side implementation of the ESM-HMR spec, for reference.
+ * @link https://github.com/pikapkg/esm-hmr
  *
  * MIT License
  *
@@ -123,8 +136,8 @@ class HotModuleState {
   }
 }
 
-export function createHotContext(fullUrl: string) {
-  const id = new URL(fullUrl).pathname;
+export function createHotContext(id: string) {
+  // const id = new URL(fullUrl).pathname;
   const existing = REGISTERED_MODULES[id];
   if (existing) {
     existing.lock();
@@ -135,7 +148,7 @@ export function createHotContext(fullUrl: string) {
   return state;
 }
 
-async function applyUpdate(id: string) {
+async function applyUpdate(id: string, updateUrl?: string) {
   const state = REGISTERED_MODULES[id];
   if (!state) {
     return false;
@@ -153,7 +166,7 @@ async function applyUpdate(id: string) {
   const updateID = Date.now();
   for (const { deps, callback: acceptCallback } of acceptCallbacks) {
     const [module, ...depModules] = await Promise.all([
-      import(id + `?mtime=${updateID}`),
+      import(updateUrl || id + `?mtime=${updateID}`),
       ...deps.map((d) => import(d + `?mtime=${updateID}`)),
     ]);
     acceptCallback({ module, deps: depModules });
@@ -178,8 +191,8 @@ socket.addEventListener('message', ({ data: _data }: { data?: string }) => {
     return;
   }
   debug('message: update', data);
-  debug(data.url, Object.keys(REGISTERED_MODULES));
-  applyUpdate(data.url)
+  debug(data.id, Object.keys(REGISTERED_MODULES));
+  applyUpdate(data.id, data.updateUrl)
     .then((ok) => {
       if (!ok) {
         reload();

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 
 export function useServerTime() {
     const [now, setNow] = React.useState('')
@@ -8,4 +8,14 @@ export function useServerTime() {
     }, [])
 
     return now
+}
+
+export function useCount(initialCount: number) {
+    const [count, setCount] = useState(initialCount)
+
+    return {
+        count,
+        increase: () => setCount(n => n + 1),
+        decrease: () => setCount(n => n - 1)
+    }
 }

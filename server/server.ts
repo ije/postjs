@@ -20,15 +20,31 @@ export async function start(appDir: string, port: number, isDev = false) {
 
             try {
                 if (pathname.startsWith('/_hmr')) {
-                    const { conn, r: bufReader, w: bufWriter, headers } = req;
+                    const { conn, r: bufReader, w: bufWriter, headers } = req
                     ws.acceptWebSocket({ conn, bufReader, bufWriter, headers }).then(async socket => {
+                        const watcher = project.createFSWatcher()
                         for await (const e of socket) {
-                            if (typeof e === 'string') {
-                                console.log(e)
-                            } else if (ws.isWebSocketCloseEvent(e)) {
-
+                            if (util.isNEString(e)) {
+                                try {
+                                    const data = JSON.parse(e)
+                                    if (data.type === 'hotAccept' && util.isNEString(data.id)) {
+                                        const mod = project.getModule(data.id)
+                                        if (mod) {
+                                            watcher.on(mod.id, (type: string, hash?: string) => {
+                                                if (type == 'modify') {
+                                                    socket.send(JSON.stringify({
+                                                        type: 'update',
+                                                        id: mod.id,
+                                                        updateUrl: path.resolve(path.join(project.config.baseUrl, '/_dist/'), mod.id.replace(/\.js$/, `.${hash!.slice(0, 9)}.js`))
+                                                    }))
+                                                }
+                                            })
+                                        }
+                                    }
+                                } catch (e) { }
                             }
                         }
+                        project.removeFSWatcher(watcher)
                     })
                     continue
                 }
@@ -59,26 +75,7 @@ export async function start(appDir: string, port: number, isDev = false) {
                 // serve js files
                 if (pathname.endsWith('.js') || pathname.endsWith('.js.map')) {
                     const reqSourceMap = pathname.endsWith('.js.map')
-                    const { baseUrl } = project.config
-                    let modname = pathname
-                    if (baseUrl !== '/') {
-                        modname = util.trimPrefix(modname, baseUrl)
-                    }
-                    if (modname.startsWith('/_dist/')) {
-                        modname = util.trimPrefix(modname, '/_dist')
-                    }
-                    if (modname.startsWith('/-/')) {
-                        modname = util.trimPrefix(modname, '/-/')
-                    } else {
-                        modname = '.' + modname
-                        if (/\.[0-9a-f]{9}\.js$/.test(modname)) {
-                            modname = modname.slice(0, modname.length - 13) + '.js'
-                        }
-                    }
-                    if (reqSourceMap) {
-                        modname = modname.slice(0, -4)
-                    }
-                    const mod = project.getModule(modname)
+                    const mod = project.getModuleByPath(reqSourceMap ? pathname.slice(0, -4) : pathname)
                     if (mod) {
                         const etag = req.headers.get('If-None-Match')
                         if (etag && etag === mod.hash) {
@@ -87,22 +84,22 @@ export async function start(appDir: string, port: number, isDev = false) {
                             })
                             continue
                         }
-                        let { jsContent } = mod
-                        if (modname === './app.js' || modname.startsWith('./pages/')) {
-                            const { staticProps } = await project.importModuleAsComponent(modname)
+                        let { jsContent, id } = mod
+                        if (id === './app.js' || id.startsWith('./pages/')) {
+                            const { staticProps } = await project.importModuleAsComponent(id)
                             if (staticProps) {
                                 jsContent = 'export const __staticProps = ' + JSON.stringify(staticProps) + ';\n\n' + jsContent
                             }
                         }
-                        if (modname === './app.js' || modname.startsWith('./pages/') || modname.startsWith('./components/')) {
+                        if (id === './app.js' || id.startsWith('./pages/') || id.startsWith('./components/')) {
                             let hmrImportPath = path.relative(
-                                path.dirname(path.resolve('/', modname)),
+                                path.dirname(path.resolve('/', id)),
                                 '/-/postjs.io/hmr.js'
                             )
                             if (!hmrImportPath.startsWith('.') && !hmrImportPath.startsWith('/')) {
                                 hmrImportPath = './' + hmrImportPath
                             }
-                            jsContent = 'import { createHotContext } from ' + JSON.stringify(hmrImportPath) + ';\nimport.meta.hot = createHotContext(import.meta.url);\n\n' + jsContent
+                            jsContent = injectHmr(id, hmrImportPath, jsContent)
                         }
                         req.respond({
                             status: 200,
@@ -110,7 +107,7 @@ export async function start(appDir: string, port: number, isDev = false) {
                                 'Content-Type': `application/${reqSourceMap ? 'json' : 'javascript'}; charset=utf-8`,
                                 'ETag': mod.hash
                             }),
-                            body: reqSourceMap ? mod.sourceMap : jsContent
+                            body: reqSourceMap ? mod.jsSourceMap : jsContent
                         })
                         continue
                     }
@@ -156,4 +153,23 @@ export async function start(appDir: string, port: number, isDev = false) {
         }
         Deno.exit(1)
     }
+}
+
+function injectHmr(modId: string, hmrImportPath: string, code: string) {
+    return `import { createHotContext, RefreshRuntime, performReactRefresh } from ${JSON.stringify(hmrImportPath)}
+import.meta.hot = createHotContext(${JSON.stringify(modId)})
+
+const prevRefreshReg = window.$RefreshReg$
+const prevRefreshSig = window.$RefreshSig$
+window.$RefreshReg$ = (type, id) => {
+    RefreshRuntime.register(type, ${JSON.stringify(modId)} + " " + id)
+}
+window.$RefreshSig$ = RefreshRuntime.createSignatureFunctionForTransform
+
+${code}
+
+window.$RefreshReg$ = prevRefreshReg
+window.$RefreshSig$ = prevRefreshSig
+import.meta.hot.accept(performReactRefresh)
+`
 }

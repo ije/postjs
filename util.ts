@@ -67,5 +67,17 @@ export default {
     },
     cleanPath(path: string): string {
         return '/' + this.splitPath(path).join('/')
+    },
+    debounce(cb: () => void, delay: number) {
+        let timer: number | null = null
+        return () => {
+            if (timer != null) {
+                clearTimeout(timer)
+            }
+            timer = setTimeout(() => {
+                timer = null
+                cb()
+            }, delay)
+        }
     }
 }

@@ -5,114 +5,301 @@
  */
 
 // @deno-types="../vendor/typescript/lib/typescript.d.ts"
-import ts from '../vendor/typescript/lib/typescript.js';
-import { traverse } from './traverse.ts';
+import ts from '../vendor/typescript/lib/typescript.js'
 
 type TSFunctionLike = ts.FunctionDeclaration | ts.FunctionExpression | ts.ArrowFunction
 
-interface HookCall {
-    expression: ts.Identifier | ts.PropertyAccessExpression
-    name: string
-    key: string
-}
-
-const refreshSig = '$RefreshSig$'
-const refreshReg = '$RefreshReg$'
-
 export class RefreshTransformer {
     private _sf: ts.SourceFile
-    private _hookCalls: WeakMap<TSFunctionLike, HookCall[]>
-    private _seenForRegistration: WeakSet<ts.Node>
+
+    static refreshSig = '$RefreshSig$'
+    static refreshReg = '$RefreshReg$'
 
     constructor(sf: ts.SourceFile) {
         this._sf = sf
-        this._hookCalls = new WeakMap()
-        this._seenForRegistration = new WeakSet()
-        this._visitHookCalls()
     }
 
-    get statements(): ts.NodeArray<ts.Statement> {
-        return ts.createNodeArray([
-            ...this._sf.statements
-        ])
-    }
-
-    hasRegistration(node: ts.Node) {
-        return this._seenForRegistration.has(node)
-    }
-
-    addRegistration(node: ts.Node) {
-        this._seenForRegistration.add(node)
-    }
-
-    private _visitHookCalls() {
-        traverse(this._sf, node => {
-            if (ts.isCallExpression(node)) {
-                let name: string
-                const { expression } = node
-                if (ts.isIdentifier(expression)) {
-                    name = expression.text
-                } else if (ts.isPropertyAccessExpression(expression)) {
-                    name = expression.name.text
-                } else {
-                    return
+    transform() {
+        const statements: ts.Statement[] = []
+        const components: ts.Identifier[] = []
+        const signatures: ts.Identifier[] = []
+        const hookCalls: WeakMap<TSFunctionLike, { id: ts.Identifier, key: string, customHooks: string[] }> = new WeakMap()
+        const seenHooks: Set<string> = new Set()
+        this._sf.statements.forEach(node => {
+            if (ts.isFunctionDeclaration(node)) {
+                const hookCallsSignature = this._getHookCallsSignature(node)
+                if (node.name && isComponentishName(node.name.text)) {
+                    components.push(node.name)
                 }
-                if (!isHookName(name)) {
-                    return
+                if (node.name && isHookName(node.name.text)) {
+                    seenHooks.add(node.name.text)
                 }
-
-                let fnNode: TSFunctionLike | null = null
-                let n = node.parent
-                while (n !== undefined && !ts.isSourceFile(n)) {
-                    if (ts.isFunctionDeclaration(n) || ts.isFunctionExpression(n) || ts.isArrowFunction(n)) {
-                        fnNode = n
-                        break
+                if (hookCallsSignature) {
+                    const id = ts.createUniqueName('_s', ts.GeneratedIdentifierFlags.Optimistic)
+                    signatures.push(id)
+                    hookCalls.set(node, { id, ...hookCallsSignature })
+                }
+            } else if (ts.isVariableStatement(node)) {
+                node.declarationList.declarations.forEach(({ name, initializer }) => {
+                    if (
+                        initializer &&
+                        ts.isIdentifier(name) &&
+                        (ts.isFunctionExpression(initializer) || ts.isArrowFunction(initializer))
+                    ) {
+                        const hookCallsSignature = this._getHookCallsSignature(initializer)
+                        if (isComponentishName(name.text)) {
+                            components.push(name)
+                        }
+                        if (isHookName(name.text)) {
+                            seenHooks.add(name.text)
+                        }
+                        if (hookCallsSignature) {
+                            const id = ts.createUniqueName('_s', ts.GeneratedIdentifierFlags.Optimistic)
+                            signatures.push(id)
+                            hookCalls.set(initializer, { id, ...hookCallsSignature })
+                        }
                     }
-                    n = n.parent
-                }
-                if (fnNode === null) {
-                    return
-                }
-
-                if (!this._hookCalls.has(fnNode)) {
-                    this._hookCalls.set(fnNode, [])
-                }
-                const hookCallsForFn = this._hookCalls.get(fnNode)
-                let key = ''
-                if (ts.isVariableDeclaration(node.parent)) {
-                    // TODO: if there is no LHS, consider some other heuristic.
-                    key = node.parent.name.getText()
-                }
-
-                // Some built-in Hooks reset on edits to arguments.
-                const args = node.arguments
-                if (name === 'useState' && args.length > 0) {
-                    // useState second argument is initial state.
-                    key += '(' + args[0].getFullText() + ')'
-                } else if (name === 'useReducer' && args.length > 1) {
-                    // useReducer second argument is initial state.
-                    key += '(' + args[1].getFullText() + ')'
-                }
-
-                hookCallsForFn!.push({
-                    expression,
-                    name,
-                    key,
                 })
+            } else if (ts.isImportDeclaration(node)) {
+                const name = node.importClause?.name
+                const namedBindings = node.importClause?.namedBindings
+                if (name && isHookName(name.text)) {
+                    seenHooks.add(name.text)
+                }
+                if (namedBindings) {
+                    namedBindings.forEachChild(node => {
+                        if (ts.isImportSpecifier(node) && isHookName(node.name.text)) {
+                            seenHooks.add(node.name.text)
+                        }
+                    })
+                }
             }
+            statements.push(node)
         })
+
+        components.forEach(name => {
+            statements.push(ts.createExpressionStatement(
+                ts.createCall(
+                    ts.createIdentifier(RefreshTransformer.refreshReg),
+                    undefined,
+                    [
+                        name,
+                        ts.createStringLiteralFromNode(name)
+                    ]
+                )
+            ))
+        })
+
+        return ts.updateSourceFileNode(
+            this._sf,
+            ts.setTextRange(
+                ts.createNodeArray([
+                    ...signatures.map(id => {
+                        return ts.createVariableStatement(
+                            undefined,
+                            ts.createVariableDeclarationList([
+                                ts.createVariableDeclaration(
+                                    id,
+                                    undefined,
+                                    ts.createCall(ts.createIdentifier(RefreshTransformer.refreshSig), undefined, undefined)
+                                )
+                            ])
+                        )
+                    }),
+                    ...statements.map(node => {
+                        if (ts.isFunctionDeclaration(node) && hookCalls.has(node)) {
+                            const { id, key, customHooks } = hookCalls.get(node)!
+                            const _customHooks = customHooks.filter(name => seenHooks.has(name))
+                            const forceResetComment = !!ts.getLeadingCommentRanges(this._sf.text, node.pos)?.filter(({ pos, end }) => this._sf.text.substring(pos, end).includes('@refresh reset')).length;
+                            return this._sign(node, node.name!.text, id, key, forceResetComment || _customHooks.length !== _customHooks.length, _customHooks)! as ts.Statement[]
+                        }
+                        if (ts.isVariableStatement(node)) {
+                            const forceResetComment = !!ts.getLeadingCommentRanges(this._sf.text, node.pos)?.filter(({ pos, end }) => this._sf.text.substring(pos, end).includes('@refresh reset')).length;
+                            const _ss: ts.Statement[] = []
+                            const vs = ts.createVariableStatement(
+                                node.modifiers,
+                                ts.createVariableDeclarationList(
+                                    node.declarationList.declarations.map(decl => {
+                                        const { name, initializer } = decl
+                                        if (
+                                            initializer &&
+                                            ts.isIdentifier(name) &&
+                                            (ts.isFunctionExpression(initializer) || ts.isArrowFunction(initializer)) &&
+                                            hookCalls.has(initializer)
+                                        ) {
+                                            const { id, key, customHooks } = hookCalls.get(initializer)!
+                                            const _customHooks = customHooks.filter(name => seenHooks.has(name))
+                                            const [_initializer, _s] = this._sign(initializer, name.text, id, key, forceResetComment || _customHooks.length !== _customHooks.length, _customHooks)!
+                                            _ss.push(_s as ts.Statement)
+                                            return ts.createVariableDeclaration(name, decl.type, _initializer as ts.ArrowFunction)
+                                        }
+                                        return decl
+                                    }),
+                                    node.declarationList.flags
+                                )
+                            )
+                            return [vs, ..._ss]
+                        }
+                        return node
+                    }).flat()
+                ]),
+                this._sf.statements
+            )
+        )
     }
 
-    getHookCallsSignature(functionNode: TSFunctionLike) {
-        const fnHookCalls = this._hookCalls.get(functionNode)
-        if (fnHookCalls === undefined) {
+    private _getHookCallsSignature(fnNode: ts.FunctionDeclaration | ts.FunctionExpression | ts.ArrowFunction) {
+        const hookCalls: { name: string, key: string }[] = []
+        if (fnNode.body && ts.isBlock(fnNode.body)) {
+            fnNode.body.statements.forEach(s => {
+                if (ts.isVariableStatement(s)) {
+                    s.declarationList.declarations.forEach(({ name, initializer }) => {
+                        if (
+                            initializer &&
+                            ts.isCallExpression(initializer)
+                        ) {
+                            const sig = this._getHookCallSignature(initializer)
+                            if (sig) {
+                                hookCalls.push(sig)
+                            }
+                        }
+                    })
+                } else if (
+                    ts.isExpressionStatement(s) &&
+                    ts.isCallExpression(s.expression)
+                ) {
+                    const sig = this._getHookCallSignature(s.expression)
+                    if (sig) {
+                        hookCalls.push(sig)
+                    }
+                }
+            })
+        }
+        if (hookCalls.length === 0) {
             return null
         }
         return {
-            key: fnHookCalls.map(call => call.name + '{' + call.key + '}').join('\n'),
-            customHooks: fnHookCalls
+            key: hookCalls.map(call => call.name + '{' + call.key + '}').join('\n'),
+            customHooks: hookCalls
                 .filter(call => !isBuiltinHook(call.name))
-                .map(call => JSON.parse(JSON.stringify(call))),
+                .map(call => call.name),
+        }
+    }
+
+    private _getHookCallSignature(ctx: ts.CallExpression) {
+        let name: string
+        const { expression, arguments: args } = ctx
+        if (ts.isIdentifier(expression)) {
+            name = expression.text
+        } else if (ts.isPropertyAccessExpression(expression)) {
+            name = expression.name.text
+        } else {
+            return null
+        }
+        if (!isHookName(name)) {
+            return null
+        }
+
+        let key = ''
+        if (ts.isVariableDeclaration(ctx.parent)) {
+            // TODO: if there is no LHS, consider some other heuristic.
+            key = ctx.parent.name.getText()
+        }
+
+        // Some built-in Hooks reset on edits to arguments.
+        if (name === 'useState' && args.length > 0) {
+            // useState second argument is initial state.
+            key += '(' + args[0].getFullText() + ')'
+        } else if (name === 'useReducer' && args.length > 1) {
+            // useReducer second argument is initial state.
+            key += '(' + args[1].getFullText() + ')'
+        }
+
+        return {
+            name,
+            key,
+        }
+    }
+
+    private _sign(fnNode: TSFunctionLike, fnName: string, sigId: ts.Identifier, key: string, forceReset: boolean, customHooks: string[]) {
+        if (fnNode.body && ts.isBlock(fnNode.body)) {
+            const _s = ts.createExpressionStatement(ts.createCall(
+                sigId,
+                undefined,
+                [
+                    ts.createIdentifier(fnName),
+                    ts.createStringLiteral(key),
+                    ...(forceReset || customHooks.length > 0 ? [
+                        forceReset ? ts.createTrue() : ts.createFalse(),
+                        ...(customHooks.length > 0 ? [
+                            ts.createFunctionExpression(
+                                undefined,
+                                undefined,
+                                undefined,
+                                undefined,
+                                undefined,
+                                undefined,
+                                ts.createBlock([
+                                    ts.createReturn(
+                                        ts.createArrayLiteral(
+                                            customHooks.map(name => ts.createIdentifier(name)),
+                                            false
+                                        )
+                                    )
+                                ], true)
+                            )
+                        ] : [])
+                    ] : [])
+                ]
+            ))
+            if (ts.isFunctionDeclaration(fnNode)) {
+                return [
+                    ts.createFunctionDeclaration(
+                        fnNode.decorators,
+                        fnNode.modifiers,
+                        fnNode.asteriskToken,
+                        fnNode.name,
+                        fnNode.typeParameters,
+                        fnNode.parameters,
+                        fnNode.type,
+                        ts.createBlock([
+                            ts.createExpressionStatement(ts.createCall(sigId, undefined, undefined)),
+                            ...fnNode.body.statements
+                        ], true)
+                    ),
+                    _s
+                ]
+            } else if (ts.isFunctionExpression(fnNode)) {
+                return [
+                    ts.createFunctionExpression(
+                        fnNode.modifiers,
+                        fnNode.asteriskToken,
+                        fnNode.name,
+                        fnNode.typeParameters,
+                        fnNode.parameters,
+                        fnNode.type,
+                        ts.createBlock([
+                            ts.createExpressionStatement(ts.createCall(sigId, undefined, undefined)),
+                            ...fnNode.body.statements
+                        ], true)
+                    ),
+                    _s
+                ]
+            } else if (ts.isArrowFunction(fnNode)) {
+                return [
+                    ts.createArrowFunction(
+                        fnNode.modifiers,
+                        fnNode.typeParameters,
+                        fnNode.parameters,
+                        fnNode.type,
+                        ts.createBlock([
+                            ts.createExpressionStatement(ts.createCall(sigId, undefined, undefined)),
+                            ...fnNode.body.statements
+                        ], true)
+                    ),
+                    _s
+                ]
+            }
         }
     }
 }
@@ -155,7 +342,23 @@ function isBuiltinHook(hookName: string) {
     }
 }
 
+function getComments(sourceFile: ts.SourceFile, node: ts.Node) {
+    if (node.parent) {
+        const nodePos = node.pos;
+        const parentPos = node.parent.pos;
+
+        if (node.parent.kind === ts.SyntaxKind.SourceFile || nodePos !== parentPos) {
+            let comments = ts.getLeadingCommentRanges(sourceFile.text, nodePos);
+
+            if (Array.isArray(comments)) {
+                return comments.map(({ pos, end }) => sourceFile.text.substring(pos, end))
+            }
+        }
+    }
+    return null
+}
+
 export default function transformReactRefresh(ctx: ts.TransformationContext, sf: ts.SourceFile): ts.SourceFile {
     const t = new RefreshTransformer(sf)
-    return ts.updateSourceFileNode(sf, ts.setTextRange(t.statements, sf.statements))
+    return t.transform()
 }

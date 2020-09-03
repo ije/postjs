@@ -7,6 +7,7 @@ import { CreatePlainTransformer, CreateTransformer } from './transformer.ts'
 
 export interface CompileOptions {
     mode?: 'development' | 'production'
+    reactRefresh?: boolean
     rewriteImportPath?: (importPath: string) => string
     transformers?: (ts.TransformerFactory<ts.SourceFile> | ts.CustomTransformerFactory)[]
 }
@@ -19,13 +20,15 @@ export function createSourceFile(fileName: string, source: string) {
     )
 }
 
-export function compile(fileName: string, source: string, { mode, rewriteImportPath }: CompileOptions) {
+export function compile(fileName: string, source: string, { mode, reactRefresh, rewriteImportPath }: CompileOptions) {
     const transformers: ts.CustomTransformers = {
         before: [],
         after: []
     }
     if (mode === 'development') {
         transformers.before!.push(CreatePlainTransformer(transformReactJsxSource))
+    }
+    if (reactRefresh) {
         transformers.after!.push(CreateTransformer(transformReactRefresh))
     }
     if (rewriteImportPath) {
