@@ -342,22 +342,6 @@ function isBuiltinHook(hookName: string) {
     }
 }
 
-function getComments(sourceFile: ts.SourceFile, node: ts.Node) {
-    if (node.parent) {
-        const nodePos = node.pos;
-        const parentPos = node.parent.pos;
-
-        if (node.parent.kind === ts.SyntaxKind.SourceFile || nodePos !== parentPos) {
-            let comments = ts.getLeadingCommentRanges(sourceFile.text, nodePos);
-
-            if (Array.isArray(comments)) {
-                return comments.map(({ pos, end }) => sourceFile.text.substring(pos, end))
-            }
-        }
-    }
-    return null
-}
-
 export default function transformReactRefresh(ctx: ts.TransformationContext, sf: ts.SourceFile): ts.SourceFile {
     const t = new RefreshTransformer(sf)
     return t.transform()

@@ -40,7 +40,7 @@ interface Config {
     }
 }
 
-interface AppManifest {
+interface BuildManifest {
     baseUrl: string
     defaultLocale: string
     locales: Record<string, Record<string, string>>
@@ -96,7 +96,7 @@ export default class Project {
 
     get manifest() {
         const { baseUrl, defaultLocale } = this.config
-        const manifest: AppManifest = {
+        const manifest: BuildManifest = {
             baseUrl,
             defaultLocale,
             locales: {},
