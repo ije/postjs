@@ -90,23 +90,24 @@ export class RefreshTransformer {
             ))
         })
 
+        if (signatures.length > 0) {
+            statements.unshift(ts.createVariableStatement(
+                undefined,
+                ts.createVariableDeclarationList(signatures.map(id => {
+                    return ts.createVariableDeclaration(
+                        id,
+                        undefined,
+                        ts.createCall(ts.createIdentifier(RefreshTransformer.refreshSig), undefined, undefined)
+                    )
+                }), ts.NodeFlags.Const)
+            ))
+        }
+
         return ts.updateSourceFileNode(
             this._sf,
             ts.setTextRange(
-                ts.createNodeArray([
-                    ...signatures.map(id => {
-                        return ts.createVariableStatement(
-                            undefined,
-                            ts.createVariableDeclarationList([
-                                ts.createVariableDeclaration(
-                                    id,
-                                    undefined,
-                                    ts.createCall(ts.createIdentifier(RefreshTransformer.refreshSig), undefined, undefined)
-                                )
-                            ])
-                        )
-                    }),
-                    ...statements.map(node => {
+                ts.createNodeArray(
+                    statements.map(node => {
                         if (ts.isFunctionDeclaration(node) && hookCalls.has(node)) {
                             const { id, key, customHooks } = hookCalls.get(node)!
                             const _customHooks = customHooks.filter(name => seenHooks.has(name))
@@ -142,7 +143,7 @@ export class RefreshTransformer {
                         }
                         return node
                     }).flat()
-                ]),
+                ),
                 this._sf.statements
             )
         )
