@@ -568,9 +568,9 @@ export default class Project {
                     rewrittenPaths[path] = rewrittenPath
                     return rewrittenPath
                 }))
-                mod.jsContent = sourceContent.replace(/ from ("|')(.+?)("|');?/g, (s, ql, importPath, qr) => {
+                mod.jsContent = sourceContent.replace(/import([^'"]+)("|')([^'"]+)("|')(\)|;)?/g, (s, from, ql, importPath, qr, end) => {
                     if (importPath in rewrittenPaths) {
-                        return ` from ${ql}${rewrittenPaths[importPath]}${qr};`
+                        return `import${from}${ql}${rewrittenPaths[importPath]}${qr}${end}`
                     }
                     return s
                 })
@@ -660,24 +660,27 @@ export default class Project {
                         path.resolve('/', dep.path.replace(reModuleExt, ''))
                     )
                     dep.hash = depHash
-                    mod.jsContent = mod.jsContent.replace(/ from ("|')([^'"]+)("|');?/g, (s, ql, importPath, qr) => {
+                    mod.jsContent = mod.jsContent.replace(/import([^'"]+)("|')([^'"]+)("|')(\)|;)?/g, (s, from, ql, importPath, qr, end) => {
                         if (
                             reHashJS.test(importPath) &&
                             importPath.slice(0, importPath.length - 13) === depImportPath
                         ) {
-                            return ` from ${ql}${depImportPath}.${dep.hash.slice(0, 9)}.js${qr};`
+                            return `import${from}${ql}${depImportPath}.${dep.hash.slice(0, 9)}.js${qr}${end}`
                         }
                         return s
                     })
                     mod.hash = this._hash(mod.jsContent)
+                    mod.jsFile = `${mod.jsFile.replace(reHashJS, '')}.${mod.hash.slice(0, 9)}.js`
                     this._writeTextFile(mod.jsFile.replace(reHashJS, '') + '.meta.json', JSON.stringify({
                         sourceFile: mod.sourceFile,
                         sourceHash: mod.sourceHash,
                         hash: mod.hash,
                         deps: mod.deps,
                     }, undefined, 4))
-                    this._writeTextFile(`${mod.jsFile.replace(reHashJS, '')}.${mod.hash.slice(0, 9)}.js`, mod.jsContent)
-                    this._writeTextFile(`${mod.jsFile.replace(reHashJS, '')}.${mod.hash.slice(0, 9)}.js.map`, mod.jsSourceMap)
+                    this._writeTextFile(mod.jsFile, mod.jsContent)
+                    if (mod.jsSourceMap) {
+                        this._writeTextFile(mod.jsFile + '.map', mod.jsSourceMap)
+                    }
                     callback(mod)
                     this._updateDependency(mod.sourceFile, mod.hash, callback)
                     log.debug('update dependency:', mod.sourceFile, '<-', depPath, depHash)
@@ -760,6 +763,7 @@ export default class Project {
         }
         if (this._pageModules.has(url.pagePath)) {
             const pm = this._pageModules.get(url.pagePath)!
+            const mod = this._modules.get(pm.moduleId)!
             if (pm.rendered.html) {
                 ret.code = 200
                 ret.head = pm.rendered.head
@@ -782,7 +786,7 @@ export default class Project {
                 ])
                 if (util.isFunction(Page.Component)) {
                     const html = renderPage(url, util.isFunction(App.Component) ? App : undefined, Page)
-                    const head = renderHead()
+                    const head = renderHead(mod.deps.filter(({ path }) => reStyleModuleExt.test(path)).map(({ path }) => path))
                     ret.code = 200
                     ret.head = head
                     ret.body = `<main>${html}</main>`

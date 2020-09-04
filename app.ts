@@ -4,15 +4,14 @@ import { EventEmitter } from './events.ts'
 import { route, RouterContext, RouterURL } from './router.ts'
 import util from './util.ts'
 
-interface AppManifest {
+interface AppManifestProps {
     baseUrl: string
     defaultLocale: string
     locales: Record<string, Record<string, string>>
     appModule: { hash: string } | null
     pageModules: Record<string, { moduleId: string, hash: string }>
 }
-
-export const AppManifestContext = createContext<AppManifest>({
+export const AppManifestContext = createContext<AppManifestProps>({
     baseUrl: '/',
     defaultLocale: 'en',
     locales: {},
@@ -30,7 +29,7 @@ function Main({
     app: initialApp,
     page: initialPage
 }: {
-    manifest: AppManifest
+    manifest: AppManifestProps
     url: RouterURL
     app?: { Component: ComponentType<any>, staticProps: any }
     page: { Component: ComponentType<any>, staticProps: any }
@@ -165,7 +164,7 @@ export async function bootstrap(manifest: AppManifest) {
             const el = React.createElement(
                 Main,
                 {
-                    url: url,
+                    url,
                     manifest,
                     app: { Component: AppComponent, staticProps: appStaticProps },
                     page: { Component: PageComponent, staticProps },

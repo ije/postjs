@@ -4,7 +4,7 @@ import util from './util.ts'
 const serverHeadElements: Array<{ type: string, props: Record<string, any> }> = []
 const serverStyles: Array<{ id: string, css: string }> = []
 
-export function renderHead() {
+export function renderHead(styleModules?: string[]) {
     const tags: string[] = []
     serverHeadElements.forEach(({ type, props }) => {
         if (type === 'title') {
@@ -27,17 +27,26 @@ export function renderHead() {
             }
         }
     })
-    serverStyles.forEach(({ id, css }) => {
-        tags.push(`<style type="text/css" data-module-id=${JSON.stringify(id)}>${css}</style>`)
-    })
+    if (styleModules) {
+        serverStyles.forEach(({ id, css }) => {
+            if (styleModules.includes(id)) {
+                tags.push(`<style type="text/css" data-module-id=${JSON.stringify(id)}>\n${css}</style>`)
+            }
+        })
+    }
     serverHeadElements.splice(0, serverHeadElements.length)
-    serverStyles.splice(0, serverStyles.length)
     return tags
 }
 
 export function createStyle(id: string, css: string) {
     if (window.Deno) {
-        serverStyles.push({ id, css })
+        const prev = serverStyles.find(({ id: _id }) => _id === id)
+        console.log('createStyle prev', prev?.id)
+        if (prev) {
+            prev.css = css
+        } else {
+            serverStyles.push({ id, css })
+        }
     } else {
         const { document } = (window as any)
         const textEl = document.createTextNode(css)
