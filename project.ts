@@ -304,8 +304,9 @@ export default class Project {
 
         const innerModules: Record<string, string> = {
             './main.js': [
-                `import { bootstrap } from 'https://postjs.io/app.ts'`,
+                `import 'https://postjs.io/hmr.ts'`,
                 `import 'https://postjs.io/vendor/tslib/tslib.js'`,
+                `import { bootstrap } from 'https://postjs.io/app.ts'`,
                 `bootstrap(${JSON.stringify(this.manifest)})`
             ].join('\n'),
             './renderer.js': `export * from 'https://postjs.io/renderer.ts'`
