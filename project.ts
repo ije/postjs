@@ -554,11 +554,11 @@ export default class Project {
                     css = output.css
                 }
                 mod.jsContent = [
-                    `import { createStyle } from ${JSON.stringify(path.relative(
+                    `import { applyCSS } from ${JSON.stringify(path.relative(
                         path.dirname(path.resolve('/', mod.sourceFile)),
                         '/-/postjs.io/head.js'
                     ))}`,
-                    `createStyle(${JSON.stringify(sourceFile)}, ${JSON.stringify(css)})`,
+                    `applyCSS(${JSON.stringify(sourceFile)}, ${JSON.stringify(css)})`,
                 ].join('\n')
                 mod.jsSourceMap = ''
                 mod.hash = this._hash(mod.jsContent)

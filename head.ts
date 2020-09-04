@@ -38,7 +38,7 @@ export function renderHead(styleModules?: string[]) {
     return tags
 }
 
-export function createStyle(id: string, css: string) {
+export function applyCSS(id: string, css: string) {
     if (window.Deno) {
         const prev = serverStyles.find(({ id: _id }) => _id === id)
         if (prev) {
