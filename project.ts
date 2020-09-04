@@ -12,6 +12,7 @@ import AnsiUp from './vendor/ansi-up/ansi-up.ts'
 
 const reHttp = /^https?:\/\//i
 const reModuleExt = /\.(m?jsx?|tsx?)$/i
+const reHashJS = /\.[0-9a-fx]{9}\.js$/i
 
 interface Module {
     id: string
@@ -54,7 +55,7 @@ export default class Project {
     private _deps: Map<string, Module> = new Map()
     private _modules: Map<string, Module> = new Map()
     private _pageModules: Record<string, string> = {}
-    private _fsWatchQueue: Map<string, any> = new Map()
+    private _fsWatchQueue: Map<string, number> = new Map()
     private _fsWatchListeners: Array<EventEmitter> = []
 
     constructor(dir: string, mode: 'development' | 'production') {
@@ -70,13 +71,10 @@ export default class Project {
                 imports: {}
             }
         }
-        this.ready = new Promise((resolve, reject) => {
-            this._init().then(resolve).catch(reject)
-        })
-    }
-
-    get isDev() {
-        return this.mode === 'development'
+        this.ready = (async () => {
+            await this._loadConfig()
+            await this._init()
+        })()
     }
 
     get rootDir() {
@@ -90,6 +88,10 @@ export default class Project {
 
     get apiPaths() {
         return Array.from(this._modules.keys()).filter(p => p.startsWith('./api/')).map(p => p.slice(1).replace(reModuleExt, ''))
+    }
+
+    get isDev() {
+        return this.mode === 'development'
     }
 
     get manifest() {
@@ -253,13 +255,9 @@ export default class Project {
                 Object.assign(this.config, { cacheDeps })
             }
         }
-
-        return this.config
     }
 
     private async _init() {
-        await this._loadConfig()
-
         const walkOptions = { includeDirs: false, exts: ['.js', '.jsx', '.mjs', '.ts', '.tsx'], skip: [/\.d\.ts$/i] }
         const w1 = walk(path.join(this.srcDir), { ...walkOptions, maxDepth: 1 })
         const w2 = walk(path.join(this.srcDir, 'api'), walkOptions)
@@ -331,8 +329,11 @@ export default class Project {
                                 type = 'add'
                             }
                             log.info(type, './' + rp)
-                            this._compile('./' + rp).then(({ hash }) => {
+                            this._compile('./' + rp, { forceCompile: true }).then(({ hash }) => {
                                 this._fsWatchListeners.forEach(e => e.emit(moduleId, type, hash))
+                                this._updateDependency('./' + rp, hash, mod => {
+                                    this._fsWatchListeners.forEach(e => e.emit(mod.id, 'modify', mod.hash))
+                                })
                             })
                         } else if (this._modules.has(moduleId)) {
                             this._modules.delete(moduleId)
@@ -359,11 +360,18 @@ export default class Project {
         }
     }
 
-    private async _compile(sourceFile: string, options?: { sourceCode?: string }) {
+    private async _compile(sourceFile: string, options?: { sourceCode?: string, forceCompile?: boolean }) {
         const { rootDir, importMap } = this.config
+        const isRemote = reHttp.test(sourceFile) || (sourceFile in importMap.imports && reHttp.test(importMap.imports[sourceFile]))
+        const id = (isRemote ? util.trimPrefix(this._renameRemotePath(sourceFile), '/-/') : sourceFile).replace(reModuleExt, '') + '.js'
+
+        if (this._deps.has(id) && !options?.forceCompile) {
+            return this._deps.get(id)!
+        }
+
         const mod: Module = {
-            id: sourceFile.replace(reModuleExt, '') + '.js',
-            isRemote: reHttp.test(sourceFile) || (sourceFile in importMap.imports && reHttp.test(importMap.imports[sourceFile])),
+            id,
+            isRemote,
             sourceFile,
             sourceType: reModuleExt.test(sourceFile) ? path.extname(sourceFile).slice(1).replace('mjs', 'js') : 'js',
             sourceHash: '',
@@ -373,26 +381,17 @@ export default class Project {
             jsSourceMap: '',
             hash: '',
         }
-        const moduleName = path.basename(sourceFile).replace(reModuleExt, '')
-        const saveDir = path.join(rootDir, '.postjs', path.dirname(mod.isRemote ? this._rewriteRemotePath(sourceFile) : sourceFile))
+        const name = path.basename(sourceFile).replace(reModuleExt, '')
+        const saveDir = path.join(rootDir, '.postjs', path.dirname(mod.isRemote ? this._renameRemotePath(sourceFile) : sourceFile))
+        const metaFile = path.join(saveDir, `${name}.meta.json`)
 
-        if (mod.isRemote) {
-            mod.id = this._rewriteRemotePath(mod.id).slice(3)
-        }
-
-        // only compile the remote module once
-        if (mod.isRemote && this._deps.has(mod.id)) {
-            return this._deps.get(mod.id)!
-        }
-
-        const metaFile = path.join(saveDir, `${moduleName}.meta.json`)
         if (existsSync(metaFile)) {
             const { sourceHash, hash, deps } = JSON.parse(await Deno.readTextFile(metaFile))
             if (util.isNEString(sourceHash) && util.isNEString(hash) && util.isArray(deps)) {
                 mod.sourceHash = sourceHash
                 mod.hash = hash
                 mod.deps = deps
-                mod.jsFile = path.join(saveDir, moduleName + (mod.isRemote ? '' : '.' + hash.slice(0, 9))) + '.js'
+                mod.jsFile = path.join(saveDir, name + (mod.isRemote ? '' : '.' + hash.slice(0, 9))) + '.js'
                 mod.jsContent = await Deno.readTextFile(mod.jsFile)
                 try {
                     mod.jsSourceMap = await Deno.readTextFile(mod.jsFile + '.map')
@@ -499,7 +498,7 @@ export default class Project {
             } else {
                 const compileOptions = {
                     mode: this.mode,
-                    reactRefresh: this.mode === 'development' && !mod.isRemote,
+                    reactRefresh: this.isDev && !mod.isRemote,
                     rewriteImportPath: (path: string) => this._rewriteImportPath(mod, path)
                 }
                 const { diagnostics, outputText, sourceMapText } = compile(mod.sourceFile, sourceContent, compileOptions)
@@ -518,10 +517,10 @@ export default class Project {
         }
 
         // compile deps
-        for (let dep of mod.deps) {
-            const depmod = await this._compile(dep.path)
-            if (dep.hash !== depmod.hash) {
-                dep.hash = depmod.hash
+        for (const dep of mod.deps) {
+            const depMod = await this._compile(dep.path)
+            if (dep.hash !== depMod.hash) {
+                dep.hash = depMod.hash
                 if (!dep.path.startsWith('http')) {
                     const depImportPath = path.relative(
                         path.dirname(path.resolve('/', sourceFile)),
@@ -529,7 +528,7 @@ export default class Project {
                     )
                     mod.jsContent = mod.jsContent.replace(/ from ("|')([^'"]+)("|');?/g, (s, ql, importPath, qr) => {
                         if (
-                            /\.[0-9a-fx]{9}\.js$/.test(importPath) &&
+                            reHashJS.test(importPath) &&
                             importPath.slice(0, importPath.length - 13) === depImportPath
                         ) {
                             return ` from ${ql}${depImportPath}.${dep.hash.slice(0, 9)}.js${qr};`
@@ -545,7 +544,7 @@ export default class Project {
         }
 
         if (fsync) {
-            mod.jsFile = path.join(saveDir, moduleName + (mod.isRemote ? '' : `.${mod.hash.slice(0, 9)}`)) + '.js'
+            mod.jsFile = path.join(saveDir, name + (mod.isRemote ? '' : `.${mod.hash.slice(0, 9)}`)) + '.js'
             await Promise.all([
                 this._writeTextFile(metaFile, JSON.stringify({
                     sourceFile,
@@ -567,8 +566,43 @@ export default class Project {
         return mod
     }
 
+    private _updateDependency(depPath: string, depHash: string, callback: (mod: Module) => void) {
+        this._modules.forEach(mod => {
+            mod.deps.forEach(dep => {
+                if (dep.path === depPath && dep.hash !== depHash) {
+                    const depImportPath = path.relative(
+                        path.dirname(path.resolve('/', mod.sourceFile)),
+                        path.resolve('/', dep.path.replace(reModuleExt, ''))
+                    )
+                    dep.hash = depHash
+                    mod.jsContent = mod.jsContent.replace(/ from ("|')([^'"]+)("|');?/g, (s, ql, importPath, qr) => {
+                        if (
+                            reHashJS.test(importPath) &&
+                            importPath.slice(0, importPath.length - 13) === depImportPath
+                        ) {
+                            return ` from ${ql}${depImportPath}.${dep.hash.slice(0, 9)}.js${qr};`
+                        }
+                        return s
+                    })
+                    mod.hash = this._hash(mod.jsContent)
+                    this._writeTextFile(mod.jsFile.replace(reHashJS, '') + '.meta.json', JSON.stringify({
+                        sourceFile: mod.sourceFile,
+                        sourceHash: mod.sourceHash,
+                        hash: mod.hash,
+                        deps: mod.deps,
+                    }, undefined, 4))
+                    this._writeTextFile(`${mod.jsFile.replace(reHashJS, '')}.${mod.hash.slice(0, 9)}.js`, mod.jsContent)
+                    this._writeTextFile(`${mod.jsFile.replace(reHashJS, '')}.${mod.hash.slice(0, 9)}.js.map`, mod.jsSourceMap)
+                    callback(mod)
+                    this._updateDependency(mod.sourceFile, mod.hash, callback)
+                    log.debug('update dependency:', mod.sourceFile, '<-', depPath, depHash)
+                }
+            })
+        })
+    }
+
     private _rewriteImportPath(mod: Module, importPath: string): string {
-        const { cacheDeps, rootDir, importMap } = this.config
+        const { cacheDeps, importMap } = this.config
         let rewrittenPath: string
         if (importPath in importMap.imports) {
             importPath = importMap.imports[importPath]
@@ -578,12 +612,12 @@ export default class Project {
                 if (mod.isRemote) {
                     rewrittenPath = path.relative(
                         path.dirname(path.resolve('/', mod.sourceFile.replace(reHttp, '-/').replace(/:(\d+)/, `/$1`))),
-                        this._rewriteRemotePath(importPath)
+                        this._renameRemotePath(importPath)
                     )
                 } else {
                     rewrittenPath = path.relative(
                         path.dirname(path.resolve('/', mod.sourceFile)),
-                        this._rewriteRemotePath(importPath)
+                        this._renameRemotePath(importPath)
                     )
                 }
             } else {
@@ -597,7 +631,7 @@ export default class Project {
                     pathname = path.join(path.dirname(sourceUrl.pathname), importPath)
                 }
                 rewrittenPath = path.relative(
-                    path.dirname(this._rewriteRemotePath(mod.sourceFile)),
+                    path.dirname(this._renameRemotePath(mod.sourceFile)),
                     '/' + path.join('-', sourceUrl.host, pathname)
                 )
             } else {
@@ -629,7 +663,7 @@ export default class Project {
         return rewrittenPath.replace(reModuleExt, '') + '.js'
     }
 
-    private _rewriteRemotePath(path: string): string {
+    private _renameRemotePath(path: string): string {
         return path.replace(reHttp, '/-/').replace(/:(\d+)/, '/$1')
     }
 
