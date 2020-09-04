@@ -74,8 +74,10 @@ export default class Project {
             }
         }
         this.ready = (async () => {
+            const t = performance.now()
             await this._loadConfig()
             await this._init()
+            log.debug('initialize project token ' + Math.round(performance.now() - t) + 'ms')
         })()
     }
 
@@ -315,7 +317,7 @@ export default class Project {
         await this._compile('https://postjs.io/hmr.ts')
 
         log.info(colors.bold('Pages'))
-        for (const path in this._pageModules) {
+        for (const path of this._pageModules.keys()) {
             const isIndex = path == '/'
             log.info('○', path, isIndex ? colors.dim('(index)') : '')
         }

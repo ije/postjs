@@ -210,10 +210,10 @@ export class RefreshTransformer {
         // Some built-in Hooks reset on edits to arguments.
         if (name === 'useState' && args.length > 0) {
             // useState second argument is initial state.
-            key += '(' + args[0].getFullText() + ')'
+            key += '(' + args[0].getText() + ')'
         } else if (name === 'useReducer' && args.length > 1) {
             // useReducer second argument is initial state.
-            key += '(' + args[1].getFullText() + ')'
+            key += '(' + args[1].getText() + ')'
         }
 
         return {
