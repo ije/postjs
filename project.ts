@@ -285,6 +285,7 @@ export default class Project {
         const innerModules: Record<string, string> = {
             './main.js': [
                 `import { bootstrap } from 'https://postjs.io/app.ts'`,
+                `import('https://postjs.io/vendor/tslib/tslib.js')`,
                 `bootstrap(${JSON.stringify(this.manifest)})`
             ].join('\n'),
             './renderer.js': `export * from 'https://postjs.io/renderer.ts'`
@@ -505,9 +506,12 @@ export default class Project {
                 if (diagnostics && diagnostics.length) {
                     throw new Error(`compile ${sourceFile}: ${JSON.stringify(diagnostics)}`)
                 }
-                mod.jsContent = outputText
+                mod.jsContent = outputText.replace(/ from ("|')tslib("|');?/g, ' from ' + JSON.stringify(path.relative(
+                    path.dirname(path.resolve('/', mod.sourceFile)),
+                    '/-/postjs.io/vendor/tslib/tslib.js'
+                )) + ';')
                 mod.jsSourceMap = sourceMapText!
-                mod.hash = this._hash(outputText)
+                mod.hash = this._hash(mod.jsContent)
             }
             log.debug(`${sourceFile} compiled in ${(performance.now() - t).toFixed(3)}ms`)
 
