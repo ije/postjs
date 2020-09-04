@@ -1,7 +1,7 @@
-import { Link } from 'https://postjs.io/mod.ts'
 import React from 'react'
 import Logo from '../components/logo.tsx'
-import { useServerTime, useCount } from '../shared/hooks.ts'
+import { useCount } from '../shared/hooks.ts'
+import '../style/index.less'
 
 export async function getStaticProps() {
     return { name: 'postjs' }
@@ -9,26 +9,24 @@ export async function getStaticProps() {
 
 export default function Home({ name }: { name: string }) {
     const { count, increase, decrease } = useCount(0)
-    const time = useServerTime()
 
     return (
-        <div style={{ margin: 60 }}>
-            <p><Logo /></p>
-            <p>Welcome to use <strong>{name}</strong>! &nbsp; <Link to="/about">&rarr;&nbsp; About</Link></p>
+        <div className="wrapper">
+            <p><Logo height={45} /></p>
             <p>
-                <strong style={{ display: 'inline-block', marginRight: 12 }}>{count}</strong>
-                &nbsp;
-                <button onClick={decrease}>-</button>
-                &nbsp;
-                <button onClick={increase}>+</button>
+                <span>Welcome to use <strong>{name}</strong>!</span>
+                <br/>
+                [
+                    <a href="https://postjs.io/docs" target="_blank">Docs</a>
+                    |
+                    <a href="https://github.com/postui/postjs" target="_blank">Github</a>
+                ]
             </p>
-            <p>
-                {!time && (
-                    <small>loading...</small>
-                )}
-                {time && (
-                    <small>Server Time: {time}</small>
-                )}
+            <p className="counter">
+                <span>Counter:</span>
+                <strong>{count}</strong>
+                <button onClick={decrease}>-</button>
+                <button onClick={increase}>+</button>
             </p>
         </div>
     )

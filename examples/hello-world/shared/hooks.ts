@@ -1,14 +1,4 @@
-import React, { useState } from 'react'
-
-export function useServerTime() {
-    const [time, setTime] = React.useState('')
-
-    React.useEffect(() => {
-        fetch('/api/time').then(resp => resp.json()).then(data => setTime(data.time))
-    }, [])
-
-    return time.replace(/[a-z]/gi, ' ')
-}
+import { useState } from 'react'
 
 export function useCount(initial: number) {
     const [count, setCount] = useState(initial)
