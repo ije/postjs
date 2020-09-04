@@ -99,7 +99,7 @@ export async function start(appDir: string, port: number, isDev = false) {
                             if (!hmrImportPath.startsWith('.') && !hmrImportPath.startsWith('/')) {
                                 hmrImportPath = './' + hmrImportPath
                             }
-                            jsContent = injectHmr(id, hmrImportPath, jsContent, id.endsWith('.js'))
+                            jsContent = injectHmrCode(id, hmrImportPath, jsContent, id.endsWith('.js'))
                         }
                         req.respond({
                             status: 200,
@@ -155,7 +155,7 @@ export async function start(appDir: string, port: number, isDev = false) {
     }
 }
 
-function injectHmr(modId: string, hmrImportPath: string, code: string, reactRefresh: boolean) {
+function injectHmrCode(modId: string, hmrImportPath: string, code: string, reactRefresh: boolean) {
     const text: string[] = [
         `import { createHotContext, RefreshRuntime, performReactRefresh } from ${JSON.stringify(hmrImportPath)}`,
         `import.meta.hot = createHotContext(${JSON.stringify(modId)})`
@@ -170,18 +170,18 @@ function injectHmr(modId: string, hmrImportPath: string, code: string, reactRefr
             `window.$RefreshSig$ = RefreshRuntime.createSignatureFunctionForTransform`
         )
     }
-    text.push(``)
+    text.push('')
     text.push(code)
-    text.push(``)
+    text.push('')
     if (reactRefresh) {
         text.push(
-            `window.$RefreshReg$ = prevRefreshReg`,
-            `window.$RefreshSig$ = prevRefreshSig`,
-            `import.meta.hot.accept(performReactRefresh)`
+            'window.$RefreshReg$ = prevRefreshReg',
+            'window.$RefreshSig$ = prevRefreshSig',
+            'import.meta.hot.accept(performReactRefresh)'
         )
     } else {
         text.push(
-            `import.meta.hot.accept()`
+            'import.meta.hot.accept()'
         )
     }
     return text.join('\n')
