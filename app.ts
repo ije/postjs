@@ -9,7 +9,7 @@ interface AppManifest {
     defaultLocale: string
     locales: Record<string, Record<string, string>>
     appModule: { hash: string } | null
-    pageModules: Record<string, { path: string, hash: string }>
+    pageModules: Record<string, { moduleId: string, hash: string }>
 }
 
 export const AppManifestContext = createContext<AppManifest>({
@@ -160,7 +160,7 @@ export async function bootstrap(manifest: AppManifest) {
                 { default: PageComponent, __staticProps: staticProps }
             ] = await Promise.all([
                 appModule ? import(baseUrl + `_dist/app.${appModule.hash.slice(0, 9)}.js`) : async () => ({}),
-                import(baseUrl + '_dist/' + pageModule.path.replace(/\.js$/, `.${pageModule.hash.slice(0, 9)}.js`)),
+                import(baseUrl + '_dist/' + pageModule.moduleId.replace(/\.js$/, `.${pageModule.hash.slice(0, 9)}.js`)),
             ])
             const el = React.createElement(
                 Main,

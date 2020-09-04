@@ -35,7 +35,7 @@ export async function start(appDir: string, port: number, isDev = false) {
                                                     socket.send(JSON.stringify({
                                                         type: 'update',
                                                         id: mod.id,
-                                                        updateUrl: path.resolve(path.join(project.config.baseUrl, '/_dist/'), mod.id.replace(/\.js$/, `.${hash!.slice(0, 9)}.js`))
+                                                        updateUrl: path.resolve(path.join(project.config.baseUrl, '/_dist/'), mod.id.replace(/\.js$/, '') + `.${hash!.slice(0, 9)}.js`)
                                                     }))
                                                 }
                                             })
@@ -91,7 +91,7 @@ export async function start(appDir: string, port: number, isDev = false) {
                                 jsContent = 'export const __staticProps = ' + JSON.stringify(staticProps) + ';\n\n' + jsContent
                             }
                         }
-                        if (id === './app.js' || id.startsWith('./pages/') || id.startsWith('./components/')) {
+                        if (project.isHMRable(id)) {
                             let hmrImportPath = path.relative(
                                 path.dirname(path.resolve('/', id)),
                                 '/-/postjs.io/hmr.js'
@@ -99,7 +99,7 @@ export async function start(appDir: string, port: number, isDev = false) {
                             if (!hmrImportPath.startsWith('.') && !hmrImportPath.startsWith('/')) {
                                 hmrImportPath = './' + hmrImportPath
                             }
-                            jsContent = injectHmr(id, hmrImportPath, jsContent)
+                            jsContent = injectHmr(id, hmrImportPath, jsContent, id.endsWith('.js'))
                         }
                         req.respond({
                             status: 200,
@@ -155,21 +155,34 @@ export async function start(appDir: string, port: number, isDev = false) {
     }
 }
 
-function injectHmr(modId: string, hmrImportPath: string, code: string) {
-    return `import { createHotContext, RefreshRuntime, performReactRefresh } from ${JSON.stringify(hmrImportPath)}
-import.meta.hot = createHotContext(${JSON.stringify(modId)})
-
-const prevRefreshReg = window.$RefreshReg$
-const prevRefreshSig = window.$RefreshSig$
-window.$RefreshReg$ = (type, id) => {
-    RefreshRuntime.register(type, ${JSON.stringify(modId)} + " " + id)
-}
-window.$RefreshSig$ = RefreshRuntime.createSignatureFunctionForTransform
-
-${code}
-
-window.$RefreshReg$ = prevRefreshReg
-window.$RefreshSig$ = prevRefreshSig
-import.meta.hot.accept(performReactRefresh)
-`
+function injectHmr(modId: string, hmrImportPath: string, code: string, reactRefresh: boolean) {
+    const text: string[] = [
+        `import { createHotContext, RefreshRuntime, performReactRefresh } from ${JSON.stringify(hmrImportPath)}`,
+        `import.meta.hot = createHotContext(${JSON.stringify(modId)})`
+    ]
+    if (reactRefresh) {
+        text.push(
+            `const prevRefreshReg = window.$RefreshReg$`,
+            `const prevRefreshSig = window.$RefreshSig$`,
+            `window.$RefreshReg$ = (type, id) => {`,
+            `    RefreshRuntime.register(type, ${JSON.stringify(modId)} + " " + id)`,
+            `}`,
+            `window.$RefreshSig$ = RefreshRuntime.createSignatureFunctionForTransform`
+        )
+    }
+    text.push(``)
+    text.push(code)
+    text.push(``)
+    if (reactRefresh) {
+        text.push(
+            `window.$RefreshReg$ = prevRefreshReg`,
+            `window.$RefreshSig$ = prevRefreshSig`,
+            `import.meta.hot.accept(performReactRefresh)`
+        )
+    } else {
+        text.push(
+            `import.meta.hot.accept()`
+        )
+    }
+    return text.join('\n')
 }

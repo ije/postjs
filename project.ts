@@ -9,9 +9,11 @@ import transformImportPathRewrite from './ts/transform-import-path-rewrite.ts'
 import { traverse } from './ts/traverse.ts'
 import util from './util.ts'
 import AnsiUp from './vendor/ansi-up/ansi-up.ts'
+import less from './vendor/less/dist/less.js'
 
 const reHttp = /^https?:\/\//i
 const reModuleExt = /\.(m?jsx?|tsx?)$/i
+const reStyleModuleExt = /\.(css|less|sass)$/i
 const reHashJS = /\.[0-9a-fx]{9}\.js$/i
 
 interface Module {
@@ -44,7 +46,7 @@ interface BuildManifest {
     defaultLocale: string
     locales: Record<string, Record<string, string>>
     appModule: { hash: string } | null
-    pageModules: Record<string, { path: string, hash: string }>
+    pageModules: Record<string, { moduleId: string, hash: string }>
 }
 
 export default class Project {
@@ -54,7 +56,7 @@ export default class Project {
 
     private _deps: Map<string, Module> = new Map()
     private _modules: Map<string, Module> = new Map()
-    private _pageModules: Record<string, string> = {}
+    private _pageModules: Map<string, { moduleId: string, rendered: { head: string[], html: string } }> = new Map()
     private _fsWatchQueue: Map<string, number> = new Map()
     private _fsWatchListeners: Array<EventEmitter> = []
 
@@ -108,11 +110,10 @@ export default class Project {
                 hash: this._modules.get('./app.js')!.hash
             }
         }
-        for (const p in this._pageModules) {
-            const path = this._pageModules[p]
-            const { hash } = this._modules.get(path)!
-            manifest.pageModules[p] = { path, hash }
-        }
+        this._pageModules.forEach(({ moduleId }, pagePath) => {
+            const { hash } = this._modules.get(moduleId)!
+            manifest.pageModules[pagePath] = { moduleId, hash }
+        })
         return manifest
     }
 
@@ -144,7 +145,12 @@ export default class Project {
         } else {
             modId = '.' + modId
             if (/\.[0-9a-f]{9}\.js$/.test(modId)) {
-                modId = modId.slice(0, modId.length - 13) + '.js'
+                const id = modId.slice(0, modId.length - 13)
+                if (reStyleModuleExt.test(id)) {
+                    modId = id
+                } else {
+                    modId = id + '.js'
+                }
             }
         }
         return this.getModule(modId)
@@ -166,7 +172,7 @@ export default class Project {
         const { baseUrl, defaultLocale } = this.config
         const url = route(
             baseUrl,
-            Object.keys(this._pageModules),
+            Array.from(this._pageModules.keys()),
             {
                 location,
                 defaultLocale,
@@ -191,15 +197,15 @@ export default class Project {
         const { baseUrl, defaultLocale } = this.config
         const url = route(
             baseUrl,
-            Object.keys(this._pageModules),
+            Array.from(this._pageModules.keys()),
             {
                 location,
                 defaultLocale,
                 fallback: '/404'
             }
         )
-        if (url.pagePath in this._pageModules) {
-            const { staticProps } = await this.importModuleAsComponent(this._pageModules[url.pagePath])
+        if (this._pageModules.has(url.pagePath)) {
+            const { staticProps } = await this.importModuleAsComponent(this._pageModules.get(url.pagePath)!.moduleId)
             if (staticProps) {
                 return staticProps
             }
@@ -259,33 +265,45 @@ export default class Project {
 
     private async _init() {
         const walkOptions = { includeDirs: false, exts: ['.js', '.jsx', '.mjs', '.ts', '.tsx'], skip: [/\.d\.ts$/i] }
-        const w1 = walk(path.join(this.srcDir), { ...walkOptions, maxDepth: 1 })
-        const w2 = walk(path.join(this.srcDir, 'api'), walkOptions)
-        const w3 = walk(path.join(this.srcDir, 'pages'), walkOptions)
+        const apiDir = path.join(this.srcDir, 'api')
+        const pagesDir = path.join(this.srcDir, 'pages')
 
-        for await (const { path: p } of w1) {
+        if (!(await this._dirExists(pagesDir))) {
+            log.error("please create some pages.")
+            Deno.exit(0)
+        }
+
+        for await (const { path: p } of walk(this.srcDir, { ...walkOptions, maxDepth: 1 })) {
             const name = path.basename(p)
             if (name.replace(reModuleExt, '') === 'app') {
                 await this._compile('./' + name)
             }
         }
 
-        for await (const { path: p } of w2) {
-            const name = path.basename(p)
-            await this._compile('./api/' + name)
-        }
-
-        for await (const { path: p } of w3) {
+        for await (const { path: p } of walk(pagesDir, walkOptions)) {
             const name = path.basename(p)
             const pagePath = '/' + name.replace(reModuleExt, '').replace(/\s+/g, '-').replace(/\/?index$/i, '')
-            this._pageModules[pagePath] = './pages/' + name.replace(reModuleExt, '') + '.js'
+            this._pageModules.set(pagePath, {
+                moduleId: './pages/' + name.replace(reModuleExt, '') + '.js',
+                rendered: {
+                    head: [],
+                    html: ''
+                }
+            })
             await this._compile('./pages/' + name)
+        }
+
+        if (await this._dirExists(apiDir)) {
+            for await (const { path: p } of walk(apiDir, walkOptions)) {
+                const name = path.basename(p)
+                await this._compile('./api/' + name)
+            }
         }
 
         const innerModules: Record<string, string> = {
             './main.js': [
                 `import { bootstrap } from 'https://postjs.io/app.ts'`,
-                `import('https://postjs.io/vendor/tslib/tslib.js')`,
+                `import 'https://postjs.io/vendor/tslib/tslib.js'`,
                 `bootstrap(${JSON.stringify(this.manifest)})`
             ].join('\n'),
             './renderer.js': `export * from 'https://postjs.io/renderer.ts'`
@@ -317,8 +335,8 @@ export default class Project {
             for (const p of event.paths) {
                 const { rootDir, outputDir } = this.config
                 const rp = util.trimPrefix(util.trimPrefix(p, rootDir), '/')
-                if (reModuleExt.test(rp) && !rp.startsWith('.postjs/') && !rp.startsWith(outputDir.slice(1))) {
-                    const moduleId = `./${rp.replace(reModuleExt, '')}.js`
+                if ((reModuleExt.test(rp) || reStyleModuleExt.test(rp)) && !rp.startsWith('.postjs/') && !rp.startsWith(outputDir.slice(1))) {
+                    const moduleId = './' + rp.replace(reModuleExt, '.js')
                     if (this._fsWatchQueue.has(moduleId)) {
                         clearTimeout(this._fsWatchQueue.get(moduleId)!)
                     }
@@ -331,18 +349,63 @@ export default class Project {
                             }
                             log.info(type, './' + rp)
                             this._compile('./' + rp, { forceCompile: true }).then(({ hash }) => {
-                                this._fsWatchListeners.forEach(e => e.emit(moduleId, type, hash))
+                                const hmrable = this.isHMRable(moduleId)
+                                if (hmrable) {
+                                    this._fsWatchListeners.forEach(e => e.emit(moduleId, type, hash))
+                                }
+                                if (moduleId.startsWith('./pages/')) {
+                                    this._resetPageModule(moduleId)
+                                }
                                 this._updateDependency('./' + rp, hash, mod => {
-                                    this._fsWatchListeners.forEach(e => e.emit(mod.id, 'modify', mod.hash))
+                                    if (!hmrable) {
+                                        this._fsWatchListeners.forEach(e => e.emit(mod.id, 'modify', mod.hash))
+                                    }
+                                    if (mod.id.startsWith('./pages/')) {
+                                        this._resetPageModule(mod.id)
+                                    }
                                 })
                             })
                         } else if (this._modules.has(moduleId)) {
+                            if (moduleId.startsWith('./pages/')) {
+                                this._removePageModule(moduleId)
+                            }
                             this._modules.delete(moduleId)
-                            this._fsWatchListeners.forEach(e => e.emit(moduleId, 'remove'))
+                            if (this.isHMRable(moduleId)) {
+                                this._fsWatchListeners.forEach(e => e.emit(moduleId, 'remove'))
+                            }
                             log.info('remove', './' + rp)
                         }
                     }, 150))
                 }
+            }
+        }
+    }
+
+    isHMRable(moduleId: string) {
+        return moduleId === './app.js' || moduleId.startsWith('./pages/') || moduleId.startsWith('./components/') || reStyleModuleExt.test(moduleId)
+    }
+
+    private _removePageModule(moduleId: string) {
+        let pagePath = ''
+        for (const [p, pm] of this._pageModules.entries()) {
+            if (pm.moduleId === moduleId) {
+                pagePath = p
+                break
+            }
+        }
+        if (pagePath !== '') {
+            this._pageModules.delete(pagePath)
+        }
+    }
+
+    private _resetPageModule(moduleId: string) {
+        for (const [p, pm] of this._pageModules.entries()) {
+            if (pm.moduleId === moduleId) {
+                pm.rendered = {
+                    head: [],
+                    html: ''
+                }
+                break
             }
         }
     }
@@ -364,7 +427,7 @@ export default class Project {
     private async _compile(sourceFile: string, options?: { sourceCode?: string, forceCompile?: boolean }) {
         const { rootDir, importMap } = this.config
         const isRemote = reHttp.test(sourceFile) || (sourceFile in importMap.imports && reHttp.test(importMap.imports[sourceFile]))
-        const id = (isRemote ? util.trimPrefix(this._renameRemotePath(sourceFile), '/-/') : sourceFile).replace(reModuleExt, '') + '.js'
+        const id = (isRemote ? util.trimPrefix(this._renameRemotePath(sourceFile), '/-/') : sourceFile).replace(reModuleExt, '.js')
 
         if (this._deps.has(id) && !options?.forceCompile) {
             return this._deps.get(id)!
@@ -374,7 +437,7 @@ export default class Project {
             id,
             isRemote,
             sourceFile,
-            sourceType: reModuleExt.test(sourceFile) ? path.extname(sourceFile).slice(1).replace('mjs', 'js') : 'js',
+            sourceType: path.extname(sourceFile).slice(1).replace('mjs', 'js') || 'js',
             sourceHash: '',
             deps: [],
             jsFile: '',
@@ -401,6 +464,7 @@ export default class Project {
         }
 
         let sourceContent = ''
+        let emptyContent = false
         if (mod.isRemote) {
             let url = sourceFile
             for (const importPath in importMap.imports) {
@@ -470,6 +534,7 @@ export default class Project {
             const sourceHash = (new Sha1()).update(text).hex()
             if (mod.sourceHash === '' || mod.sourceHash !== sourceHash) {
                 sourceContent = text
+                emptyContent = text === ''
                 mod.sourceHash = sourceHash
             }
         }
@@ -477,10 +542,25 @@ export default class Project {
         let fsync = false
 
         // compile source
-        if (sourceContent != '') {
+        if (sourceContent != '' || emptyContent) {
             const t = performance.now()
             mod.deps = []
-            if (mod.isRemote && mod.sourceType === 'js') {
+            if (mod.sourceType === 'css' || mod.sourceType === 'less') {
+                let css = sourceContent
+                if (mod.sourceType === 'less') {
+                    const output = await less.render(sourceContent || '/* empty content */')
+                    css = output.css
+                }
+                mod.jsContent = [
+                    `import { createStyle } from ${JSON.stringify(path.relative(
+                        path.dirname(path.resolve('/', mod.sourceFile)),
+                        '/-/postjs.io/head.js'
+                    ))}`,
+                    `createStyle(${JSON.stringify(sourceFile)}, ${JSON.stringify(css)})`,
+                ].join('\n')
+                mod.jsSourceMap = ''
+                mod.hash = this._hash(mod.jsContent)
+            } else if (mod.sourceType === 'js' && mod.isRemote) {
                 const sf = createSourceFile(mod.sourceFile, sourceContent)
                 const rewrittenPaths: Record<string, string> = {}
                 traverse(sf, node => transformImportPathRewrite(sf, node, path => {
@@ -513,6 +593,7 @@ export default class Project {
                 mod.jsSourceMap = sourceMapText!
                 mod.hash = this._hash(mod.jsContent)
             }
+
             log.debug(`${sourceFile} compiled in ${(performance.now() - t).toFixed(3)}ms`)
 
             if (!fsync) {
@@ -530,12 +611,12 @@ export default class Project {
                         path.dirname(path.resolve('/', sourceFile)),
                         path.resolve('/', dep.path.replace(reModuleExt, ''))
                     )
-                    mod.jsContent = mod.jsContent.replace(/ from ("|')([^'"]+)("|');?/g, (s, ql, importPath, qr) => {
+                    mod.jsContent = mod.jsContent.replace(/import([^'"]+)("|')([^'"]+)("|')(\)|;)?/g, (s, from, ql, importPath, qr, end) => {
                         if (
                             reHashJS.test(importPath) &&
                             importPath.slice(0, importPath.length - 13) === depImportPath
                         ) {
-                            return ` from ${ql}${depImportPath}.${dep.hash.slice(0, 9)}.js${qr};`
+                            return `import${from}${ql}${depImportPath}.${dep.hash.slice(0, 9)}.js${qr}${end}`
                         }
                         return s
                     })
@@ -677,7 +758,14 @@ export default class Project {
             head: ['<title>404 - page not found</title>'],
             body: '<p><strong><code>404</code></strong><small> - </small><span>page not found</span></p>',
         }
-        if (url.pagePath in this._pageModules) {
+        if (this._pageModules.has(url.pagePath)) {
+            const pm = this._pageModules.get(url.pagePath)!
+            if (pm.rendered.html) {
+                ret.code = 200
+                ret.head = pm.rendered.head
+                ret.body = `<main>${pm.rendered.html}</main>`
+                return ret
+            }
             try {
                 Object.assign(globalThis, {
                     $RefreshReg$: () => { },
@@ -690,13 +778,15 @@ export default class Project {
                 ] = await Promise.all([
                     import(this._modules.get('./renderer.js')!.jsFile),
                     this.importModuleAsComponent('./app.js'),
-                    this.importModuleAsComponent(this._pageModules[url.pagePath], url)
+                    this.importModuleAsComponent(pm.moduleId, url)
                 ])
                 if (util.isFunction(Page.Component)) {
                     const html = renderPage(url, util.isFunction(App.Component) ? App : undefined, Page)
+                    const head = renderHead()
                     ret.code = 200
-                    ret.head = renderHead()
+                    ret.head = head
                     ret.body = `<main>${html}</main>`
+                    pm.rendered = { head, html }
                 } else {
                     ret.code = 500
                     ret.head = ['<title>500 - render error</title>']
@@ -725,5 +815,20 @@ export default class Project {
             await Deno.mkdir(dir, { recursive: true })
         }
         await Deno.writeTextFile(filepath, content)
+    }
+
+    private async _dirExists(path: string) {
+        try {
+            const fi = await Deno.lstat(path)
+            if (fi.isDirectory) {
+                return true
+            }
+            return false
+        } catch (err) {
+            if (err instanceof Deno.errors.NotFound) {
+                return false
+            }
+            throw err
+        }
     }
 }

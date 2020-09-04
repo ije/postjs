@@ -1,11 +1,7 @@
 import React from 'react'
-import { renderToTags } from './head.ts'
 import { RouterContext, RouterURL } from './router.ts'
 import ReactDomServer from './vendor/react-dom/server.js'
-
-export function renderHead() {
-    return renderToTags()
-}
+export { renderHead } from './head.ts'
 
 export function renderPage(
     url: RouterURL,

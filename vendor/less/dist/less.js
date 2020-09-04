@@ -11333,7 +11333,7 @@ export default (function  () {
             }
         }
     }
-    addDefaultOptions(window, options$1);
+    //  addDefaultOptions(window, options$1);
     options$1.plugins = options$1.plugins || [];
     if (window.LESS_PLUGINS) {
         options$1.plugins = options$1.plugins.concat(window.LESS_PLUGINS);

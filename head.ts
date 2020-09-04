@@ -1,9 +1,59 @@
 import React, { Children, createElement, isValidElement, PropsWithChildren, ReactElement, ReactNode } from 'react'
 import util from './util.ts'
 
-const headElements = new Map<string, { type: string, props: Record<string, any> }>()
+const serverHeadElements: Array<{ type: string, props: Record<string, any> }> = []
+const serverStyles: Array<{ id: string, css: string }> = []
 
-export default function Head({ children }: PropsWithChildren<{}>) {
+export function renderHead() {
+    const tags: string[] = []
+    serverHeadElements.forEach(({ type, props }) => {
+        if (type === 'title') {
+            if (util.isNEString(props.children)) {
+                tags.push(`<title>${props.children}</title>`)
+            } else if (util.isNEArray(props.children)) {
+                tags.push(`<title>${props.children.join('')}</title>`)
+            }
+        } else {
+            const attrs = Object.keys(props)
+                .filter(key => key !== 'children')
+                .map(key => ` ${key}=${JSON.stringify(props[key])}`)
+                .join('')
+            if (util.isNEString(props.children)) {
+                tags.push(`<${type}${attrs}>${props.children}</${type}>`)
+            } else if (util.isNEArray(props.children)) {
+                tags.push(`<${type}${attrs}>${props.children.join('')}</${type}>`)
+            } else {
+                tags.push(`<${type}${attrs} />`)
+            }
+        }
+    })
+    serverStyles.forEach(({ id, css }) => {
+        tags.push(`<style type="text/css" data-module-id=${JSON.stringify(id)}>${css}</style>`)
+    })
+    serverHeadElements.splice(0, serverHeadElements.length)
+    serverStyles.splice(0, serverStyles.length)
+    return tags
+}
+
+export function createStyle(id: string, css: string) {
+    if (window.Deno) {
+        serverStyles.push({ id, css })
+    } else {
+        const { document } = (window as any)
+        const textEl = document.createTextNode(css)
+        const styleEl = document.createElement('style')
+        const prevStyleEl = document.querySelector(`style[data-module-id=${JSON.stringify(id)}]`)
+        styleEl.type = 'text/css'
+        styleEl.setAttribute('data-module-id', id)
+        styleEl.appendChild(textEl)
+        document.head.appendChild(styleEl)
+        if (prevStyleEl) {
+            document.head.removeChild(prevStyleEl)
+        }
+    }
+}
+
+export function Head({ children }: PropsWithChildren<{}>) {
     return null
 }
 
@@ -121,29 +171,3 @@ function parse(node: ReactNode, els?: Map<string, { type: string, props: Record<
     return els!
 }
 
-export function renderToTags() {
-    const tags: string[] = []
-    headElements.forEach(({ type, props }) => {
-        if (type === 'title') {
-            if (util.isNEString(props.children)) {
-                tags.push(`<title>${props.children}</title>`)
-            } else if (util.isNEArray(props.children)) {
-                tags.push(`<title>${props.children.join('')}</title>`)
-            }
-        } else {
-            const attrs = Object.keys(props)
-                .filter(key => key !== 'children')
-                .map(key => ` ${key}=${JSON.stringify(props[key])}`)
-                .join('')
-            if (util.isNEString(props.children)) {
-                tags.push(`<${type}${attrs}>${props.children}</${type}>`)
-            } else if (util.isNEArray(props.children)) {
-                tags.push(`<${type}${attrs}>${props.children.join('')}</${type}>`)
-            } else {
-                tags.push(`<${type}${attrs} />`)
-            }
-        }
-    })
-    headElements.clear()
-    return tags
-}
