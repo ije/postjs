@@ -145,7 +145,7 @@ function Default404Page() {
     )
 }
 
-export async function bootstrap(manifest: AppManifest) {
+export async function bootstrap(manifest: AppManifestProps) {
     const { document } = window as any
     const { baseUrl, appModule, pageModules } = manifest
     const el = document.getElementById('ssr-data')
@@ -170,6 +170,10 @@ export async function bootstrap(manifest: AppManifest) {
                     page: { Component: PageComponent, staticProps },
                 }
             )
+            const ssrHeadEls = document.head.querySelectorAll('[ssr]')
+            if (ssrHeadEls.length > 0) {
+                ssrHeadEls.forEach((el: any) => document.head.removeChild(el))
+            }
             hydrate(el, document.querySelector('main'))
         }
     }

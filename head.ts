@@ -1,4 +1,4 @@
-import React, { Children, createElement, isValidElement, PropsWithChildren, ReactElement, ReactNode } from 'react'
+import React, { Children, createElement, isValidElement, PropsWithChildren, ReactElement, ReactNode, useEffect } from 'react'
 import util from './util.ts'
 
 const serverHeadElements: Array<{ type: string, props: Record<string, any> }> = []
@@ -9,9 +9,9 @@ export function renderHead(styleModules?: string[]) {
     serverHeadElements.forEach(({ type, props }) => {
         if (type === 'title') {
             if (util.isNEString(props.children)) {
-                tags.push(`<title>${props.children}</title>`)
+                tags.push(`<title ssr>${props.children}</title>`)
             } else if (util.isNEArray(props.children)) {
-                tags.push(`<title>${props.children.join('')}</title>`)
+                tags.push(`<title ssr>${props.children.join('')}</title>`)
             }
         } else {
             const attrs = Object.keys(props)
@@ -19,11 +19,11 @@ export function renderHead(styleModules?: string[]) {
                 .map(key => ` ${key}=${JSON.stringify(props[key])}`)
                 .join('')
             if (util.isNEString(props.children)) {
-                tags.push(`<${type}${attrs}>${props.children}</${type}>`)
+                tags.push(`<${type}${attrs} ssr>${props.children}</${type}>`)
             } else if (util.isNEArray(props.children)) {
-                tags.push(`<${type}${attrs}>${props.children.join('')}</${type}>`)
+                tags.push(`<${type}${attrs} ssr>${props.children.join('')}</${type}>`)
             } else {
-                tags.push(`<${type}${attrs} />`)
+                tags.push(`<${type}${attrs} ssr/>`)
             }
         }
     })
@@ -41,7 +41,6 @@ export function renderHead(styleModules?: string[]) {
 export function createStyle(id: string, css: string) {
     if (window.Deno) {
         const prev = serverStyles.find(({ id: _id }) => _id === id)
-        console.log('createStyle prev', prev?.id)
         if (prev) {
             prev.css = css
         } else {
@@ -63,6 +62,50 @@ export function createStyle(id: string, css: string) {
 }
 
 export function Head({ children }: PropsWithChildren<{}>) {
+    if (window.Deno) {
+        parse(children).forEach(({ type, props }, key) => serverHeadElements.push({ type, props }))
+    }
+
+    useEffect(() => {
+        const nodes = parse(children)
+        const insertedEls: Array<Object> = []
+
+        if (nodes.size > 0) {
+            let charsetEl = document.querySelector('meta[charset]')
+            if (!charsetEl) {
+                charsetEl = document.createElement('meta')
+                charsetEl.setAttribute('charset', 'utf-8')
+                document.head.prepend(charsetEl)
+            }
+
+            nodes.forEach(({ type, props }) => {
+                const el = document.createElement(type)
+                Object.keys(props).forEach(key => {
+                    const value = props[key]
+                    if (key === 'children') {
+                        if (util.isNEString(value)) {
+                            el.innerText = value
+                        } else if (util.isNEArray(value)) {
+                            el.innerText = value.join('')
+                        }
+                    } else {
+                        el.setAttribute(key, String(value || ''))
+                    }
+                })
+                if (charsetEl.nextElementSibling) {
+                    document.head.insertBefore(el, charsetEl.nextElementSibling)
+                } else {
+                    document.head.appendChild(el)
+                }
+                insertedEls.push(el)
+            })
+        }
+
+        return () => {
+            insertedEls.forEach(el => document.head.removeChild(el))
+        }
+    }, [])
+
     return null
 }
 
