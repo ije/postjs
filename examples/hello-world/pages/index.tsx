@@ -13,14 +13,13 @@ export default function Home({ name }: { name: string }) {
     return (
         <div className="wrapper">
             <p><Logo height={45} /></p>
-            <p>
-                <span>Welcome to use <strong>{name}</strong>!</span>
-                <br/>
-                [
+            <p>Welcome to use <strong>{name}</strong>!</p>
+            <p className="links">
+                <span>[</span>
                     <a href="https://postjs.io/docs" target="_blank">Docs</a>
-                    |
+                <span>|</span>
                     <a href="https://github.com/postui/postjs" target="_blank">Github</a>
-                ]
+                <span>]</span>
             </p>
             <p className="counter">
                 <span>Counter:</span>

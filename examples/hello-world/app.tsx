@@ -5,7 +5,7 @@ export default function App({ children }: PropsWithChildren<{}>) {
     return (
         <Fragment>
             <Head>
-                <title>Hello World - postjs</title>
+                <title>Welcome - postjs</title>
             </Head>
             {children}
         </Fragment>
