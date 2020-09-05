@@ -1,12 +1,12 @@
-import React from 'react'
+import React, { ComponentType } from 'react'
 import { RouterContext, RouterURL } from './router.ts'
-import ReactDomServer from './vendor/react-dom/server.js'
+import ReactDomServer from './vendor/react-dom-server/server.js'
 export { renderHead } from './head.ts'
 
 export function renderPage(
     url: RouterURL,
-    App: { Component: React.ComponentType, staticProps: any } | undefined,
-    Page: { Component: React.ComponentType, staticProps: any },
+    App: { Component: ComponentType, staticProps: any } | undefined,
+    Page: { Component: ComponentType, staticProps: any },
 ) {
     const El = React.createElement(
         RouterContext.Provider,

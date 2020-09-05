@@ -56,8 +56,8 @@ function Main({
             }
         )
         if (url.pagePath in pageModules) {
-            const mod = pageModules[url.pagePath]!
-            const importPath = util.cleanPath(baseUrl + '_dist/' + mod.path.replace(/\.js$/, `.${mod.hash.slice(0, 9)}.js`))
+            const { moduleId, hash } = pageModules[url.pagePath]!
+            const importPath = util.cleanPath(baseUrl + '_dist/' + moduleId.replace(/\.js$/, `.${hash.slice(0, 9)}.js`))
             const { default: Component, __staticProps: staticProps } = await import(importPath)
             setPage({ url, Component, staticProps })
         } else {

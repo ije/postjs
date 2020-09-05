@@ -61,25 +61,26 @@ export function applyCSS(id: string, css: string) {
     }
 }
 
-export function Head({ children }: PropsWithChildren<{}>) {
+export default function Head({ children }: PropsWithChildren<{}>) {
     if (window.Deno) {
         parse(children).forEach(({ type, props }, key) => serverHeadElements.push({ type, props }))
     }
 
     useEffect(() => {
+        const doc = (window as any).document
         const nodes = parse(children)
         const insertedEls: Array<Object> = []
 
         if (nodes.size > 0) {
-            let charsetEl = document.querySelector('meta[charset]')
+            let charsetEl = doc.querySelector('meta[charset]')
             if (!charsetEl) {
-                charsetEl = document.createElement('meta')
+                charsetEl = doc.createElement('meta')
                 charsetEl.setAttribute('charset', 'utf-8')
-                document.head.prepend(charsetEl)
+                doc.head.prepend(charsetEl)
             }
 
             nodes.forEach(({ type, props }) => {
-                const el = document.createElement(type)
+                const el = doc.createElement(type)
                 Object.keys(props).forEach(key => {
                     const value = props[key]
                     if (key === 'children') {
@@ -93,16 +94,16 @@ export function Head({ children }: PropsWithChildren<{}>) {
                     }
                 })
                 if (charsetEl.nextElementSibling) {
-                    document.head.insertBefore(el, charsetEl.nextElementSibling)
+                    doc.head.insertBefore(el, charsetEl.nextElementSibling)
                 } else {
-                    document.head.appendChild(el)
+                    doc.head.appendChild(el)
                 }
                 insertedEls.push(el)
             })
         }
 
         return () => {
-            insertedEls.forEach(el => document.head.removeChild(el))
+            insertedEls.forEach(el => doc.head.removeChild(el))
         }
     }, [])
 
