@@ -275,6 +275,21 @@ export default class Project {
             Deno.exit(0)
         }
 
+        console.log(this.mode)
+
+        await this._compile('https://postjs.io/x/react/mod.js', {
+            sourceCode: [
+                `export * from './react.${this.mode}.js'`,
+                `export { default } from './react.${this.mode}.js'`
+            ].join('\n')
+        })
+        await this._compile('https://postjs.io/x/react-dom/mod.js', {
+            sourceCode: [
+                `export * from './react-dom.${this.mode}.js'`,
+                `export { default } from './react-dom.${this.mode}.js'`
+            ].join('\n')
+        })
+
         for await (const { path: p } of walk(this.srcDir, { ...walkOptions, maxDepth: 1 })) {
             const name = path.basename(p)
             if (name.replace(reModuleExt, '') === 'app') {
@@ -314,8 +329,6 @@ export default class Project {
         for (const path in innerModules) {
             await this._compile(path, { sourceCode: innerModules[path] })
         }
-
-        await this._compile('https://postjs.io/hmr.ts')
 
         log.info(colors.bold('Pages'))
         for (const path of this._pageModules.keys()) {
@@ -440,7 +453,7 @@ export default class Project {
             id,
             isRemote,
             sourceFile,
-            sourceType: path.extname(sourceFile).slice(1).replace('mjs', 'js') || 'js',
+            sourceType: path.extname(sourceFile.split('?')[0]).slice(1).replace('mjs', 'js') || 'js',
             sourceHash: '',
             deps: [],
             jsFile: '',
@@ -448,7 +461,7 @@ export default class Project {
             jsSourceMap: '',
             hash: '',
         }
-        const name = path.basename(sourceFile).replace(reModuleExt, '')
+        const name = path.basename(sourceFile.split('?')[0]).replace(reModuleExt, '')
         const saveDir = path.join(rootDir, '.postjs', path.dirname(mod.isRemote ? this._renameRemotePath(sourceFile) : sourceFile))
         const metaFile = path.join(saveDir, `${name}.meta.json`)
 
@@ -468,7 +481,13 @@ export default class Project {
 
         let sourceContent = ''
         let emptyContent = false
-        if (mod.isRemote) {
+        if (options?.sourceCode) {
+            const sourceHash = (new Sha1()).update(options.sourceCode).hex()
+            if (mod.sourceHash === '' || mod.sourceHash !== sourceHash) {
+                sourceContent = options.sourceCode
+                mod.sourceHash = sourceHash
+            }
+        } else if (mod.isRemote) {
             let url = sourceFile
             for (const importPath in importMap.imports) {
                 const alias = importMap.imports[importPath]
@@ -517,12 +536,6 @@ export default class Project {
                 } catch (err) {
                     throw new Error(`Download ${sourceFile}: ${err.message}`)
                 }
-            }
-        } else if (options?.sourceCode) {
-            const sourceHash = (new Sha1()).update(options.sourceCode).hex()
-            if (mod.sourceHash === '' || mod.sourceHash !== sourceHash) {
-                sourceContent = options.sourceCode
-                mod.sourceHash = sourceHash
             }
         } else {
             const filepath = path.join(this.srcDir, sourceFile)
@@ -755,7 +768,7 @@ export default class Project {
     }
 
     private _renameRemotePath(path: string): string {
-        return path.replace(reHttp, '/-/').replace(/:(\d+)/, '/$1')
+        return path.replace(reHttp, '/-/').replace(/:(\d+)/, '_$1').split('?').join('+')
     }
 
     private async _renderPage(url: RouterURL) {

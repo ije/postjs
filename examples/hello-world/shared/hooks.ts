@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState } from 'https://postjs.io/x/react/mod.js'
 
 export function useCount(initial: number) {
     const [count, setCount] = useState(initial)

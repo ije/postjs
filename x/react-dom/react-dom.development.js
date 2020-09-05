@@ -1,4 +1,4 @@
-import React from "react";
+import React from "../react/react.development.js";
 
 /** @license React v16.13.0
  * react-dom.development.js
@@ -24734,7 +24734,7 @@ const ReactDOM = {};
       // Enables DevTools to append owner stacks to error messages in DEV mode.
       getCurrentFiber:  function () {
         return current;
-      } 
+      }
     }));
   }
   var IsSomeRendererActing$1 = ReactSharedInternals.IsSomeRendererActing;

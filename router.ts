@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { ComponentType, createContext, useContext } from 'https://postjs.io/x/react/mod.js'
 import util from './util.ts'
 
 export interface RouterURL {
@@ -14,7 +14,7 @@ export interface ILocation {
     search?: string
 }
 
-export const RouterContext = React.createContext<RouterURL>({
+export const RouterContext = createContext<RouterURL>({
     pagePath: '/',
     asPath: '/',
     params: {},
@@ -23,7 +23,7 @@ export const RouterContext = React.createContext<RouterURL>({
 })
 RouterContext.displayName = 'RouterContext'
 
-export function withRouter(Component: React.ComponentType<{ url: RouterURL }>) {
+export function withRouter(Component: ComponentType<{ url: RouterURL }>) {
     function WithRouter() {
         const url = useRouter()
         return React.createElement(Component, { url })
@@ -32,7 +32,7 @@ export function withRouter(Component: React.ComponentType<{ url: RouterURL }>) {
 }
 
 export function useRouter() {
-    return React.useContext(RouterContext)
+    return useContext(RouterContext)
 }
 
 export function route(base: string, pagePaths: string[], options?: { location?: ILocation, fallback?: string, defaultLocale?: string, locales?: string[] }): RouterURL {

@@ -117,7 +117,7 @@ function main() {
                             'Content-Type': getContentType(filepath),
                             'Content-Length': info.size.toString()
                         })
-                        if ((req.url.startsWith('/vendor/react/') || req.url.startsWith('/vendor/react-dom/')) && req.url.endsWith('.js')) {
+                        if (req.url.startsWith('/x/') && req.url.endsWith('.js')) {
                             headers.append('X-TypeScript-Types', path.join(path.dirname(req.url), '/types/index.d.ts'))
                         }
                         req.respond({

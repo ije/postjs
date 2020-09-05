@@ -1,4 +1,4 @@
-import React from 'react';
+import React from 'https://postjs.io/x/react/mod.js';
 /** @license React v16.13.1
  * react-dom-server.browser.production.min.js
  *

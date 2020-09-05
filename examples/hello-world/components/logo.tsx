@@ -1,4 +1,4 @@
-import React from 'react'
+import React from 'https://postjs.io/x/react/mod.js'
 
 export default function Logo({ height = 24 }: { height?: number }) {
     return (

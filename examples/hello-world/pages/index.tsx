@@ -1,4 +1,4 @@
-import React from 'react'
+import React from 'https://postjs.io/x/react/mod.js'
 import Logo from '../components/logo.tsx'
 import { useCount } from '../shared/hooks.ts'
 import '../style/index.less'

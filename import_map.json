@@ -1,7 +1,5 @@
 {
     "imports": {
-        "https://postjs.io/": "http://localhost:9000/",
-        "react-dom": "http://localhost:9000/vendor/react-dom/react-dom.development.js",
-        "react": "http://localhost:9000/vendor/react/react.development.js"
+        "https://postjs.io/": "http://localhost:9000/"
     }
 }
