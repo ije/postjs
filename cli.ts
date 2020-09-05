@@ -113,12 +113,16 @@ function main() {
                         }
 
                         const body = await Deno.readFile(filepath)
+                        const headers = new Headers({
+                            'Content-Type': getContentType(filepath),
+                            'Content-Length': info.size.toString()
+                        })
+                        if ((req.url.startsWith('/vendor/react/') || req.url.startsWith('/vendor/react-dom/')) && req.url.endsWith('.js')) {
+                            headers.append('X-TypeScript-Types', path.join(path.dirname(req.url), '/types/index.d.ts'))
+                        }
                         req.respond({
                             status: 200,
-                            headers: new Headers({
-                                'Content-Type': getContentType(filepath),
-                                'Content-Length': info.size.toString()
-                            }),
+                            headers,
                             body
                         })
                     } catch (err) {

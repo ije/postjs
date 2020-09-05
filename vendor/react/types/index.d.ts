@@ -30,10 +30,10 @@
 // to 'react/experimental' in their project. See experimental.d.ts's top comment
 // for reference and documentation on how exactly to do it.
 
-/// <reference path="global.d.ts" />
+/// <reference path="./global.d.ts" />
 
-import * as CSS from 'csstype';
-import * as PropTypes from 'prop-types';
+import * as CSS from './csstype/index.d.ts';
+import * as PropTypes from './prop-types/index.d.ts';
 
 type NativeAnimationEvent = AnimationEvent;
 type NativeClipboardEvent = ClipboardEvent;
@@ -116,7 +116,7 @@ declare namespace React {
     interface ReactComponentElement<
         T extends keyof JSX.IntrinsicElements | JSXElementConstructor<any>,
         P = Pick<ComponentProps<T>, Exclude<keyof ComponentProps<T>, 'key' | 'ref'>>
-    > extends ReactElement<P, T> { }
+        > extends ReactElement<P, T> { }
 
     /**
      * @deprecated Please use `FunctionComponentElement`
@@ -180,7 +180,7 @@ declare namespace React {
         (props?: ClassAttributes<T> & P | null, ...children: ReactNode[]) => DOMElement<P, T>;
 
     // tslint:disable-next-line:no-empty-interface
-    interface HTMLFactory<T extends HTMLElement> extends DetailedHTMLFactory<AllHTMLAttributes<T>, T> {}
+    interface HTMLFactory<T extends HTMLElement> extends DetailedHTMLFactory<AllHTMLAttributes<T>, T> { }
 
     interface DetailedHTMLFactory<P extends HTMLAttributes<T>, T extends HTMLElement> extends DOMFactory<P, T> {
         (props?: ClassAttributes<T> & P | null, ...children: ReactNode[]): DetailedReactHTMLElement<P, T>;
@@ -198,7 +198,7 @@ declare namespace React {
     type ReactText = string | number;
     type ReactChild = ReactElement | ReactText;
 
-    interface ReactNodeArray extends Array<ReactNode> {}
+    interface ReactNodeArray extends Array<ReactNode> { }
     type ReactFragment = {} | ReactNodeArray;
     type ReactNode = ReactChild | ReactFragment | ReactPortal | boolean | null | undefined;
 
@@ -321,7 +321,7 @@ declare namespace React {
         /**
          * **NOTE**: Exotic components are not callable.
          */
-        (props: P): (ReactElement|null);
+        (props: P): (ReactElement | null);
         readonly $$typeof: symbol;
     }
 
@@ -361,7 +361,7 @@ declare namespace React {
         children?: ReactNode;
 
         /** A fallback react tree to show when a Suspense child (like React.lazy) suspends */
-        fallback: NonNullable<ReactNode>|null;
+        fallback: NonNullable<ReactNode> | null;
         /**
          * Tells React whether to “skip” revealing this boundary during the initial load.
          * This API will likely be removed in a future release.
@@ -542,10 +542,10 @@ declare namespace React {
      * @deprecated Use ForwardRefRenderingFunction. forwardRef doesn't accept a
      *             "real" component.
      */
-    interface RefForwardingComponent <T, P = {}> extends ForwardRefRenderFunction<T, P> {}
+    interface RefForwardingComponent<T, P = {}> extends ForwardRefRenderFunction<T, P> { }
 
     interface ComponentClass<P = {}, S = ComponentState> extends StaticLifecycle<P, S> {
-        new (props: P, context?: any): Component<P, S>;
+        new(props: P, context?: any): Component<P, S>;
         propTypes?: WeakValidationMap<P>;
         contextType?: Context<any>;
         contextTypes?: ValidationMap<any>;
@@ -555,7 +555,7 @@ declare namespace React {
     }
 
     interface ClassicComponentClass<P = {}> extends ComponentClass<P> {
-        new (props: P, context?: any): ClassicComponent<P, ComponentState>;
+        new(props: P, context?: any): ClassicComponent<P, ComponentState>;
         getDefaultProps?(): P;
     }
 
@@ -771,18 +771,18 @@ declare namespace React {
         // Just Pick would be sufficient for this, but I'm trying to avoid unnecessary mapping over union types
         // https://github.com/Microsoft/TypeScript/issues/28339
         'ref' extends keyof P
-            ? Pick<P, Exclude<keyof P, 'ref'>>
-            : P;
+        ? Pick<P, Exclude<keyof P, 'ref'>>
+        : P;
     /** Ensures that the props do not include string ref, which cannot be forwarded */
     type PropsWithRef<P> =
         // Just "P extends { ref?: infer R }" looks sufficient, but R will infer as {} if P is {}.
         'ref' extends keyof P
-            ? P extends { ref?: infer R }
-                ? string extends R
-                    ? PropsWithoutRef<P> & { ref?: Exclude<R, string> }
-                    : P
-                : P
-            : P;
+        ? P extends { ref?: infer R }
+        ? string extends R
+        ? PropsWithoutRef<P> & { ref?: Exclude<R, string> }
+        : P
+        : P
+        : P;
 
     type PropsWithChildren<P> = P & { children?: ReactNode };
 
@@ -792,14 +792,14 @@ declare namespace React {
      */
     type ComponentProps<T extends keyof JSX.IntrinsicElements | JSXElementConstructor<any>> =
         T extends JSXElementConstructor<infer P>
-            ? P
-            : T extends keyof JSX.IntrinsicElements
-                ? JSX.IntrinsicElements[T]
-                : {};
+        ? P
+        : T extends keyof JSX.IntrinsicElements
+        ? JSX.IntrinsicElements[T]
+        : {};
     type ComponentPropsWithRef<T extends ElementType> =
         T extends ComponentClass<infer P>
-            ? PropsWithoutRef<P> & RefAttributes<InstanceType<T>>
-            : PropsWithRef<ComponentProps<T>>;
+        ? PropsWithoutRef<P> & RefAttributes<InstanceType<T>>
+        : PropsWithRef<ComponentProps<T>>;
     type ComponentPropsWithoutRef<T extends ElementType> =
         PropsWithoutRef<ComponentProps<T>>;
 
@@ -1003,7 +1003,7 @@ declare namespace React {
      * @see https://reactjs.org/docs/hooks-reference.html#useref
      */
     // TODO (TypeScript 3.0): <T extends unknown>
-    function useRef<T>(initialValue: T|null): RefObject<T>;
+    function useRef<T>(initialValue: T | null): RefObject<T>;
     // convenience overload for potentially undefined initialValue / call with 0 arguments
     // has a default to stop it from defaulting to {} instead
     /**
@@ -1052,7 +1052,7 @@ declare namespace React {
      * @version 16.8.0
      * @see https://reactjs.org/docs/hooks-reference.html#useimperativehandle
      */
-    function useImperativeHandle<T, R extends T>(ref: Ref<T>|undefined, init: () => R, deps?: DependencyList): void;
+    function useImperativeHandle<T, R extends T>(ref: Ref<T> | undefined, init: () => R, deps?: DependencyList): void;
     // I made 'inputs' required here and in useMemo as there's no point to memoizing without the memoization key
     // useCallback(X) is identical to just using X, useMemo(() => Y) is identical to just using Y.
     /**
@@ -1126,7 +1126,7 @@ declare namespace React {
      * This might be a child element to the element on which the event listener is registered.
      * If you thought this should be `EventTarget & T`, see https://github.com/DefinitelyTyped/DefinitelyTyped/pull/12239
      */
-    interface SyntheticEvent<T = Element, E = Event> extends BaseSyntheticEvent<E, EventTarget & T, EventTarget> {}
+    interface SyntheticEvent<T = Element, E = Event> extends BaseSyntheticEvent<E, EventTarget & T, EventTarget> { }
 
     interface ClipboardEvent<T = Element> extends SyntheticEvent<T, NativeClipboardEvent> {
         clipboardData: DataTransfer;
@@ -1891,7 +1891,7 @@ declare namespace React {
     }
 
     // tslint:disable-next-line:no-empty-interface
-    interface AudioHTMLAttributes<T> extends MediaHTMLAttributes<T> {}
+    interface AudioHTMLAttributes<T> extends MediaHTMLAttributes<T> { }
 
     interface AreaHTMLAttributes<T> extends HTMLAttributes<T> {
         alt?: string;
@@ -2775,10 +2775,10 @@ declare namespace React {
 
     type WeakValidationMap<T> = {
         [K in keyof T]?: null extends T[K]
-            ? Validator<T[K] | null | undefined>
-            : undefined extends T[K]
-            ? Validator<T[K] | null | undefined>
-            : Validator<T[K]>
+        ? Validator<T[K] | null | undefined>
+        : undefined extends T[K]
+        ? Validator<T[K] | null | undefined>
+        : Validator<T[K]>
     };
 
     interface ReactPropTypes {
@@ -2863,17 +2863,17 @@ type NotExactlyAnyPropertyKeys<T> = Exclude<keyof T, ExactlyAnyPropertyKeys<T>>;
 type MergePropTypes<P, T> =
     // Distribute over P in case it is a union type
     P extends any
-        // If props is type any, use propTypes definitions
-        ? IsExactlyAny<P> extends true ? T :
-            // If declared props have indexed properties, ignore inferred props entirely as keyof gets widened
-            string extends keyof P ? P :
-                // Prefer declared types which are not exactly any
-                & Pick<P, NotExactlyAnyPropertyKeys<P>>
-                // For props which are exactly any, use the type inferred from propTypes if present
-                & Pick<T, Exclude<keyof T, NotExactlyAnyPropertyKeys<P>>>
-                // Keep leftover props not specified in propTypes
-                & Pick<P, Exclude<keyof P, keyof T>>
-        : never;
+    // If props is type any, use propTypes definitions
+    ? IsExactlyAny<P> extends true ? T :
+    // If declared props have indexed properties, ignore inferred props entirely as keyof gets widened
+    string extends keyof P ? P :
+    // Prefer declared types which are not exactly any
+    & Pick<P, NotExactlyAnyPropertyKeys<P>>
+    // For props which are exactly any, use the type inferred from propTypes if present
+    & Pick<T, Exclude<keyof T, NotExactlyAnyPropertyKeys<P>>>
+    // Keep leftover props not specified in propTypes
+    & Pick<P, Exclude<keyof P, keyof T>>
+    : never;
 
 // Any prop that has a default prop becomes optional, but its type is unchanged
 // Undeclared default props are augmented into the resulting allowable attributes
@@ -2881,18 +2881,18 @@ type MergePropTypes<P, T> =
 // Wrap in an outer-level conditional type to allow distribution over props that are unions
 type Defaultize<P, D> = P extends any
     ? string extends keyof P ? P :
-        & Pick<P, Exclude<keyof P, keyof D>>
-        & Partial<Pick<P, Extract<keyof P, keyof D>>>
-        & Partial<Pick<D, Exclude<keyof D, keyof P>>>
+    & Pick<P, Exclude<keyof P, keyof D>>
+    & Partial<Pick<P, Extract<keyof P, keyof D>>>
+    & Partial<Pick<D, Exclude<keyof D, keyof P>>>
     : never;
 
 type ReactManagedAttributes<C, P> = C extends { propTypes: infer T; defaultProps: infer D; }
     ? Defaultize<MergePropTypes<P, PropTypes.InferProps<T>>, D>
     : C extends { propTypes: infer T; }
-        ? MergePropTypes<P, PropTypes.InferProps<T>>
-        : C extends { defaultProps: infer D; }
-            ? Defaultize<P, D>
-            : P;
+    ? MergePropTypes<P, PropTypes.InferProps<T>>
+    : C extends { defaultProps: infer D; }
+    ? Defaultize<P, D>
+    : P;
 
 declare global {
     namespace JSX {
@@ -2908,8 +2908,8 @@ declare global {
         // let's assume it's reasonable to do a single React.lazy() around a single React.memo() / vice-versa
         type LibraryManagedAttributes<C, P> = C extends React.MemoExoticComponent<infer T> | React.LazyExoticComponent<infer T>
             ? T extends React.MemoExoticComponent<infer U> | React.LazyExoticComponent<infer U>
-                ? ReactManagedAttributes<U, P>
-                : ReactManagedAttributes<T, P>
+            ? ReactManagedAttributes<U, P>
+            : ReactManagedAttributes<T, P>
             : ReactManagedAttributes<C, P>;
 
         // tslint:disable-next-line:no-empty-interface

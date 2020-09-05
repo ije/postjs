@@ -16,10 +16,12 @@
 export as namespace ReactDOM;
 
 import {
-    ReactInstance, Component, ComponentState,
-    ReactElement, SFCElement, CElement,
-    DOMAttributes, DOMElement, ReactNode, ReactPortal
-} from 'react';
+    CElement, Component, ComponentState,
+
+    DOMAttributes, DOMElement, ReactElement, ReactInstance,
+
+    ReactNode, ReactPortal, SFCElement
+} from '../../react/types/index.d.ts';
 
 export function findDOMNode(instance: ReactInstance | null | undefined): Element | null | Text;
 export function unmountComponentAtNode(container: Element): boolean;
