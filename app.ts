@@ -1,17 +1,12 @@
 import { hydrate } from 'https://esm.sh/react-dom/mod.js'
 import React, { ComponentType, createContext, useCallback, useEffect, useState } from 'https://esm.sh/react/mod.js'
+import { AppManifest, RouterURL } from './api.ts'
 import { EventEmitter } from './events.ts'
-import { route, RouterContext, RouterURL } from './router.ts'
+import route from './route.ts'
+import { RouterContext } from './router.ts'
 import util from './util.ts'
 
-interface AppManifestProps {
-    baseUrl: string
-    defaultLocale: string
-    locales: Record<string, Record<string, string>>
-    appModule: { hash: string } | null
-    pageModules: Record<string, { moduleId: string, hash: string }>
-}
-export const AppManifestContext = createContext<AppManifestProps>({
+export const AppManifestContext = createContext<AppManifest>({
     baseUrl: '/',
     defaultLocale: 'en',
     locales: {},
@@ -29,7 +24,7 @@ function Main({
     app: initialApp,
     page: initialPage
 }: {
-    manifest: AppManifestProps
+    manifest: AppManifest
     url: RouterURL
     app?: { Component: ComponentType<any>, staticProps: any }
     page: { Component: ComponentType<any>, staticProps: any }
@@ -145,7 +140,7 @@ function Default404Page() {
     )
 }
 
-export async function bootstrap(manifest: AppManifestProps) {
+export async function bootstrap(manifest: AppManifest) {
     const { document } = window as any
     const { baseUrl, appModule, pageModules } = manifest
     const el = document.getElementById('ssr-data')

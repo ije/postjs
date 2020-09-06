@@ -1,8 +1,8 @@
-import { APIHandle } from './api.ts'
+import { APIHandle, Location, RouterURL } from './api.ts'
 import { EventEmitter } from './events.ts'
 import { createHtml } from './html.ts'
 import log from './log.ts'
-import { ILocation, route, RouterURL } from './router.ts'
+import route from './route.ts'
 import { colors, exists, existsSync, Md5, path, Sha1, walk } from './std.ts'
 import { compile, createSourceFile } from './ts/compile.ts'
 import transformImportPathRewrite from './ts/transform-import-path-rewrite.ts'
@@ -14,7 +14,7 @@ import less from './vendor/less/dist/less.js'
 const reHttp = /^https?:\/\//i
 const reModuleExt = /\.(m?jsx?|tsx?)$/i
 const reStyleModuleExt = /\.(css|less|sass)$/i
-const reHashJS = /\.[0-9a-fx]{9}\.js$/i
+const reHashJs = /\.[0-9a-fx]{9}\.js$/i
 
 interface Module {
     id: string
@@ -170,7 +170,7 @@ export default class Project {
         return null
     }
 
-    async getPageHtml(location: ILocation): Promise<[number, string]> {
+    async getPageHtml(location: Location): Promise<[number, string]> {
         const { baseUrl, defaultLocale } = this.config
         const url = route(
             baseUrl,
@@ -195,7 +195,7 @@ export default class Project {
         return [code, html]
     }
 
-    async getPageStaticProps(location: ILocation) {
+    async getPageStaticProps(location: Location) {
         const { baseUrl, defaultLocale } = this.config
         const url = route(
             baseUrl,
@@ -627,7 +627,7 @@ export default class Project {
                     )
                     mod.jsContent = mod.jsContent.replace(/import([^'"]+)("|')([^'"]+)("|')(\)|;)?/g, (s, from, ql, importPath, qr, end) => {
                         if (
-                            reHashJS.test(importPath) &&
+                            reHashJs.test(importPath) &&
                             importPath.slice(0, importPath.length - 13) === depImportPath
                         ) {
                             return `import${from}${ql}${depImportPath}.${dep.hash.slice(0, 9)}.js${qr}${end}`
@@ -676,7 +676,7 @@ export default class Project {
                     dep.hash = depHash
                     mod.jsContent = mod.jsContent.replace(/import([^'"]+)("|')([^'"]+)("|')(\)|;)?/g, (s, from, ql, importPath, qr, end) => {
                         if (
-                            reHashJS.test(importPath) &&
+                            reHashJs.test(importPath) &&
                             importPath.slice(0, importPath.length - 13) === depImportPath
                         ) {
                             return `import${from}${ql}${depImportPath}.${dep.hash.slice(0, 9)}.js${qr}${end}`
@@ -684,8 +684,8 @@ export default class Project {
                         return s
                     })
                     mod.hash = this._hash(mod.jsContent)
-                    mod.jsFile = `${mod.jsFile.replace(reHashJS, '')}.${mod.hash.slice(0, 9)}.js`
-                    this._writeTextFile(mod.jsFile.replace(reHashJS, '') + '.meta.json', JSON.stringify({
+                    mod.jsFile = `${mod.jsFile.replace(reHashJs, '')}.${mod.hash.slice(0, 9)}.js`
+                    this._writeTextFile(mod.jsFile.replace(reHashJs, '') + '.meta.json', JSON.stringify({
                         sourceFile: mod.sourceFile,
                         sourceHash: mod.sourceHash,
                         hash: mod.hash,

@@ -1,3 +1,24 @@
+export interface AppManifest {
+    baseUrl: string
+    defaultLocale: string
+    locales: Record<string, Record<string, string>>
+    appModule: { hash: string } | null
+    pageModules: Record<string, { moduleId: string, hash: string }>
+}
+
+export interface RouterURL {
+    locale: string
+    asPath: string
+    pagePath: string
+    params: Record<string, string>
+    query: Record<string, string | string[]>
+}
+
+export interface Location {
+    pathname: string
+    search?: string
+}
+
 export interface APIRequest {
     readonly url: string
     readonly method: string

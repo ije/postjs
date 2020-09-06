@@ -1,7 +1,7 @@
 import { createHtml } from '../html.ts'
 import log from '../log.ts'
 import Project from '../project.ts'
-import { route } from '../router.ts'
+import route from '../route.ts'
 import { existsSync, path, serve, ws } from '../std.ts'
 import util from '../util.ts'
 import { PostAPIRequest, PostAPIResponse } from './api.ts'
