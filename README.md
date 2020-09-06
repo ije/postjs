@@ -1,6 +1,6 @@
 
-# postJS
-The radical new Front-End Framework in [deno](https://deno.land).
+# PostJS
+A radical new Front-End Framework in [deno](https://deno.land).
 
 [WIP]
 
