@@ -1,4 +1,4 @@
-import React, { Children, cloneElement, CSSProperties, isValidElement, MouseEvent, PropsWithChildren, useCallback, useEffect, useMemo, useRef } from 'https://postjs.io/x/react/mod.js'
+import React, { Children, cloneElement, CSSProperties, isValidElement, MouseEvent, PropsWithChildren, useCallback, useEffect, useMemo, useRef } from 'https://esm.sh/react'
 import { redirect } from './app.ts'
 import { useRouter } from './router.ts'
 import util from './util.ts'

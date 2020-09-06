@@ -1,5 +1,5 @@
-import { hydrate } from 'https://postjs.io/x/react-dom/mod.js'
-import React, { ComponentType, createContext, useCallback, useEffect, useState } from 'https://postjs.io/x/react/mod.js'
+import { hydrate } from 'https://esm.sh/react-dom/mod.js'
+import React, { ComponentType, createContext, useCallback, useEffect, useState } from 'https://esm.sh/react/mod.js'
 import { EventEmitter } from './events.ts'
 import { route, RouterContext, RouterURL } from './router.ts'
 import util from './util.ts'

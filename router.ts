@@ -1,4 +1,4 @@
-import React, { ComponentType, createContext, useContext } from 'https://postjs.io/x/react/mod.js'
+import React, { ComponentType, createContext, useContext } from 'https://esm.sh/react/mod.js'
 import util from './util.ts'
 
 export interface RouterURL {

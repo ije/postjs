@@ -105,8 +105,8 @@ function main() {
                                     'Content-Type': getContentType('.html')
                                 }),
                                 body: createHtml({
-                                    head: [`<title>postjs.io</title>`],
-                                    body: `<h1>&nbsp;postjs.io/</h1><ul>${Array.from(items).join('')}</ul>`
+                                    head: [`<title>postjs/</title>`],
+                                    body: `<h1>&nbsp;postjs//</h1><ul>${Array.from(items).join('')}</ul>`
                                 })
                             })
                             return

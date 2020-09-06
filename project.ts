@@ -270,20 +270,18 @@ export default class Project {
         const apiDir = path.join(this.srcDir, 'api')
         const pagesDir = path.join(this.srcDir, 'pages')
 
-        if (!(await this._dirExists(pagesDir))) {
+        if (!(await this._existsDir(pagesDir))) {
             log.error("please create some pages.")
             Deno.exit(0)
         }
 
-        console.log(this.mode)
-
-        await this._compile('https://postjs.io/x/react/mod.js', {
+        await this._compile('https://esm.sh/react/mod.js', {
             sourceCode: [
                 `export * from './react.${this.mode}.js'`,
                 `export { default } from './react.${this.mode}.js'`
             ].join('\n')
         })
-        await this._compile('https://postjs.io/x/react-dom/mod.js', {
+        await this._compile('https://esm.sh/react-dom/mod.js', {
             sourceCode: [
                 `export * from './react-dom.${this.mode}.js'`,
                 `export { default } from './react-dom.${this.mode}.js'`
@@ -310,7 +308,7 @@ export default class Project {
             await this._compile('./pages/' + name)
         }
 
-        if (await this._dirExists(apiDir)) {
+        if (await this._existsDir(apiDir)) {
             for await (const { path: p } of walk(apiDir, walkOptions)) {
                 const name = path.basename(p)
                 await this._compile('./api/' + name)
@@ -568,7 +566,7 @@ export default class Project {
                     css = output.css
                 }
                 mod.jsContent = [
-                    `import { applyCSS } from ${JSON.stringify(path.relative(
+                    `import { applyCSS } from ${JSON.stringify(this._relativePath(
                         path.dirname(path.resolve('/', mod.sourceFile)),
                         '/-/postjs.io/head.js'
                     ))}`,
@@ -602,8 +600,8 @@ export default class Project {
                 if (diagnostics && diagnostics.length) {
                     throw new Error(`compile ${sourceFile}: ${JSON.stringify(diagnostics)}`)
                 }
-                mod.jsContent = outputText.replace(/ from ("|')tslib("|');?/g, ' from ' + JSON.stringify(path.relative(
-                    path.dirname(path.resolve('/', mod.sourceFile)),
+                mod.jsContent = outputText.replace(/ from ("|')tslib("|');?/g, ' from ' + JSON.stringify(this._relativePath(
+                    path.dirname(path.resolve('/', mod.isRemote ? this._renameRemotePath(mod.sourceFile) : mod.sourceFile)),
                     '/-/postjs.io/vendor/tslib/tslib.js'
                 )) + ';')
                 mod.jsSourceMap = sourceMapText!
@@ -623,7 +621,7 @@ export default class Project {
             if (dep.hash !== depMod.hash) {
                 dep.hash = depMod.hash
                 if (!dep.path.startsWith('http')) {
-                    const depImportPath = path.relative(
+                    const depImportPath = this._relativePath(
                         path.dirname(path.resolve('/', sourceFile)),
                         path.resolve('/', dep.path.replace(reModuleExt, ''))
                     )
@@ -671,7 +669,7 @@ export default class Project {
         this._modules.forEach(mod => {
             mod.deps.forEach(dep => {
                 if (dep.path === depPath && dep.hash !== depHash) {
-                    const depImportPath = path.relative(
+                    const depImportPath = this._relativePath(
                         path.dirname(path.resolve('/', mod.sourceFile)),
                         path.resolve('/', dep.path.replace(reModuleExt, ''))
                     )
@@ -714,12 +712,12 @@ export default class Project {
         if (reHttp.test(importPath)) {
             if (cacheDeps || /\.(jsx|tsx?)$/i.test(importPath)) {
                 if (mod.isRemote) {
-                    rewrittenPath = path.relative(
+                    rewrittenPath = this._relativePath(
                         path.dirname(path.resolve('/', mod.sourceFile.replace(reHttp, '-/').replace(/:(\d+)/, `/$1`))),
                         this._renameRemotePath(importPath)
                     )
                 } else {
-                    rewrittenPath = path.relative(
+                    rewrittenPath = this._relativePath(
                         path.dirname(path.resolve('/', mod.sourceFile)),
                         this._renameRemotePath(importPath)
                     )
@@ -734,7 +732,7 @@ export default class Project {
                 if (!pathname.startsWith('/')) {
                     pathname = path.join(path.dirname(sourceUrl.pathname), importPath)
                 }
-                rewrittenPath = path.relative(
+                rewrittenPath = this._relativePath(
                     path.dirname(this._renameRemotePath(mod.sourceFile)),
                     '/' + path.join('-', sourceUrl.host, pathname)
                 )
@@ -829,6 +827,14 @@ export default class Project {
         return md5.toString('hex')
     }
 
+    private _relativePath(from: string, to: string): string {
+        let r = path.relative(from, to)
+        if (!r.startsWith('.') && !r.startsWith('/')) {
+            r = './' + r
+        }
+        return r
+    }
+
     private async _writeTextFile(filepath: string, content: string) {
         const dir = path.dirname(filepath)
         if (!existsSync(dir)) {
@@ -837,7 +843,7 @@ export default class Project {
         await Deno.writeTextFile(filepath, content)
     }
 
-    private async _dirExists(path: string) {
+    private async _existsDir(path: string) {
         try {
             const fi = await Deno.lstat(path)
             if (fi.isDirectory) {
