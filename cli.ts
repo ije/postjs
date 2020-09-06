@@ -106,7 +106,7 @@ function main() {
                                 }),
                                 body: createHtml({
                                     head: [`<title>postjs/</title>`],
-                                    body: `<h1>&nbsp;postjs//</h1><ul>${Array.from(items).join('')}</ul>`
+                                    body: `<h1>&nbsp;postjs/</h1><ul>${Array.from(items).join('')}</ul>`
                                 })
                             })
                             return
@@ -117,7 +117,7 @@ function main() {
                             'Content-Type': getContentType(filepath),
                             'Content-Length': info.size.toString()
                         })
-                        if (req.url.startsWith('/x/') && req.url.endsWith('.js')) {
+                        if (req.url.startsWith('/vendor/') && req.url.endsWith('mod.js')) {
                             headers.append('X-TypeScript-Types', path.join(path.dirname(req.url), '/types/index.d.ts'))
                         }
                         req.respond({
