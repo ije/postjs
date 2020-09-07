@@ -72,11 +72,18 @@ export default function Head({ children }: PropsWithChildren<{}>) {
         const insertedEls: Array<Object> = []
 
         if (nodes.size > 0) {
-            let charsetEl = doc.querySelector('meta[charset]')
-            if (!charsetEl) {
-                charsetEl = doc.createElement('meta')
-                charsetEl.setAttribute('charset', 'utf-8')
-                doc.head.prepend(charsetEl)
+            let charset = doc.querySelector('meta[charset]')
+            if (!charset) {
+                charset = doc.createElement('meta')
+                charset.setAttribute('charset', 'utf-8')
+                doc.head.prepend(charset)
+            }
+
+            const anchor = doc.createElement('meta')
+            if (charset.nextElementSibling) {
+                doc.head.insertBefore(anchor, charset.nextElementSibling)
+            } else {
+                doc.head.appendChild(anchor)
             }
 
             nodes.forEach(({ type, props }) => {
@@ -93,13 +100,10 @@ export default function Head({ children }: PropsWithChildren<{}>) {
                         el.setAttribute(key, String(value || ''))
                     }
                 })
-                if (charsetEl.nextElementSibling) {
-                    doc.head.insertBefore(el, charsetEl.nextElementSibling)
-                } else {
-                    doc.head.appendChild(el)
-                }
+                doc.head.insertBefore(el, anchor)
                 insertedEls.push(el)
             })
+            doc.head.removeChild(anchor)
         }
 
         return () => {
