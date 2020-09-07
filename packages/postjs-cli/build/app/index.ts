@@ -195,7 +195,6 @@ export class App {
                 const { asPath } = url
                 const asName = asPath.replace(/^\/+/, '').replace(/\/+$/, '/index') || 'index'
                 const htmlFile = path.join(buildDir, asName + '.html')
-                console.log(url, asName, htmlFile)
                 const exposedChunks = Array.from(chunks.values()).filter(({ name }) => !(/^(pages|components)\//.test(name)) || name === 'pages/' + pageName)
                 await fs.ensureDir(path.dirname(htmlFile))
                 await fs.writeFile(htmlFile, createHtml({

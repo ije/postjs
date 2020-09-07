@@ -34,7 +34,7 @@ export function Link({
         e.preventDefault()
         if (router.asPath !== href) {
             redirect(href, replace, transition).catch(err => {
-                console.log(err)
+                console.error(err)
                 alert(`Error: ${err.message}`)
             })
         }
