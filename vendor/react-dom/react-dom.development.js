@@ -1,4 +1,4 @@
-import React from "../react/react.development.js";
+import React from "/react/react.development.js";
 
 /** @license React v16.13.0
  * react-dom.development.js

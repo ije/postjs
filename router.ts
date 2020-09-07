@@ -1,4 +1,4 @@
-import React, { ComponentType, createContext, useContext } from 'https://esm.sh/react/mod.js'
+import React, { ComponentType, createContext, useContext } from 'https://esm.sh/react'
 import { RouterURL } from './api.ts'
 
 export const RouterContext = createContext<RouterURL>({

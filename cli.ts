@@ -88,21 +88,40 @@ function main() {
             if (match) {
                 const port = parseInt(match[2])
                 listenAndServe({ port }, async (req: ServerRequest) => {
-                    const filepath = path.join(Deno.cwd(), req.url)
+                    const url = new URL('http://localhost' + req.url)
+                    const filepath = path.join(Deno.cwd(), url.pathname)
                     try {
+                        if (/^\/vendor\/react(\-dom)?$/.test(url.pathname)) {
+                            const vendorName = path.basename(url.pathname)
+                            const env = url.searchParams.get('env') === 'development' ? 'development' : 'production'
+                            req.respond({
+                                status: 200,
+                                headers: new Headers({
+                                    'Content-Type': 'application/javascript',
+                                    'X-TypeScript-Types': `/vendor/${vendorName}/types/index.d.ts`
+                                }),
+                                body: [
+                                    `export * from '/${vendorName}/${vendorName}.${env}.js';`,
+                                    `export {default} from '/${vendorName}/${vendorName}.${env}.js';`
+                                ].join('\n')
+                            })
+                            return
+                        }
+
                         const info = await Deno.lstat(filepath)
                         if (info.isDirectory) {
                             const r = Deno.readDir(filepath)
                             const items: string[] = []
                             for await (const item of r) {
                                 if (!item.name.startsWith('.')) {
-                                    items.push(`<li><a href='${path.join(req.url, encodeURI(item.name))}'>${item.name}${item.isDirectory ? '/' : ''}<a></li>`)
+                                    items.push(`<li><a href='${path.join(url.pathname, encodeURI(item.name))}'>${item.name}${item.isDirectory ? '/' : ''}<a></li>`)
                                 }
                             }
                             req.respond({
                                 status: 200,
                                 headers: new Headers({
-                                    'Content-Type': getContentType('.html')
+                                    'Content-Type': getContentType('.html'),
+                                    'Content-Length': info.size.toString()
                                 }),
                                 body: createHtml({
                                     head: [`<title>postjs/</title>`],
@@ -112,18 +131,10 @@ function main() {
                             return
                         }
 
-                        const body = await Deno.readFile(filepath)
-                        const headers = new Headers({
-                            'Content-Type': getContentType(filepath),
-                            'Content-Length': info.size.toString()
-                        })
-                        if (req.url.startsWith('/vendor/') && req.url.endsWith('mod.js')) {
-                            headers.append('X-TypeScript-Types', path.join(path.dirname(req.url), '/types/index.d.ts'))
-                        }
                         req.respond({
                             status: 200,
-                            headers,
-                            body
+                            headers: new Headers({ 'Content-Type': getContentType(filepath) }),
+                            body: await Deno.readFile(filepath)
                         })
                     } catch (err) {
                         if (err instanceof Deno.errors.NotFound) {

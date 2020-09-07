@@ -1,5 +1,5 @@
-import { hydrate } from 'https://esm.sh/react-dom/mod.js'
-import React, { ComponentType, createContext, useCallback, useEffect, useState } from 'https://esm.sh/react/mod.js'
+import React, { ComponentType, createContext, useCallback, useEffect, useState } from 'https://esm.sh/react'
+import { hydrate } from 'https://esm.sh/react-dom'
 import { AppManifest, RouterURL } from './api.ts'
 import { EventEmitter } from './events.ts'
 import route from './route.ts'

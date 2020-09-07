@@ -275,19 +275,6 @@ export default class Project {
             Deno.exit(0)
         }
 
-        await this._compile('https://esm.sh/react/mod.js', {
-            sourceCode: [
-                `export * from './react.${this.mode}.js'`,
-                `export { default } from './react.${this.mode}.js'`
-            ].join('\n')
-        })
-        await this._compile('https://esm.sh/react-dom/mod.js', {
-            sourceCode: [
-                `export * from './react-dom.${this.mode}.js'`,
-                `export { default } from './react-dom.${this.mode}.js'`
-            ].join('\n')
-        })
-
         for await (const { path: p } of walk(this.srcDir, { ...walkOptions, maxDepth: 1 })) {
             const name = path.basename(p)
             if (name.replace(reModuleExt, '') === 'app') {
@@ -497,6 +484,9 @@ export default class Project {
                     break
                 }
             }
+            if ((sourceFile === 'https://esm.sh/react' || sourceFile === 'https://esm.sh/react-dom') && this.isDev) {
+                url += '?env=development'
+            }
             if (mod.sourceHash === '') {
                 log.info('Download', sourceFile, url != sourceFile ? colors.dim(`• ${url}`) : '')
                 try {
@@ -582,9 +572,9 @@ export default class Project {
                     rewrittenPaths[path] = rewrittenPath
                     return rewrittenPath
                 }))
-                mod.jsContent = sourceContent.replace(/import([^'"]+)("|')([^'"]+)("|')(\)|;)?/g, (s, from, ql, importPath, qr, end) => {
+                mod.jsContent = sourceContent.replace(/(import|export)([^'"]+)("|')([^'"]+)("|')(\)|;)?/g, (s, key, from, ql, importPath, qr, end) => {
                     if (importPath in rewrittenPaths) {
-                        return `import${from}${ql}${rewrittenPaths[importPath]}${qr}${end}`
+                        return `${key}${from}${ql}${rewrittenPaths[importPath]}${qr}${end}`
                     }
                     return s
                 })
@@ -625,12 +615,12 @@ export default class Project {
                         path.dirname(path.resolve('/', sourceFile)),
                         path.resolve('/', dep.path.replace(reModuleExt, ''))
                     )
-                    mod.jsContent = mod.jsContent.replace(/import([^'"]+)("|')([^'"]+)("|')(\)|;)?/g, (s, from, ql, importPath, qr, end) => {
+                    mod.jsContent = mod.jsContent.replace(/(import|export)([^'"]+)("|')([^'"]+)("|')(\)|;)?/g, (s, key, from, ql, importPath, qr, end) => {
                         if (
                             reHashJs.test(importPath) &&
                             importPath.slice(0, importPath.length - 13) === depImportPath
                         ) {
-                            return `import${from}${ql}${depImportPath}.${dep.hash.slice(0, 9)}.js${qr}${end}`
+                            return `${key}${from}${ql}${depImportPath}.${dep.hash.slice(0, 9)}.js${qr}${end}`
                         }
                         return s
                     })
@@ -674,12 +664,12 @@ export default class Project {
                         path.resolve('/', dep.path.replace(reModuleExt, ''))
                     )
                     dep.hash = depHash
-                    mod.jsContent = mod.jsContent.replace(/import([^'"]+)("|')([^'"]+)("|')(\)|;)?/g, (s, from, ql, importPath, qr, end) => {
+                    mod.jsContent = mod.jsContent.replace(/(import|export)([^'"]+)("|')([^'"]+)("|')(\)|;)?/g, (s, key, from, ql, importPath, qr, end) => {
                         if (
                             reHashJs.test(importPath) &&
                             importPath.slice(0, importPath.length - 13) === depImportPath
                         ) {
-                            return `import${from}${ql}${depImportPath}.${dep.hash.slice(0, 9)}.js${qr}${end}`
+                            return `${key}${from}${ql}${depImportPath}.${dep.hash.slice(0, 9)}.js${qr}${end}`
                         }
                         return s
                     })
@@ -765,8 +755,14 @@ export default class Project {
         return rewrittenPath.replace(reModuleExt, '') + '.js'
     }
 
-    private _renameRemotePath(path: string): string {
-        return path.replace(reHttp, '/-/').replace(/:(\d+)/, '_$1').split('?').join('+')
+    private _renameRemotePath(remotePath: string): string {
+        const url = new URL(remotePath)
+        const ext = path.extname(path.basename(url.pathname)) || '.js'
+        let pathname = ext ? util.trimSuffix(url.pathname, ext) : url.pathname
+        if (url.search) {
+            pathname += '_' + btoa(url.search)
+        }
+        return '/-/' + url.hostname + (url.port ? '/' + url.port : '') + pathname + ext
     }
 
     private async _renderPage(url: RouterURL) {

@@ -1,5 +1,5 @@
-import React, { Fragment, PropsWithChildren } from 'https://esm.sh/react/mod.js'
-import Head from 'https://postjs.io/head.ts'
+import React, { Fragment, PropsWithChildren } from 'https://esm.sh/react'
+import { Head } from 'https://postjs.io/mod.ts'
 
 export default function App({ children }: PropsWithChildren<{}>) {
     return (

@@ -1,4 +1,4 @@
-import React from "../react/react.production.js";
+import React from "/react/react.production.js";
 /** @license React v16.13.0
  * react-dom.production.js
  *

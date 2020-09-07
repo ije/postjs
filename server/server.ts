@@ -73,7 +73,7 @@ export async function start(appDir: string, port: number, isDev = false) {
                 }
 
                 // serve js files
-                if (pathname.endsWith('.js') || pathname.endsWith('.js.map')) {
+                if (pathname.startsWith('/_dist/')) {
                     const reqSourceMap = pathname.endsWith('.js.map')
                     const mod = project.getModuleByPath(reqSourceMap ? pathname.slice(0, -4) : pathname)
                     if (mod) {
@@ -109,8 +109,18 @@ export async function start(appDir: string, port: number, isDev = false) {
                             }),
                             body: reqSourceMap ? mod.jsSourceMap : jsContent
                         })
-                        continue
+                    } else {
+                        req.respond({
+                            status: 404,
+                            headers: new Headers({ 'Content-Type': 'text/html' }),
+                            body: createHtml({
+                                lang: 'en',
+                                head: ['<title>404 - page not found</title>'],
+                                body: `<p><strong><code>404</code></strong><small> - </small><span>page not found</span></p>`
+                            })
+                        })
                     }
+                    continue
                 }
 
                 // serve public files

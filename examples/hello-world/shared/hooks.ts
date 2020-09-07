@@ -1,4 +1,4 @@
-import { useState } from 'https://esm.sh/react/mod.js'
+import { useState } from 'https://esm.sh/react'
 
 export function useCount(initial: number) {
     const [count, setCount] = useState(initial)

@@ -1,4 +1,4 @@
-import React from 'https://esm.sh/react/mod.js';
+import React from 'https://esm.sh/react';
 /** @license React v16.13.1
  * react-dom-server.browser.production.min.js
  *
