@@ -63,7 +63,7 @@ export function applyCSS(id: string, css: string) {
 
 export default function Head({ children }: PropsWithChildren<{}>) {
     if (window.Deno) {
-        parse(children).forEach(({ type, props }, key) => serverHeadElements.push({ type, props }))
+        parse(children).forEach(({ type, props }) => serverHeadElements.push({ type, props }))
     }
 
     useEffect(() => {
@@ -105,7 +105,7 @@ export default function Head({ children }: PropsWithChildren<{}>) {
         return () => {
             insertedEls.forEach(el => doc.head.removeChild(el))
         }
-    }, [])
+    }, [children])
 
     return null
 }
