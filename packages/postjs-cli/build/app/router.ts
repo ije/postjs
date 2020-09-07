@@ -1,15 +1,24 @@
-import { fetchPage, Loading, PageTransition, route, RouterContext, RouterStore, transitionsToStyle, URL, utils } from '@postjs/core'
+import { fetchPage, I18nContext, Loading, PageTransition, route, RouterContext, RouterStore, transitionsToStyle, URL, utils } from '@postjs/core'
 import { ComponentType, createElement, CSSProperties, Fragment, PropsWithChildren, useCallback, useEffect, useState } from 'react'
 import hotEmitter from 'webpack/hot/emitter'
 
-export function AppRouter({ baseUrl, initialUrl }: { baseUrl: string, initialUrl: URL }) {
+export function AppRouter({ initialUrl }: { initialUrl: URL }) {
     const [url, setUrl] = useState<{ current: URL, prev?: URL }>(() => ({ current: initialUrl }))
     const [sideEffect, setSideEffect] = useState<{ transition?: string | PageTransition }>(() => ({}))
 
     useEffect(() => {
         const buildManifest = window['__POST_BUILD_MANIFEST'] || {}
+        const config = (window['__POST_APP'] || {}).config || {}
         const onpopstate = e => {
-            const url = route(baseUrl, Object.keys(buildManifest.pages), { fallback: '/_404' })
+            const url = route(
+                config.baseUrl || '/',
+                Object.keys(buildManifest.pages),
+                {
+                    fallback: '/_404',
+                    defaultLocale: config.defaultLocale || 'en',
+                    locales: (buildManifest.locales || []).map(({ code }) => code)
+                }
+            )
             setUrl(prevUrl => {
                 const { current } = prevUrl
                 if (url.pagePath === current.pagePath && url.asPath === current.asPath) {
@@ -42,15 +51,24 @@ export function AppRouter({ baseUrl, initialUrl }: { baseUrl: string, initialUrl
         RouterContext.Provider,
         { value: new RouterStore(url.current) },
         createElement(
-            HotAPP,
-            null,
-            createElement(
-                Switch,
-                {
-                    enterPage: url.current,
-                    exitPage: url.prev,
-                    sideEffect
+            I18nContext.Provider,
+            {
+                value: {
+                    locale: url.current.locale,
+                    translations: (window['__POST_I18N'] || {})[url.current.locale] || {}
                 }
+            },
+            createElement(
+                HotAPP,
+                null,
+                createElement(
+                    Switch,
+                    {
+                        enterPage: url.current,
+                        exitPage: url.prev,
+                        sideEffect
+                    }
+                )
             )
         )
     )
@@ -159,16 +177,16 @@ function Switch({ enterPage, exitPage, sideEffect }: { enterPage: URL, exitPage?
     return createElement(Fragment, null, pages.map(pageProps => createElement(HotPage, { ...pageProps, key: pageProps.pagePath })))
 }
 
-function HotPage({ pagePath, asPath, className, style }: URL & TransitionProps) {
+function HotPage({ className, style, ...url }: URL & TransitionProps) {
     const [hot, setHot] = useState<{ Component: ComponentType<any> | null, staticProps?: Record<string, any> | null }>(() => {
         const {
             __POST_PAGES: pages = {},
             __POST_SSR_DATA: ssrData = {}
         } = window as any
-        if (pagePath in pages) {
+        if (url.pagePath in pages) {
             return {
-                Component: pages[pagePath].Component,
-                staticProps: ssrData[asPath]?.staticProps
+                Component: pages[url.pagePath].Component,
+                staticProps: ssrData[url.asPath]?.staticProps
             }
         }
         return { Component: null }
@@ -186,17 +204,17 @@ function HotPage({ pagePath, asPath, className, style }: URL & TransitionProps) 
         const hotUpdate = (Component: ComponentType) => {
             setHot({
                 Component,
-                staticProps: ssrData[asPath]?.staticProps
+                staticProps: ssrData[url.asPath]?.staticProps
             })
         }
 
-        if (!(pagePath in pages)) {
-            if (pagePath in (buildManifest.pages || {})) {
+        if (!(url.pagePath in pages)) {
+            if (url.pagePath in (buildManifest.pages || {})) {
                 setIsFetching(true)
-                fetchPage(pagePath, asPath).then(() => {
+                fetchPage(url).then(() => {
                     setHot({
-                        Component: pages[pagePath].Component,
-                        staticProps: ssrData[asPath]?.staticProps
+                        Component: pages[url.pagePath].Component,
+                        staticProps: ssrData[url.asPath]?.staticProps
                     })
                 }).catch(error => {
                     setError(error.message)
@@ -209,15 +227,15 @@ function HotPage({ pagePath, asPath, className, style }: URL & TransitionProps) 
         }
 
         if (hmr) {
-            hotEmitter.on('postPageHotUpdate:' + pagePath, hotUpdate)
+            hotEmitter.on('postPageHotUpdate:' + url.pagePath, hotUpdate)
         }
 
         return () => {
             if (hmr) {
-                hotEmitter.off('postPageHotUpdate:' + pagePath, hotUpdate)
+                hotEmitter.off('postPageHotUpdate:' + url.pagePath, hotUpdate)
             }
         }
-    }, [pagePath])
+    }, [url.pagePath, url.asPath])
 
     // console.log('[render] HotPage', pagePath)
 

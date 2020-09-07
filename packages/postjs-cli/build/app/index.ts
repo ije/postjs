@@ -1,4 +1,4 @@
-import { AppContext, RouterContext, RouterStore, URL, utils } from '@postjs/core'
+import { AppContext, I18nContext, RouterContext, RouterStore, URL, utils } from '@postjs/core'
 import fs from 'fs-extra'
 import path from 'path'
 import React, { ComponentType, createElement, Fragment } from 'react'
@@ -32,12 +32,11 @@ export class App {
 
     get entryJS(): string {
         const {
-            baseUrl,
             polyfillsMode = 'usage',
             polyfills = ['core-js/stable', 'whatwg-fetch']
         } = this.config
         return (`
-            import React from 'react'
+            import React, {useState} from 'react'
             import ReactDom from 'react-dom'
             import { AppContext } from '@postjs/core'
             import { AppRouter } from '@postjs/cli/dist/build/app/router'
@@ -48,6 +47,7 @@ export class App {
 
             // onload
             window.addEventListener('load', () => {
+                const config = ${JSON.stringify(this.publicConfig)}
                 const dataEl = document.getElementById('ssr-data')
                 if (dataEl) {
                     const ssrData = JSON.parse(dataEl.innerHTML)
@@ -55,7 +55,7 @@ export class App {
                         const { url, staticProps } = ssrData
 
                         // inject global variables
-                        { (window['__POST_APP'] =  window['__POST_APP'] || {}).config = ${JSON.stringify(this._publicConfig)} }
+                        { (window['__POST_APP'] =  window['__POST_APP'] || {}).config = config }
                         { (window['__POST_SSR_DATA'] =  window['__POST_SSR_DATA'] || {})[url.asPath] = { staticProps } }
 
                         // delete ssr head elements
@@ -74,24 +74,30 @@ export class App {
                             torms = null
                         }
 
+                        function Main() {
+                            return (
+                                 <AppContext.Provider value={{
+                                    config: Object.assign({}, config),
+                                    staticProps: Object.assign({}, window['__POST_APP'].staticProps)
+                                }}>
+                                    <AppRouter
+                                        initialUrl={url}
+                                    />
+                                </AppContext.Provider>
+                            )
+                        }
+
                         // hydrate app
-                        ReactDom.hydrate((
-                            <AppContext.Provider value={{
-                                config: Object.assign({}, window['__POST_APP'].config),
-                                staticProps: Object.assign({}, window['__POST_APP'].staticProps)
-                            }}>
-                                <AppRouter baseUrl="${baseUrl}" initialUrl={url} />
-                            </AppContext.Provider>
-                        ), document.querySelector('main'))
+                        ReactDom.hydrate(<Main />, document.querySelector('main'))
                     }
                 }
             })
         `)
     }
 
-    private get _publicConfig() {
-        const { defaultLocale, locales, baseUrl } = this.config
-        return { defaultLocale, locales, baseUrl }
+    get publicConfig() {
+        const { defaultLocale, baseUrl } = this.config
+        return { defaultLocale, baseUrl }
     }
 
     private get _peerDependencies() {
@@ -108,7 +114,7 @@ export class App {
 
     async build() {
         const { rootDir, defaultLocale, useSass, useStyledComponents, browserslist, polyfillsMode } = this.config
-        const { customApp, pages: ssrPages, lazyComponents } = await this.renderAll()
+        const { customApp, pages: ssrPages, lazyComponents, locales } = await this.renderAll()
         const compiler = new Compiler(
             this.srcDir,
             Object.keys(ssrPages).reduce((entries, pagePath) => {
@@ -171,6 +177,13 @@ export class App {
             }
         }
 
+        for (const locale in locales) {
+            const filepath = path.join(buildDir, '_post', `i18n/${locale}.js`)
+            const content = `(window.__POST_I18N = window.__POST_I18N || {})[${JSON.stringify(locale)}] = ${JSON.stringify(locales[locale])}`
+            await fs.ensureDir(path.dirname(filepath))
+            await fs.writeFile(filepath, content)
+        }
+
         for (const pagePath of Object.keys(ssrPages)) {
             const pageName = pagePath.replace(/^\/+/, '') || 'index'
             buildManifest.pages[pagePath] = {
@@ -180,8 +193,9 @@ export class App {
             for (const ssrPage of ssrPages[pagePath]) {
                 const { url, staticProps, html, head, styledTags } = ssrPage
                 const { asPath } = url
-                const asName = asPath.replace(/^\/+/, '') || 'index'
+                const asName = asPath.replace(/^\/+/, '').replace(/\/+$/, '/index') || 'index'
                 const htmlFile = path.join(buildDir, asName + '.html')
+                console.log(url, asName, htmlFile)
                 const exposedChunks = Array.from(chunks.values()).filter(({ name }) => !(/^(pages|components)\//.test(name)) || name === 'pages/' + pageName)
                 await fs.ensureDir(path.dirname(htmlFile))
                 await fs.writeFile(htmlFile, createHtml({
@@ -225,29 +239,46 @@ export class App {
     }
 
     async renderAll() {
-        const { useSass, useStyledComponents } = this.config
-        const compiler = new Compiler(this.srcDir, `
-            const { utils } = require('@postjs/core')
-            const r = require.context('./pages', true, /\\.(jsx?|mjs|tsx?)$/i)
-            const pages = {}
+        const { defaultLocale, useSass, useStyledComponents } = this.config
+        const compiler = new Compiler(this.srcDir, {
+            entry: `
+                const { utils } = require('@postjs/core')
+                const r = require.context('./pages', true, /\\.(jsx?|mjs|tsx?)$/i)
+                const pages = {}
 
-            r.keys().filter(key => /^[a-z0-9/.$*_~ -]+$/i.test(key)).forEach(key => {
-                const pagePath = key.replace(/^[.]+/, '').replace(/(\\/index)?\\.(jsx?|mjs|tsx?)$/i, '').replace(/ /g, '-') || '/'
-                pages[pagePath] = {
-                    rawRequest: './pages/' + key.replace(/^[./]+/, ''),
-                    Component: utils.isComponentModule(r(key), 'page', ['getStaticProps', 'getStaticPaths'])
-                }
-            })
+                r.keys().filter(key => /^[a-z0-9/.$*_~ -]+$/i.test(key)).forEach(key => {
+                    const pagePath = key.replace(/^[.]+/, '').replace(/(\\/index)?\\.(jsx?|mjs|tsx?)$/i, '').replace(/ /g, '-') || '/'
+                    pages[pagePath] = {
+                        rawRequest: './pages/' + key.replace(/^[./]+/, ''),
+                        Component: utils.isComponentModule(r(key), 'page', ['getStaticProps', 'getStaticPaths'])
+                    }
+                })
 
-            exports.pages = pages
-        `, {
+                exports.pages = pages
+            `,
+            locales: `
+                const r = require.context('./pages', true, /[a-z]{2}(\\-[a-zA-Z0-9]+)?\\/locale.json$/i)
+                const locales = {}
+
+                r.keys().forEach(key => {
+                    const p = key.split('/')
+                    if (p.length === 3 && p[0] === '.') {
+                        locales[p[1]] = r(key)
+                    }
+                })
+
+                exports.locales = locales
+            `
+        }, {
             isServer: true,
             useSass,
             useStyledComponents,
             externals: Object.keys(this._peerDependencies)
         })
         const { chunks, hash, warnings, startTime, endTime } = await compiler.compile()
-        const { pages } = runJS(chunks.get('main')!.content, this._peerDependencies)
+        const { pages } = runJS(chunks.get('entry')!.content, this._peerDependencies)
+        const { locales } = runJS(chunks.get('locales')!.content, {})
+        const localeKeys = Object.keys(locales)
 
         type RenderedPage = { url: URL, staticProps: any, html: string, head: string[], styledTags: string }
         const renderRet = {
@@ -257,13 +288,14 @@ export class App {
             endTime,
             customApp: null as any,
             pages: {} as Record<string, Array<RenderedPage>>,
-            lazyComponents: [] as Array<string>
+            lazyComponents: [] as Array<string>,
+            locales
         }
 
         let App: ComponentType = Fragment
         if ('/_app' in pages) {
             App = pages['/_app'].Component
-            renderRet.customApp = { staticProps: await callGetStaticProps(App, this._publicConfig) }
+            renderRet.customApp = { staticProps: await callGetStaticProps(App, this.publicConfig) }
         }
 
         for (const pagePath of Object.keys(pages).filter(pagePath => pagePath !== '/_app')) {
@@ -280,18 +312,23 @@ export class App {
             }
 
             renderRet.pages[pagePath] = []
-            for (const asPath of pagePaths) {
-                const url = { pagePath, asPath, params: {}, query: {} }
-                if (asPath !== pagePath) {
-                    const [params, ok] = matchPath(pagePath, asPath)
+            for (const p of pagePaths) {
+                const url = { locale: defaultLocale, asPath: p, pagePath, params: {}, query: {} }
+                if (url.asPath !== pagePath) {
+                    const [params, ok] = matchPath(pagePath, url.asPath)
                     if (!ok) {
-                        console.log(`invalid static path '${asPath}' of page '${pageName}'`)
+                        console.log(`invalid static path '${url.asPath}' of page '${pageName}'`)
                         continue
                     }
                     url.params = params
                 }
-                const { staticProps, html, head, styledTags } = await this._renderPage(App, renderRet.customApp?.staticProps, PageComponent, url)
+                const { staticProps, html, head, styledTags } = await this._renderPage(App, renderRet.customApp?.staticProps, PageComponent, url, locales[defaultLocale] || {})
                 renderRet.pages[pagePath].push({ url, staticProps, html, head, styledTags })
+                for (const locale of localeKeys.filter(l => l !== defaultLocale)) {
+                    const lurl = { ...url, locale, asPath: path.join('/' + locale, url.asPath) }
+                    const { staticProps, html, head, styledTags } = await this._renderPage(App, renderRet.customApp?.staticProps, PageComponent, lurl, locales[locale])
+                    renderRet.pages[pagePath].push({ url: lurl, staticProps, html, head, styledTags })
+                }
             }
         }
 
@@ -325,12 +362,12 @@ export class App {
         const { App } = runJS(js, this._peerDependencies)
 
         if (App) {
-            return await callGetStaticProps(App, this._publicConfig)
+            return await callGetStaticProps(App, this.publicConfig)
         }
         return null
     }
 
-    async renderPage(url: URL) {
+    async renderPage(url: URL, translations: Record<string, string>) {
         const { useSass, useStyledComponents } = this.config
         const compiler = new Compiler(this.srcDir, `
             const { utils } = require('@postjs/core')
@@ -356,10 +393,10 @@ export class App {
 
         let appStaticProps: any = null
         if (App) {
-            appStaticProps = await callGetStaticProps(App, this._publicConfig)
+            appStaticProps = await callGetStaticProps(App, this.publicConfig)
         }
 
-        const { staticProps, html, head, styledTags } = await this._renderPage(App || Fragment, appStaticProps, PageComponent, url)
+        const { staticProps, html, head, styledTags } = await this._renderPage(App || Fragment, appStaticProps, PageComponent, url, translations)
         return { staticProps, html, head, styledTags, css }
     }
 
@@ -367,7 +404,8 @@ export class App {
         App: React.ComponentType,
         appStaticProps: any,
         PageComponent: React.ComponentType,
-        url: URL
+        url: URL,
+        translations: Record<string, string>
     ) {
         const pageStaticProps: any = await callGetStaticProps(PageComponent, url)
         const sheet = (() => {
@@ -384,7 +422,8 @@ export class App {
             AppContext.Provider,
             {
                 value: {
-                    config: this._publicConfig,
+                    config: { ...this.publicConfig },
+                    translations,
                     staticProps: appStaticProps
                 }
             },
@@ -392,11 +431,20 @@ export class App {
                 RouterContext.Provider,
                 { value: new RouterStore(url) },
                 createElement(
-                    App,
-                    appStaticProps,
+                    I18nContext.Provider,
+                    {
+                        value: {
+                            locale: url.locale,
+                            translations
+                        }
+                    },
                     createElement(
-                        PageComponent,
-                        pageStaticProps
+                        App,
+                        appStaticProps,
+                        createElement(
+                            PageComponent,
+                            pageStaticProps
+                        )
                     )
                 )
             )

@@ -11,7 +11,6 @@ export interface AppConfig {
     readonly useSass: boolean
     readonly useStyledComponents: boolean
     readonly defaultLocale: string
-    readonly locales: Record<string, Record<string, string>>
     readonly browserslist?: string | string[] | Record<string, any>
     readonly polyfillsMode?: 'usage' | 'entry'
     readonly polyfills?: string[]
@@ -27,7 +26,6 @@ export function loadAppConfigSync(appDir: string) {
         outputDir: '/dist',
         baseUrl: '/',
         defaultLocale: 'en',
-        locales: {},
         useSass: false,
         useStyledComponents: false
     }
@@ -44,34 +42,6 @@ export function loadAppConfigSync(appDir: string) {
             Object.assign(config, { useSass: true })
         }
     } catch (error) { }
-
-    // todo: load i18n files
-    const i18nDir = path.join(config.rootDir, 'i18n')
-    if (fs.existsSync(i18nDir)) {
-        const items = fs.readdirSync(i18nDir, { withFileTypes: true })
-        for (const item of items) {
-            if (item.isDirectory()) {
-                // todo: find i18n files(json)
-            } else if (/^[a-z]{2}(-[a-z0-9]+)?\.json$/i.test(name)) {
-                const [l, c] = utils.trimSuffix(name, '.json').split('-')
-                const locale = [l.toLowerCase(), c.toUpperCase()].filter(Boolean).join('-')
-                try {
-                    const dict = fs.readJSONSync(path.join(i18nDir, item.name))
-                    if (utils.isObject(dict)) {
-                        const dictMap: Record<string, string> = {}
-                        Object.entries(dict).forEach(([key, text]) => {
-                            if (utils.isNEString(text)) {
-                                dictMap[key] = text
-                            }
-                        })
-                        config.locales[locale] = dictMap
-                    }
-                } catch (error) {
-                    console.warn(`bad locale(${locale}):`, error)
-                }
-            }
-        }
-    }
 
     try {
         const configJson = path.join(appDir, 'post.config.json')
@@ -102,11 +72,8 @@ export function loadAppConfigSync(appDir: string) {
     if (utils.isNEString(baseUrl)) {
         Object.assign(config, { baseUrl: utils.cleanPath(encodeURI(baseUrl)) })
     }
-    if (/^[a-z]{2}(-[a-z0-9]+)?$/i.test(defaultLocale) && Object.keys(config.locales).includes(defaultLocale)) {
+    if (/^[a-z]{2}(-[a-z0-9]+)?$/i.test(defaultLocale)) {
         Object.assign(config, { defaultLocale })
-    }
-    if (config.defaultLocale === 'en' && !Object.keys(config.locales).includes('en')) {
-        Object.assign(config, { defaultLocale: Object.keys(config.locales)[0] })
     }
     if (utils.isNEString(browserslist) || utils.isNEArray(browserslist) || utils.isObject(browserslist)) {
         Object.assign(config, { browserslist })

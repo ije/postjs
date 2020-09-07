@@ -9,6 +9,7 @@ import TerserPlugin from 'terser-webpack-plugin'
 import webpack from 'webpack'
 import './loaders/post-app-loader'
 import './loaders/post-component-loader'
+import './loaders/post-i18n-loader'
 import './loaders/post-page-loader'
 import './plugins/babel-plugin-post-module-resolver'
 
@@ -187,7 +188,8 @@ export default function createConfig(context: string, entry: webpack.Entry, conf
             alias: [
                 'post-app-loader',
                 'post-component-loader',
-                'post-page-loader'
+                'post-page-loader',
+                'post-i18n-loader'
             ].reduce((alias, name) => {
                 alias[name] = path.join(__dirname, `loaders/${name}.js`)
                 return alias

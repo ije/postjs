@@ -1,13 +1,13 @@
-import { parse, ParsedUrlQuery } from 'querystring'
 import { createContext, useContext } from 'react'
 import { redirect } from './redirect'
 import { utils } from './utils'
 
 export interface URL {
+    locale: string
     pagePath: string
     asPath: string
     params: Record<string, string>
-    query: ParsedUrlQuery
+    query: Record<string, string | string[]>
 }
 
 export class RouterStore {
@@ -15,6 +15,10 @@ export class RouterStore {
 
     constructor(url: URL) {
         this._url = url
+    }
+
+    get locale() {
+        return this._url.locale
     }
 
     get pagePath() {
@@ -43,7 +47,7 @@ export class RouterStore {
 }
 
 export const RouterContext = createContext(
-    new RouterStore({ pagePath: '/', asPath: '/', params: {}, query: {} })
+    new RouterStore({ locale: 'en', pagePath: '/', asPath: '/', params: {}, query: {} })
 )
 RouterContext.displayName = 'RouterContext'
 
@@ -51,39 +55,55 @@ export function useRouter() {
     return useContext(RouterContext)
 }
 
-export function route(base: string, pagePaths: string[], options?: { location?: { pathname: string, search?: string }, fallback?: string }): URL {
-    const loc = (options?.location || location)
-    const fallback = options?.fallback
+export function route(base: string, pagePaths: string[], options?: { location?: { pathname: string, search?: string }, fallback?: string, defaultLocale?: string, locales?: string[] }): URL {
+    const { pathname, search }: Location = (options?.location || (window as any).location || { pathname: '/' })
+    const asPath = utils.cleanPath(utils.trimPrefix(pathname, base))
+    const query: Record<string, string | string[]> = {}
 
+    if (search) {
+        const segs = utils.trimPrefix(search, '?').split('&')
+        segs.forEach(seg => {
+            const [key, value] = utils.splitBy(seg, '=')
+            if (key in query) {
+                const prevValue = query[key]
+                if (utils.isArray(prevValue)) {
+                    prevValue.push(value)
+                } else {
+                    query[key] = [prevValue, value]
+                }
+            } else {
+                query[key] = value
+            }
+        })
+    }
+
+    let locale = options?.defaultLocale || 'en'
+    let asPagePath = asPath
     let pagePath = ''
-    let asPath = loc.pathname
     let params: Record<string, string> = {}
-    let query: ParsedUrlQuery = loc.search ? parse(loc.search.replace(/^\?/, '')) : {}
 
-    if (base.length > 1 && base.charAt(0) === '/') {
-        asPath = utils.trimPrefix(asPath, base)
-        if (asPath === '' || asPath.charAt(0) !== '/') {
-            asPath = '/' + asPath
+    if (asPagePath !== '/') {
+        const a = asPagePath.slice(1).split('/')
+        if (options?.locales?.includes(a[0])) {
+            locale = a[0]
+            asPagePath = '/' + a.slice(1).join('/')
         }
     }
 
-    // todo: sort pagePaths
-
-    utils.each(pagePaths, routePath => {
-        const [p, ok] = matchPath(routePath, asPath)
+    for (const routePath of pagePaths) {
+        const [p, ok] = matchPath(routePath, asPagePath)
         if (ok) {
             pagePath = routePath
             params = p
-            return false
+            break
         }
-        return undefined
-    })
-
-    if (pagePath === '' && fallback !== undefined) {
-        pagePath = fallback
     }
 
-    return { pagePath, asPath, params, query }
+    if (pagePath === '' && options?.fallback) {
+        pagePath = options?.fallback
+    }
+
+    return { locale, asPath, pagePath, params, query }
 }
 
 function matchPath(routePath: string, locPath: string): [Record<string, string>, boolean] {

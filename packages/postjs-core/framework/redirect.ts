@@ -37,27 +37,45 @@ export async function redirect(href: string, replace?: boolean, transition?: Pag
     const {
         __POST_APP: app = {},
         __POST_BUILD_MANIFEST: buildManifest = {},
+        __POST_I18N: i18n = {},
         __POST_PAGES: pages = {}
     } = window as any
 
-    const { pagePath } = route(app.config?.baseUrl || '/', Object.keys(buildManifest.pages), { fallback: '/_404', location: { pathname: href } })
-    if (pagePath === '/_404' && !(pagePath in (buildManifest.pages || {}))) {
+    const url = route(
+        app.config?.baseUrl || '/',
+        Object.keys(buildManifest.pages),
+        {
+            fallback: '/_404',
+            location: { pathname: href },
+            defaultLocale: app.config?.defaultLocale || 'en',
+            locales: (buildManifest.locales || []).map(({ code }) => code)
+        }
+    )
+
+    if (!(url.locale in i18n)) {
+        const i = (buildManifest.locales || []).find(({ code }) => code === url.locale)
+        if (i) {
+            await loadI18n(i.code, i.hash)
+        }
+    }
+
+    if (url.pagePath === '/_404' && !(url.pagePath in (buildManifest.pages || {}))) {
         if (replace) {
-            history.replaceState({ transition }, '', href)
+            history.replaceState({ transition }, '', url.asPath)
         } else {
-            history.pushState({ transition }, '', href)
+            history.pushState({ transition }, '', url.asPath)
         }
         hotEmitter.emit('popstate', { type: 'popstate', resetScroll: true, state: { transition } })
         return
     }
 
-    if (pagePath in pages) {
-        const page = pages[pagePath]
-        if (utils.isObject(page) && page.path === pagePath && isValidElementType(page.Component)) {
+    if (url.pagePath in pages) {
+        const page = pages[url.pagePath]
+        if (utils.isObject(page) && page.path === url.pagePath && isValidElementType(page.Component)) {
             if (replace) {
-                history.replaceState({ transition }, '', href)
+                history.replaceState({ transition }, '', url.asPath)
             } else {
-                history.pushState({ transition }, '', href)
+                history.pushState({ transition }, '', url.asPath)
             }
             hotEmitter.emit('popstate', { type: 'popstate', resetScroll: true, state: { transition } })
             if (redirectMark !== null) {
@@ -65,11 +83,11 @@ export async function redirect(href: string, replace?: boolean, transition?: Pag
             }
             return
         }
-        delete pages[pagePath]
+        delete pages[url.pagePath]
     }
 
-    redirectMark = href
-    return fetchPage(pagePath, href).then(() => {
+    redirectMark = url.asPath
+    return fetchPage(url).then(() => {
         if (redirectMark !== null) {
             if (replace) {
                 history.replaceState({ transition }, '', redirectMark)
@@ -79,5 +97,20 @@ export async function redirect(href: string, replace?: boolean, transition?: Pag
             hotEmitter.emit('popstate', { type: 'popstate', resetScroll: true, state: { transition } })
             redirectMark = null
         }
+    })
+}
+
+export async function loadI18n(code: string, hash?: string) {
+    return new Promise<void>((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = `/_post/i18n/${code}.js?v=${hash || Date.now()}`
+        script.async = false
+        script.onload = () => {
+            resolve()
+        }
+        script.onerror = err => {
+            reject(err)
+        }
+        document.head.appendChild(script)
     })
 }

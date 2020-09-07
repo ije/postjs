@@ -1,7 +1,8 @@
 import { isValidElementType } from 'react-is'
+import { URL } from './router'
 import { utils } from './utils'
 
-export async function fetchPage(pagePath: string, asPath: string) {
+export async function fetchPage({ pagePath, asPath }: URL) {
     // only in browser
     if (!process['browser']) {
         return Promise.reject(new Error(`can't fetch page '${pagePath}' on server`))
@@ -88,3 +89,4 @@ async function fetchPageData(page: any, asPath: string, hash: string): Promise<v
 function isValidPage(page: any, pagePath: string) {
     return utils.isObject(page) && page.path === pagePath && isValidElementType(page.Component)
 }
+

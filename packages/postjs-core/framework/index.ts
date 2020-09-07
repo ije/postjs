@@ -1,4 +1,4 @@
-import { createContext, useContext } from 'react'
+import { createContext, useContext, useMemo } from 'react'
 
 export * from './component'
 export * from './head'
@@ -22,13 +22,12 @@ export interface AppConfig {
 type AppContextProps = {
     config: {
         defaultLocale: string
-        locales: Record<string, Record<string, string>>
         baseUrl: string
     }
+    translations: Record<string, string>
     staticProps: Record<string, any>
 }
-
-export const AppContext = createContext<AppContextProps>({ config: { defaultLocale: 'en', locales: {}, baseUrl: '/' }, staticProps: {} })
+export const AppContext = createContext<AppContextProps>({ config: { defaultLocale: 'en', baseUrl: '/' }, translations: {}, staticProps: {} })
 AppContext.displayName = 'AppContext'
 
 export function useAppConfig() {
@@ -39,4 +38,21 @@ export function useAppConfig() {
 export function useAppStaticProps<T = Record<string, any>>(): T {
     const { staticProps } = useContext(AppContext)
     return staticProps as T
+}
+
+type I18nContextProps = {
+    locale: string
+    translations: Record<string, string>
+}
+export const I18nContext = createContext<I18nContextProps>({ locale: 'en', translations: {} })
+I18nContext.displayName = 'I18nContext'
+
+export function useLocale() {
+    const { locale } = useContext(I18nContext)
+    return locale
+}
+
+export function useTranslate(text: string) {
+    const { translations } = useContext(I18nContext)
+    return useMemo(() => translations[text] || text, [translations, text])
 }

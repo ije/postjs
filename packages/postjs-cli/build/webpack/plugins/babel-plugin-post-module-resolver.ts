@@ -21,7 +21,7 @@ export default () => ({
         }
     },
     post() {
-        delete this.currentRequest
+        this.currentRequest = ''
     }
 }) as PluginObj<{
     opts: {

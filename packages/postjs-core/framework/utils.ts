@@ -83,6 +83,14 @@ export const utils = {
         return s
     },
 
+    splitBy(s: string, splitter: string): [string, string] {
+        const i = s.indexOf(splitter)
+        if (i >= 0) {
+            return [s.slice(0, i), s.slice(i + 1)]
+        }
+        return [s, '']
+    },
+
     cleanPath(path: string): string {
         return '/' + path.replace(/^[./]+/, '').split('/')
             .map(p => p.trim())

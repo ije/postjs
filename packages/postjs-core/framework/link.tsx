@@ -1,6 +1,6 @@
 import React, { Children, cloneElement, CSSProperties, isValidElement, PropsWithChildren, useCallback, useEffect, useMemo } from 'react'
 import { fetchPage } from './page'
-import { redirect } from './redirect'
+import { loadI18n, redirect } from './redirect'
 import { route, useRouter } from './router'
 import { PageTransition } from './transition'
 import { utils } from './utils'
@@ -34,6 +34,7 @@ export function Link({
         e.preventDefault()
         if (router.asPath !== href) {
             redirect(href, replace, transition).catch(err => {
+                console.log(err)
                 alert(`Error: ${err.message}`)
             })
         }
@@ -133,11 +134,28 @@ function prefetchPage(href: string) {
         __POST_APP: app = {},
         __POST_PAGES: pages = {},
         __POST_SSR_DATA: ssrData = {},
-        __POST_BUILD_MANIFEST: buildManifest = {}
+        __POST_BUILD_MANIFEST: buildManifest = {},
+        __POST_I18N: i18n = {}
     } = window as any
-    const { pagePath } = route(app.config?.baseUrl || '/', Object.keys(buildManifest.pages), { fallback: '/_404', location: { pathname: href } })
+    const url = route(
+        app.config?.baseUrl || '/',
+        Object.keys(buildManifest.pages),
+        {
+            fallback: '/_404',
+            location: { pathname: href },
+            defaultLocale: app.config?.defaultLocale || 'en',
+            locales: (buildManifest.locales || []).map(({ code }) => code)
+        }
+    )
 
-    if (pagePath in (buildManifest.pages || {}) && (!(pagePath in pages) || !(href in ssrData))) {
-        fetchPage(pagePath, href)
+    if (!(url.locale in i18n)) {
+        const i = (buildManifest.locales || []).find(({ code }) => code === url.locale)
+        if (i) {
+            loadI18n(i.code, i.hash)
+        }
+    }
+
+    if (url.pagePath in (buildManifest.pages || {}) && (!(url.pagePath in pages) || !(url.asPath in ssrData))) {
+        fetchPage(url)
     }
 }
