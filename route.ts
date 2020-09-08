@@ -1,8 +1,9 @@
 import { Location, RouterURL } from './api.ts'
 import util from './util.ts'
 
-export default function route(base: string, pagePaths: string[], options?: { location?: Location, fallback?: string, defaultLocale?: string, locales?: string[] }): RouterURL {
+export default function route(base: string, pagePaths: string[], options?: { location?: { pathname: string, search?: string }, fallback?: string, defaultLocale?: string, locales?: string[] }): RouterURL {
     const { pathname, search }: Location = (options?.location || (window as any).location || { pathname: '/' })
+    const asPath = util.cleanPath(util.trimPrefix(pathname, base))
     const query: Record<string, string | string[]> = {}
 
     if (search) {
@@ -23,18 +24,20 @@ export default function route(base: string, pagePaths: string[], options?: { loc
     }
 
     let locale = options?.defaultLocale || 'en'
-    let asPath = util.cleanPath(util.trimPrefix(pathname, base))
+    let asPagePath = asPath
     let pagePath = ''
     let params: Record<string, string> = {}
 
-    const a = asPath.slice(1).split('/')
-    if (options?.locales?.includes(a[0])) {
-        locale = a[0]
-        asPath = '/' + a.slice(1).join('/')
+    if (asPagePath !== '/') {
+        const a = asPagePath.split('/')
+        if (options?.locales?.includes(a[0])) {
+            locale = a[0]
+            asPagePath = '/' + a.slice(1).join('/')
+        }
     }
 
     for (const routePath of pagePaths) {
-        const [p, ok] = matchPath(routePath, asPath)
+        const [p, ok] = matchPath(routePath, asPagePath)
         if (ok) {
             pagePath = routePath
             params = p
