@@ -16,6 +16,18 @@ const reModuleExt = /\.(m?jsx?|tsx?)$/i
 const reStyleModuleExt = /\.(css|less|sass)$/i
 const reHashJs = /\.[0-9a-fx]{9}\.js$/i
 
+interface Config {
+    readonly rootDir: string
+    readonly srcDir: string
+    readonly outputDir: string
+    readonly baseUrl: string
+    readonly defaultLocale: string
+    readonly cacheDeps: boolean
+    readonly importMap: {
+        imports: Record<string, string>
+    }
+}
+
 interface Module {
     id: string
     isRemote: boolean
@@ -27,18 +39,6 @@ interface Module {
     jsContent: string
     jsSourceMap: string
     hash: string
-}
-
-interface Config {
-    readonly rootDir: string
-    readonly srcDir: string
-    readonly outputDir: string
-    readonly baseUrl: string
-    readonly defaultLocale: string
-    readonly cacheDeps: boolean
-    readonly importMap: {
-        imports: Record<string, string>
-    }
 }
 
 interface BuildManifest {
@@ -54,7 +54,6 @@ export default class Project {
     readonly config: Config
     readonly ready: Promise<void>
 
-    private _deps: Map<string, Module> = new Map()
     private _modules: Map<string, Module> = new Map()
     private _pageModules: Map<string, { moduleId: string, rendered: { head: string[], html: string } }> = new Map()
     private _fsWatchQueue: Map<string, number> = new Map()
@@ -128,9 +127,6 @@ export default class Project {
     }
 
     getModule(id: string): Module | null {
-        if (this._deps.has(id)) {
-            return this._deps.get(id)!
-        }
         if (this._modules.has(id)) {
             return this._modules.get(id)!
         }
@@ -376,7 +372,7 @@ export default class Project {
                                     this._resetPageModule(moduleId)
                                 }
                                 this._updateDependency('./' + rp, hash, mod => {
-                                    if (!hmrable) {
+                                    if (!hmrable && this.isHMRable(mod.id)) {
                                         this._fsWatchListeners.forEach(e => e.emit(mod.id, 'modify', mod.hash))
                                     }
                                     if (mod.id.startsWith('./pages/')) {
@@ -430,8 +426,8 @@ export default class Project {
         const isRemote = reHttp.test(sourceFile) || (sourceFile in importMap.imports && reHttp.test(importMap.imports[sourceFile]))
         const id = (isRemote ? util.trimPrefix(this._renameRemotePath(sourceFile), '/-/') : sourceFile).replace(reModuleExt, '.js')
 
-        if (this._deps.has(id) && !options?.forceCompile) {
-            return this._deps.get(id)!
+        if (this._modules.has(id) && !options?.forceCompile) {
+            return this._modules.get(id)!
         }
 
         const mod: Module = {
@@ -646,11 +642,7 @@ export default class Project {
             ])
         }
 
-        if (mod.isRemote) {
-            this._deps.set(mod.id, mod)
-        } else {
-            this._modules.set(mod.id, mod)
-        }
+        this._modules.set(mod.id, mod)
 
         return mod
     }
@@ -687,7 +679,7 @@ export default class Project {
                     }
                     callback(mod)
                     this._updateDependency(mod.sourceFile, mod.hash, callback)
-                    log.debug('update dependency:', mod.sourceFile, '<-', depPath, depHash)
+                    log.debug('update dependency:', depPath, '->', mod.sourceFile)
                 }
             })
         })
