@@ -1,4 +1,4 @@
-import { colors } from './std.ts'
+import { colors } from './deps.ts'
 
 export default {
     debug(...args: unknown[]) {

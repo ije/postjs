@@ -1,5 +1,5 @@
 import { APIRequest, APIResponse } from '../api.ts'
-import { ServerRequest } from '../std.ts'
+import { ServerRequest } from '../deps.ts'
 
 export class PostAPIRequest implements APIRequest {
     private _req: ServerRequest

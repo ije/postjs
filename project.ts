@@ -1,12 +1,12 @@
 import { APIHandle, Location, RouterURL } from './api.ts'
+import { colors, exists, existsSync, Md5, path, Sha1, walk } from './deps.ts'
 import { EventEmitter } from './events.ts'
 import { createHtml } from './html.ts'
 import log from './log.ts'
 import route from './route.ts'
-import { colors, exists, existsSync, Md5, path, Sha1, walk } from './std.ts'
-import { compile, createSourceFile } from './ts/compile.ts'
-import transformImportPathRewrite from './ts/transform-import-path-rewrite.ts'
-import { traverse } from './ts/traverse.ts'
+import { compile, createSourceFile } from './tsc/compile.ts'
+import transformImportPathRewrite from './tsc/transform-import-path-rewrite.ts'
+import { traverse } from './tsc/traverse.ts'
 import util from './util.ts'
 import AnsiUp from './vendor/ansi-up/ansi-up.ts'
 import less from './vendor/less/dist/less.js'
@@ -98,6 +98,10 @@ export default class Project {
         return this.mode === 'development'
     }
 
+    isHMRable(moduleId: string) {
+        return moduleId === './app.js' || moduleId.startsWith('./pages/') || moduleId.startsWith('./components/') || reStyleModuleExt.test(moduleId)
+    }
+
     get manifest() {
         const { baseUrl, defaultLocale } = this.config
         const manifest: BuildManifest = {
@@ -156,6 +160,20 @@ export default class Project {
             }
         }
         return this.getModule(modId)
+    }
+
+    createFSWatcher(): EventEmitter {
+        const e = new EventEmitter()
+        this._fsWatchListeners.push(e)
+        return e
+    }
+
+    removeFSWatcher(e: EventEmitter) {
+        e.removeAllListeners()
+        const index = this._fsWatchListeners.indexOf(e)
+        if (index > -1) {
+            this._fsWatchListeners.splice(index, 1)
+        }
     }
 
     async getAPIHandle(path: string): Promise<APIHandle | null> {
@@ -382,10 +400,6 @@ export default class Project {
         }
     }
 
-    isHMRable(moduleId: string) {
-        return moduleId === './app.js' || moduleId.startsWith('./pages/') || moduleId.startsWith('./components/') || reStyleModuleExt.test(moduleId)
-    }
-
     private _removePageModule(moduleId: string) {
         let pagePath = ''
         for (const [p, pm] of this._pageModules.entries()) {
@@ -408,20 +422,6 @@ export default class Project {
                 }
                 break
             }
-        }
-    }
-
-    createFSWatcher(): EventEmitter {
-        const e = new EventEmitter()
-        this._fsWatchListeners.push(e)
-        return e
-    }
-
-    removeFSWatcher(e: EventEmitter) {
-        e.removeAllListeners()
-        const index = this._fsWatchListeners.indexOf(e)
-        if (index > -1) {
-            this._fsWatchListeners.splice(index, 1)
         }
     }
 

@@ -1,25 +1,25 @@
+import { path, serve, ws } from '../deps.ts'
 import { createHtml } from '../html.ts'
 import log from '../log.ts'
 import Project from '../project.ts'
 import route from '../route.ts'
-import { existsSync, path, serve, ws } from '../std.ts'
 import util from '../util.ts'
 import { PostAPIRequest, PostAPIResponse } from './api.ts'
 import { getContentType } from './mime.ts'
 
 export async function start(appDir: string, port: number, isDev = false) {
-    const project = new Project(appDir, 'development')
+    const project = new Project(appDir, isDev ? 'development' : 'production')
     await project.ready
 
     try {
         const s = serve({ port })
         log.info(`Server ready on http://localhost:${port}`)
         for await (const req of s) {
-            let [pathname, search] = util.splitBy(req.url, '?')
-            pathname = util.cleanPath(pathname)
+            const url = new URL('http://localhost/' + req.url)
+            const pathname = util.cleanPath(url.pathname)
 
             try {
-                if (pathname.startsWith('/_hmr')) {
+                if (pathname === '/_hmr') {
                     const { conn, r: bufReader, w: bufWriter, headers } = req
                     ws.acceptWebSocket({ conn, bufReader, bufWriter, headers }).then(async socket => {
                         const watcher = project.createFSWatcher()
@@ -54,7 +54,7 @@ export async function start(appDir: string, port: number, isDev = false) {
                     const { pagePath, params, query } = route(
                         project.config.baseUrl,
                         project.apiPaths,
-                        { location: { pathname, search } }
+                        { location: { pathname, search: url.search } }
                     )
                     const handle = await project.getAPIHandle(pagePath)
                     if (handle) {
@@ -65,7 +65,7 @@ export async function start(appDir: string, port: number, isDev = false) {
                     } else {
                         req.respond({
                             status: 404,
-                            headers: new Headers({ 'Content-Type': `application/javascript; charset=utf-8` }),
+                            headers: new Headers({ 'Content-Type': 'application/javascript; charset=utf-8' }),
                             body: 'page not found'
                         })
                     }
@@ -84,22 +84,22 @@ export async function start(appDir: string, port: number, isDev = false) {
                             })
                             continue
                         }
-                        let { jsContent, id } = mod
-                        if (id === './app.js' || id.startsWith('./pages/')) {
-                            const { staticProps } = await project.importModuleAsComponent(id)
-                            if (staticProps) {
-                                jsContent = 'export const __staticProps = ' + JSON.stringify(staticProps) + ';\n\n' + jsContent
+
+                        let body = ''
+                        if (reqSourceMap) {
+                            body = mod.jsSourceMap
+                        } else {
+                            if (project.isHMRable(mod.id)) {
+                                body = useHmr(mod)
+                            } else {
+                                body = mod.jsContent
                             }
-                        }
-                        if (project.isHMRable(id)) {
-                            let hmrImportPath = path.relative(
-                                path.dirname(path.resolve('/', id)),
-                                '/-/postjs.io/hmr.js'
-                            )
-                            if (!hmrImportPath.startsWith('.') && !hmrImportPath.startsWith('/')) {
-                                hmrImportPath = './' + hmrImportPath
+                            if (mod.id === './app.js' || mod.id.startsWith('./pages/')) {
+                                const { staticProps } = await project.importModuleAsComponent(mod.id)
+                                if (staticProps) {
+                                    body += '\nexport const __staticProps = ' + JSON.stringify(staticProps) + ';\n'
+                                }
                             }
-                            jsContent = injectHmrCode(id, hmrImportPath, jsContent, id.endsWith('.js'))
                         }
                         req.respond({
                             status: 200,
@@ -107,7 +107,7 @@ export async function start(appDir: string, port: number, isDev = false) {
                                 'Content-Type': `application/${reqSourceMap ? 'json' : 'javascript'}; charset=utf-8`,
                                 'ETag': mod.hash
                             }),
-                            body: reqSourceMap ? mod.jsSourceMap : jsContent
+                            body
                         })
                     } else {
                         req.respond({
@@ -116,7 +116,7 @@ export async function start(appDir: string, port: number, isDev = false) {
                             body: createHtml({
                                 lang: 'en',
                                 head: ['<title>404 - page not found</title>'],
-                                body: `<p><strong><code>404</code></strong><small> - </small><span>page not found</span></p>`
+                                body: '<p><strong><code>404</code></strong><small> - </small><span>page not found</span></p>'
                             })
                         })
                     }
@@ -124,20 +124,25 @@ export async function start(appDir: string, port: number, isDev = false) {
                 }
 
                 // serve public files
-                if (path.basename(pathname).includes('.')) {
-                    const filePath = path.join(project.rootDir, 'public', pathname)
-                    if (existsSync(filePath)) {
-                        const body = await Deno.readFile(filePath)
+                const publicPath = path.join(project.rootDir, 'public', pathname)
+                try {
+                    const info = await Deno.lstat(publicPath)
+                    if (!info.isDirectory) {
+                        const body = await Deno.readFile(publicPath)
                         req.respond({
                             status: 200,
-                            headers: new Headers({ 'Content-Type': getContentType(filePath) }),
+                            headers: new Headers({ 'Content-Type': getContentType(publicPath) }),
                             body
                         })
                         continue
                     }
+                } catch (err) {
+                    if (!(err instanceof Deno.errors.NotFound)) {
+                        throw err
+                    }
                 }
 
-                const [status, html] = await project.getPageHtml({ pathname, search })
+                const [status, html] = await project.getPageHtml({ pathname, search: url.search })
                 req.respond({
                     status,
                     headers: new Headers({ 'Content-Type': 'text/html' }),
@@ -165,23 +170,32 @@ export async function start(appDir: string, port: number, isDev = false) {
     }
 }
 
-function injectHmrCode(modId: string, hmrImportPath: string, code: string, reactRefresh: boolean) {
+function useHmr({ id, jsContent }: { id: string, jsContent: string }) {
+    let hmrImportPath = path.relative(
+        path.dirname(path.resolve('/', id)),
+        '/-/postjs.io/hmr.js'
+    )
+    if (!hmrImportPath.startsWith('.') && !hmrImportPath.startsWith('/')) {
+        hmrImportPath = './' + hmrImportPath
+    }
+
     const text: string[] = [
         `import { createHotContext, RefreshRuntime, performReactRefresh } from ${JSON.stringify(hmrImportPath)}`,
-        `import.meta.hot = createHotContext(${JSON.stringify(modId)})`
+        `import.meta.hot = createHotContext(${JSON.stringify(id)})`
     ]
+    const reactRefresh = id.endsWith('.js')
     if (reactRefresh) {
         text.push(
             `const prevRefreshReg = window.$RefreshReg$`,
             `const prevRefreshSig = window.$RefreshSig$`,
             `window.$RefreshReg$ = (type, id) => {`,
-            `    RefreshRuntime.register(type, ${JSON.stringify(modId)} + " " + id)`,
+            `    RefreshRuntime.register(type, ${JSON.stringify(id)} + " " + id)`,
             `}`,
             `window.$RefreshSig$ = RefreshRuntime.createSignatureFunctionForTransform`
         )
     }
     text.push('')
-    text.push(code)
+    text.push(jsContent)
     text.push('')
     if (reactRefresh) {
         text.push(
