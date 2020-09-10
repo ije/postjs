@@ -54,10 +54,10 @@ export default class Project {
     readonly config: Config
     readonly ready: Promise<void>
 
-    private _modules: Map<string, Module> = new Map()
-    private _pageModules: Map<string, { moduleId: string, rendered: { head: string[], html: string } }> = new Map()
-    private _fsWatchQueue: Map<string, number> = new Map()
-    private _fsWatchListeners: Array<EventEmitter> = []
+    #modules: Map<string, Module> = new Map()
+    #pageModules: Map<string, { moduleId: string, rendered: { head: string[], html: string } }> = new Map()
+    #fsWatchQueue: Map<string, number> = new Map()
+    #fsWatchListeners: Array<EventEmitter> = []
 
     constructor(dir: string, mode: 'development' | 'production') {
         this.mode = mode
@@ -90,7 +90,7 @@ export default class Project {
     }
 
     get apiPaths() {
-        return Array.from(this._modules.keys()).filter(p => p.startsWith('./api/')).map(p => p.slice(1).replace(reModuleExt, ''))
+        return Array.from(this.#modules.keys()).filter(p => p.startsWith('./api/')).map(p => p.slice(1).replace(reModuleExt, ''))
     }
 
     get isDev() {
@@ -110,25 +110,26 @@ export default class Project {
             appModule: null,
             pageModules: {}
         }
-        if (this._modules.has('./app.js')) {
+        if (this.#modules.has('./app.js')) {
             manifest.appModule = {
-                hash: this._modules.get('./app.js')!.hash
+                hash: this.#modules.get('./app.js')!.hash
             }
         }
-        this._pageModules.forEach(({ moduleId }, pagePath) => {
-            const { hash } = this._modules.get(moduleId)!
+        this.#pageModules.forEach(({ moduleId }, pagePath) => {
+            const { hash } = this.#modules.get(moduleId)!
             manifest.pageModules[pagePath] = { moduleId, hash }
         })
         return manifest
     }
 
     async build() {
-
+        await this.ready
+        Deno.exit(0)
     }
 
     getModule(id: string): Module | null {
-        if (this._modules.has(id)) {
-            return this._modules.get(id)!
+        if (this.#modules.has(id)) {
+            return this.#modules.get(id)!
         }
         return null
     }
@@ -160,23 +161,23 @@ export default class Project {
 
     createFSWatcher(): EventEmitter {
         const e = new EventEmitter()
-        this._fsWatchListeners.push(e)
+        this.#fsWatchListeners.push(e)
         return e
     }
 
     removeFSWatcher(e: EventEmitter) {
         e.removeAllListeners()
-        const index = this._fsWatchListeners.indexOf(e)
+        const index = this.#fsWatchListeners.indexOf(e)
         if (index > -1) {
-            this._fsWatchListeners.splice(index, 1)
+            this.#fsWatchListeners.splice(index, 1)
         }
     }
 
     async getAPIHandle(path: string): Promise<APIHandle | null> {
         if (path) {
             const importPath = '.' + path + '.js'
-            if (this._modules.has(importPath)) {
-                const { default: handle } = await import(this._modules.get(importPath)!.jsFile)
+            if (this.#modules.has(importPath)) {
+                const { default: handle } = await import(this.#modules.get(importPath)!.jsFile)
                 return handle
             }
         }
@@ -188,14 +189,14 @@ export default class Project {
         const { baseUrl, defaultLocale } = this.config
         const url = route(
             baseUrl,
-            Array.from(this._pageModules.keys()),
+            Array.from(this.#pageModules.keys()),
             {
                 location,
                 defaultLocale,
                 fallback: '/404'
             }
         )
-        const mainMod = this._modules.get('./main.js')!
+        const mainMod = this.#modules.get('./main.js')!
         const { code, head, body } = await this._renderPage(url)
         const html = createHtml({
             lang: url.locale,
@@ -213,15 +214,15 @@ export default class Project {
         const { baseUrl, defaultLocale } = this.config
         const url = route(
             baseUrl,
-            Array.from(this._pageModules.keys()),
+            Array.from(this.#pageModules.keys()),
             {
                 location,
                 defaultLocale,
                 fallback: '/404'
             }
         )
-        if (this._pageModules.has(url.pagePath)) {
-            const { staticProps } = await this.importModuleAsComponent(this._pageModules.get(url.pagePath)!.moduleId)
+        if (this.#pageModules.has(url.pagePath)) {
+            const { staticProps } = await this.importModuleAsComponent(this.#pageModules.get(url.pagePath)!.moduleId)
             if (staticProps) {
                 return staticProps
             }
@@ -230,8 +231,8 @@ export default class Project {
     }
 
     async importModuleAsComponent(name: string, ...args: any[]) {
-        if (this._modules.has(name)) {
-            const { default: Component, getStaticProps } = await import(this._modules.get(name)!.jsFile)
+        if (this.#modules.has(name)) {
+            const { default: Component, getStaticProps } = await import(this.#modules.get(name)!.jsFile)
             const fn = [Component.getStaticProps, getStaticProps].filter(util.isFunction)[0]
             const data = fn ? await fn(...args) : null
             return { Component, staticProps: util.isObject(data) ? data : null }
@@ -299,7 +300,7 @@ export default class Project {
         for await (const { path: p } of walk(pagesDir, walkOptions)) {
             const name = path.basename(p)
             const pagePath = '/' + name.replace(reModuleExt, '').replace(/\s+/g, '-').replace(/\/?index$/i, '')
-            this._pageModules.set(pagePath, {
+            this.#pageModules.set(pagePath, {
                 moduleId: './pages/' + name.replace(reModuleExt, '') + '.js',
                 rendered: {
                     head: [],
@@ -330,7 +331,7 @@ export default class Project {
         }
 
         log.info(colors.bold('Pages'))
-        for (const path of this._pageModules.keys()) {
+        for (const path of this.#pageModules.keys()) {
             const isIndex = path == '/'
             log.info('○', path, isIndex ? colors.dim('(index)') : '')
         }
@@ -352,41 +353,41 @@ export default class Project {
                 const rp = util.trimPrefix(util.trimPrefix(p, rootDir), '/')
                 if ((reModuleExt.test(rp) || reStyleModuleExt.test(rp)) && !rp.startsWith('.postjs/') && !rp.startsWith(outputDir.slice(1))) {
                     const moduleId = './' + rp.replace(reModuleExt, '.js')
-                    if (this._fsWatchQueue.has(moduleId)) {
-                        clearTimeout(this._fsWatchQueue.get(moduleId)!)
+                    if (this.#fsWatchQueue.has(moduleId)) {
+                        clearTimeout(this.#fsWatchQueue.get(moduleId)!)
                     }
-                    this._fsWatchQueue.set(moduleId, setTimeout(() => {
-                        this._fsWatchQueue.delete(moduleId)
+                    this.#fsWatchQueue.set(moduleId, setTimeout(() => {
+                        this.#fsWatchQueue.delete(moduleId)
                         if (existsSync(p)) {
                             let type = 'modify'
-                            if (!this._modules.has(moduleId)) {
+                            if (!this.#modules.has(moduleId)) {
                                 type = 'add'
                             }
                             log.info(type, './' + rp)
                             this._compile('./' + rp, { forceCompile: true }).then(({ hash }) => {
                                 const hmrable = this.isHMRable(moduleId)
                                 if (hmrable) {
-                                    this._fsWatchListeners.forEach(e => e.emit(moduleId, type, hash))
+                                    this.#fsWatchListeners.forEach(e => e.emit(moduleId, type, hash))
                                 }
                                 if (moduleId.startsWith('./pages/')) {
                                     this._resetPageModule(moduleId)
                                 }
                                 this._updateDependency('./' + rp, hash, mod => {
                                     if (!hmrable && this.isHMRable(mod.id)) {
-                                        this._fsWatchListeners.forEach(e => e.emit(mod.id, 'modify', mod.hash))
+                                        this.#fsWatchListeners.forEach(e => e.emit(mod.id, 'modify', mod.hash))
                                     }
                                     if (mod.id.startsWith('./pages/')) {
                                         this._resetPageModule(mod.id)
                                     }
                                 })
                             })
-                        } else if (this._modules.has(moduleId)) {
+                        } else if (this.#modules.has(moduleId)) {
                             if (moduleId.startsWith('./pages/')) {
                                 this._removePageModule(moduleId)
                             }
-                            this._modules.delete(moduleId)
+                            this.#modules.delete(moduleId)
                             if (this.isHMRable(moduleId)) {
-                                this._fsWatchListeners.forEach(e => e.emit(moduleId, 'remove'))
+                                this.#fsWatchListeners.forEach(e => e.emit(moduleId, 'remove'))
                             }
                             log.info('remove', './' + rp)
                         }
@@ -398,19 +399,19 @@ export default class Project {
 
     private _removePageModule(moduleId: string) {
         let pagePath = ''
-        for (const [p, pm] of this._pageModules.entries()) {
+        for (const [p, pm] of this.#pageModules.entries()) {
             if (pm.moduleId === moduleId) {
                 pagePath = p
                 break
             }
         }
         if (pagePath !== '') {
-            this._pageModules.delete(pagePath)
+            this.#pageModules.delete(pagePath)
         }
     }
 
     private _resetPageModule(moduleId: string) {
-        for (const [p, pm] of this._pageModules.entries()) {
+        for (const [p, pm] of this.#pageModules.entries()) {
             if (pm.moduleId === moduleId) {
                 pm.rendered = {
                     head: [],
@@ -426,8 +427,8 @@ export default class Project {
         const isRemote = reHttp.test(sourceFile) || (sourceFile in importMap.imports && reHttp.test(importMap.imports[sourceFile]))
         const id = (isRemote ? util.trimPrefix(this._renameRemotePath(sourceFile), '/-/') : sourceFile).replace(reModuleExt, '.js')
 
-        if (this._modules.has(id) && !options?.forceCompile) {
-            return this._modules.get(id)!
+        if (this.#modules.has(id) && !options?.forceCompile) {
+            return this.#modules.get(id)!
         }
 
         const mod: Module = {
@@ -443,7 +444,7 @@ export default class Project {
             hash: '',
         }
         const name = path.basename(sourceFile.split('?')[0]).replace(reModuleExt, '')
-        const saveDir = path.join(rootDir, '.postjs', path.dirname(mod.isRemote ? this._renameRemotePath(sourceFile) : sourceFile))
+        const saveDir = path.join(rootDir, '.postjs', this.mode, path.dirname(mod.isRemote ? this._renameRemotePath(sourceFile) : sourceFile))
         const metaFile = path.join(saveDir, `${name}.meta.json`)
 
         if (existsSync(metaFile)) {
@@ -642,13 +643,13 @@ export default class Project {
             ])
         }
 
-        this._modules.set(mod.id, mod)
+        this.#modules.set(mod.id, mod)
 
         return mod
     }
 
     private _updateDependency(depPath: string, depHash: string, callback: (mod: Module) => void) {
-        this._modules.forEach(mod => {
+        this.#modules.forEach(mod => {
             mod.deps.forEach(dep => {
                 if (dep.path === depPath && dep.hash !== depHash) {
                     const depImportPath = this._relativePath(
@@ -763,9 +764,9 @@ export default class Project {
             head: ['<title>404 - page not found</title>'],
             body: '<p><strong><code>404</code></strong><small> - </small><span>page not found</span></p>',
         }
-        if (this._pageModules.has(url.pagePath)) {
-            const pm = this._pageModules.get(url.pagePath)!
-            const mod = this._modules.get(pm.moduleId)!
+        if (this.#pageModules.has(url.pagePath)) {
+            const pm = this.#pageModules.get(url.pagePath)!
+            const mod = this.#modules.get(pm.moduleId)!
             if (pm.rendered.html) {
                 ret.code = 200
                 ret.head = pm.rendered.head
@@ -782,7 +783,7 @@ export default class Project {
                     App,
                     Page
                 ] = await Promise.all([
-                    import(this._modules.get('./renderer.js')!.jsFile),
+                    import(this.#modules.get('./renderer.js')!.jsFile),
                     this.importModuleAsComponent('./app.js'),
                     this.importModuleAsComponent(pm.moduleId, url)
                 ])

@@ -1,4 +1,6 @@
 
+import Project from '../project.ts'
+
 export const helpMessage = `Builds the postjs app in production mode.
 
 Usage:
@@ -12,5 +14,6 @@ Options:
 `
 
 export default function (appDir: string, options: Record<string, string | boolean>) {
-
+    const project = new Project(appDir, 'production')
+    project.build()
 }

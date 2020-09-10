@@ -36,8 +36,8 @@ export function compile(fileName: string, source: string, { mode, rewriteImportP
     }
 
     return ts.transpileModule(source, {
-        reportDiagnostics: true,
         fileName,
+        reportDiagnostics: true,
         compilerOptions: {
             target: ts.ScriptTarget.ES2015,
             module: ts.ModuleKind.ES2015,
