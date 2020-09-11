@@ -14,88 +14,50 @@
 // Please consider also adding to 'react-devtools-shared/src/backend/ReactSymbols'
 // The Symbol used to tag the ReactElement-like types. If there is no native Symbol
 // nor polyfill, then a plain number is used for performance.
-var REACT_ELEMENT_TYPE = 0xeac7;
-var REACT_PORTAL_TYPE = 0xeaca;
-var REACT_FRAGMENT_TYPE = 0xeacb;
-var REACT_STRICT_MODE_TYPE = 0xeacc;
-var REACT_PROFILER_TYPE = 0xead2;
-var REACT_PROVIDER_TYPE = 0xeacd;
-var REACT_CONTEXT_TYPE = 0xeace;
-var REACT_FORWARD_REF_TYPE = 0xead0;
-var REACT_SUSPENSE_TYPE = 0xead1;
-var REACT_SUSPENSE_LIST_TYPE = 0xead8;
-var REACT_MEMO_TYPE = 0xead3;
-var REACT_LAZY_TYPE = 0xead4;
-var REACT_BLOCK_TYPE = 0xead9;
-var REACT_SERVER_BLOCK_TYPE = 0xeada;
-var REACT_FUNDAMENTAL_TYPE = 0xead5;
-var REACT_RESPONDER_TYPE = 0xead6;
-var REACT_SCOPE_TYPE = 0xead7;
-var REACT_OPAQUE_ID_TYPE = 0xeae0;
-var REACT_DEBUG_TRACING_MODE_TYPE = 0xeae1;
-var REACT_OFFSCREEN_TYPE = 0xeae2;
-var REACT_LEGACY_HIDDEN_TYPE = 0xeae3;
+let REACT_FORWARD_REF_TYPE = 0xead0
+let REACT_MEMO_TYPE = 0xead3
 
 if (typeof Symbol === 'function' && Symbol.for) {
-  var symbolFor = Symbol.for;
-  REACT_ELEMENT_TYPE = symbolFor('react.element');
-  REACT_PORTAL_TYPE = symbolFor('react.portal');
-  REACT_FRAGMENT_TYPE = symbolFor('react.fragment');
-  REACT_STRICT_MODE_TYPE = symbolFor('react.strict_mode');
-  REACT_PROFILER_TYPE = symbolFor('react.profiler');
-  REACT_PROVIDER_TYPE = symbolFor('react.provider');
-  REACT_CONTEXT_TYPE = symbolFor('react.context');
-  REACT_FORWARD_REF_TYPE = symbolFor('react.forward_ref');
-  REACT_SUSPENSE_TYPE = symbolFor('react.suspense');
-  REACT_SUSPENSE_LIST_TYPE = symbolFor('react.suspense_list');
-  REACT_MEMO_TYPE = symbolFor('react.memo');
-  REACT_LAZY_TYPE = symbolFor('react.lazy');
-  REACT_BLOCK_TYPE = symbolFor('react.block');
-  REACT_SERVER_BLOCK_TYPE = symbolFor('react.server.block');
-  REACT_FUNDAMENTAL_TYPE = symbolFor('react.fundamental');
-  REACT_RESPONDER_TYPE = symbolFor('react.responder');
-  REACT_SCOPE_TYPE = symbolFor('react.scope');
-  REACT_OPAQUE_ID_TYPE = symbolFor('react.opaque.id');
-  REACT_DEBUG_TRACING_MODE_TYPE = symbolFor('react.debug_trace_mode');
-  REACT_OFFSCREEN_TYPE = symbolFor('react.offscreen');
-  REACT_LEGACY_HIDDEN_TYPE = symbolFor('react.legacy_hidden');
+    REACT_FORWARD_REF_TYPE = Symbol.for('react.forward_ref')
+    REACT_MEMO_TYPE = Symbol.for('react.memo')
 }
 
-var PossiblyWeakMap = typeof WeakMap === 'function' ? WeakMap : Map; // We never remove these associations.
+const PossiblyWeakMap = typeof WeakMap === 'function' ? WeakMap : Map; // We never remove these associations.
 // It's OK to reference families, but use WeakMap/Set for types.
-
-var allFamiliesByID = new Map();
-var allFamiliesByType = new PossiblyWeakMap();
-var allSignaturesByType = new PossiblyWeakMap(); // This WeakMap is read by React, so we only put families
+const allFamiliesByID = new Map();
+const allFamiliesByType = new PossiblyWeakMap();
+const allSignaturesByType = new PossiblyWeakMap(); // This WeakMap is read by React, so we only put families
 // that have actually been edited here. This keeps checks fast.
 // $FlowIssue
+const updatedFamiliesByType = new PossiblyWeakMap();
 
-var updatedFamiliesByType = new PossiblyWeakMap(); // This is cleared on every performReactRefresh() call.
+// This is cleared on every performReactRefresh() call.
 // It is an array of [Family, NextType] tuples.
+let pendingUpdates = [];
 
-var pendingUpdates = []; // This is injected by the renderer via DevTools global hook.
+// This is injected by the renderer via DevTools global hook.
+const helpersByRendererID = new Map();
+const helpersByRoot = new Map();
 
-var helpersByRendererID = new Map();
-var helpersByRoot = new Map(); // We keep track of mounted roots so we can schedule updates.
+// We keep track of mounted roots so we can schedule updates.
+const mountedRoots = new Set();
+// If a root captures an error, we remember it so we can retry on edit.
+const failedRoots = new Set();
 
-var mountedRoots = new Set(); // If a root captures an error, we remember it so we can retry on edit.
-
-var failedRoots = new Set(); // In environments that support WeakMap, we also remember the last element for every root.
+// In environments that support WeakMap, we also remember the last element for every root.
 // It needs to be weak because we do this even for roots that failed to mount.
 // If there is no WeakMap, we won't attempt to do retrying.
 // $FlowIssue
-
-var rootElements = // $FlowIssue
-  typeof WeakMap === 'function' ? new WeakMap() : null;
-var isPerformingRefresh = false;
+const rootElements = typeof WeakMap === 'function' ? new WeakMap() : null;
+let isPerformingRefresh = false;
 
 function computeFullKey(signature) {
   if (signature.fullKey !== null) {
     return signature.fullKey;
   }
 
-  var fullKey = signature.ownKey;
-  var hooks;
+  let fullKey = signature.ownKey;
+  let hooks;
 
   try {
     hooks = signature.getCustomHooks();
@@ -108,8 +70,8 @@ function computeFullKey(signature) {
     return fullKey;
   }
 
-  for (var i = 0; i < hooks.length; i++) {
-    var hook = hooks[i];
+  for (let i = 0; i < hooks.length; i++) {
+    const hook = hooks[i];
 
     if (typeof hook !== 'function') {
       // Something's wrong. Assume we need to remount.
@@ -118,7 +80,7 @@ function computeFullKey(signature) {
       return fullKey;
     }
 
-    var nestedHookSignature = allSignaturesByType.get(hook);
+    let nestedHookSignature = allSignaturesByType.get(hook);
 
     if (nestedHookSignature === undefined) {
       // No signature means Hook wasn't in the source code, e.g. in a library.
@@ -126,7 +88,7 @@ function computeFullKey(signature) {
       continue;
     }
 
-    var nestedHookKey = computeFullKey(nestedHookSignature);
+    let nestedHookKey = computeFullKey(nestedHookSignature);
 
     if (nestedHookSignature.forceReset) {
       signature.forceReset = true;
@@ -140,8 +102,8 @@ function computeFullKey(signature) {
 }
 
 function haveEqualSignatures(prevType, nextType) {
-  var prevSignature = allSignaturesByType.get(prevType);
-  var nextSignature = allSignaturesByType.get(nextType);
+  const prevSignature = allSignaturesByType.get(prevType);
+  const nextSignature = allSignaturesByType.get(nextType);
 
   if (prevSignature === undefined && nextSignature === undefined) {
     return true;
@@ -183,9 +145,8 @@ function resolveFamily(type) {
   return updatedFamiliesByType.get(type);
 } // If we didn't care about IE11, we could use new Map/Set(iterable).
 
-
 function cloneMap(map) {
-  var clone = new Map();
+  const clone = new Map();
   map.forEach(function (value, key) {
     clone.set(key, value);
   });
@@ -193,7 +154,7 @@ function cloneMap(map) {
 }
 
 function cloneSet(set) {
-  var clone = new Set();
+  const clone = new Set();
   set.forEach(function (value) {
     clone.add(value);
   });
@@ -201,7 +162,6 @@ function cloneSet(set) {
 }
 
 function performReactRefresh() {
-
   if (pendingUpdates.length === 0) {
     return null;
   }
@@ -213,16 +173,16 @@ function performReactRefresh() {
   isPerformingRefresh = true;
 
   try {
-    var staleFamilies = new Set();
-    var updatedFamilies = new Set();
-    var updates = pendingUpdates;
+    const staleFamilies = new Set();
+    const updatedFamilies = new Set();
+    const updates = pendingUpdates;
     pendingUpdates = [];
     updates.forEach(function (_ref) {
-      var family = _ref[0],
+      let family = _ref[0],
         nextType = _ref[1];
       // Now that we got a real edit, we can create associations
       // that will be read by the React reconciler.
-      var prevType = family.current;
+      let prevType = family.current;
       updatedFamiliesByType.set(prevType, family);
       updatedFamiliesByType.set(nextType, family);
       family.current = nextType; // Determine whether this should be a re-render or a re-mount.
@@ -234,7 +194,7 @@ function performReactRefresh() {
       }
     }); // TODO: rename these fields to something more meaningful.
 
-    var update = {
+    let update = {
       updatedFamilies: updatedFamilies,
       // Families that will re-render preserving state
       staleFamilies: staleFamilies // Families that will be remounted
@@ -245,17 +205,17 @@ function performReactRefresh() {
       // This ensures that if *new* roots are mounted, they'll use the resolve handler.
       helpers.setRefreshHandler(resolveFamily);
     });
-    var didError = false;
-    var firstError = null; // We snapshot maps and sets that are mutated during commits.
+    let didError = false;
+    let firstError = null; // We snapshot maps and sets that are mutated during commits.
     // If we don't do this, there is a risk they will be mutated while
     // we iterate over them. For example, trying to recover a failed root
     // may cause another root to be added to the failed list -- an infinite loop.
 
-    var failedRootsSnapshot = cloneSet(failedRoots);
-    var mountedRootsSnapshot = cloneSet(mountedRoots);
-    var helpersByRootSnapshot = cloneMap(helpersByRoot);
+    const failedRootsSnapshot = cloneSet(failedRoots);
+    const mountedRootsSnapshot = cloneSet(mountedRoots);
+    const helpersByRootSnapshot = cloneMap(helpersByRoot);
     failedRootsSnapshot.forEach(function (root) {
-      var helpers = helpersByRootSnapshot.get(root);
+      const helpers = helpersByRootSnapshot.get(root);
 
       if (helpers === undefined) {
         throw new Error('Could not find helpers for a root. This is a bug in React Refresh.');
@@ -272,7 +232,7 @@ function performReactRefresh() {
         return;
       }
 
-      var element = rootElements.get(root);
+      let element = rootElements.get(root);
 
       try {
         helpers.scheduleRoot(root, element);
@@ -285,7 +245,7 @@ function performReactRefresh() {
       }
     });
     mountedRootsSnapshot.forEach(function (root) {
-      var helpers = helpersByRootSnapshot.get(root);
+      const helpers = helpersByRootSnapshot.get(root);
 
       if (helpers === undefined) {
         throw new Error('Could not find helpers for a root. This is a bug in React Refresh.');
@@ -314,6 +274,7 @@ function performReactRefresh() {
     isPerformingRefresh = false;
   }
 }
+
 function register(type, id) {
   {
     if (type === null) {
@@ -333,8 +294,7 @@ function register(type, id) {
     // None of this bookkeeping affects reconciliation
     // until the first performReactRefresh() call above.
 
-
-    var family = allFamiliesByID.get(id);
+    let family = allFamiliesByID.get(id);
 
     if (family === undefined) {
       family = {
@@ -360,13 +320,14 @@ function register(type, id) {
     }
   }
 }
+
 function setSignature(type, key) {
-  var forceReset = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : false;
-  var getCustomHooks = arguments.length > 3 ? arguments[3] : undefined;
+  const forceReset = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : false;
+  const getCustomHooks = arguments.length > 3 ? arguments[3] : undefined;
 
   {
     allSignaturesByType.set(type, {
-      forceReset: forceReset,
+      forceReset,
       ownKey: key,
       fullKey: null,
       getCustomHooks: getCustomHooks || function () {
@@ -379,34 +340,37 @@ function setSignature(type, key) {
 
 function collectCustomHooksForSignature(type) {
   {
-    var signature = allSignaturesByType.get(type);
+    const signature = allSignaturesByType.get(type);
 
     if (signature !== undefined) {
       computeFullKey(signature);
     }
   }
 }
+
 function getFamilyByID(id) {
   {
     return allFamiliesByID.get(id);
   }
 }
+
 function getFamilyByType(type) {
   {
     return allFamiliesByType.get(type);
   }
 }
+
 function findAffectedHostInstances(families) {
   {
-    var affectedInstances = new Set();
+    const affectedInstances = new Set();
     mountedRoots.forEach(function (root) {
-      var helpers = helpersByRoot.get(root);
+      const helpers = helpersByRoot.get(root);
 
       if (helpers === undefined) {
         throw new Error('Could not find helpers for a root. This is a bug in React Refresh.');
       }
 
-      var instancesForRoot = helpers.findHostInstancesForRefresh(root, families);
+      const instancesForRoot = helpers.findHostInstancesForRefresh(root, families);
       instancesForRoot.forEach(function (inst) {
         affectedInstances.add(inst);
       });
@@ -414,19 +378,20 @@ function findAffectedHostInstances(families) {
     return affectedInstances;
   }
 }
+
 function injectIntoGlobalHook(globalObject) {
   {
     // For React Native, the global hook will be set up by require('react-devtools-core').
     // That code will run before us. So we need to monkeypatch functions on existing hook.
     // For React Web, the global hook will be set up by the extension.
     // This will also run before us.
-    var hook = globalObject.__REACT_DEVTOOLS_GLOBAL_HOOK__;
+    let hook = globalObject.__REACT_DEVTOOLS_GLOBAL_HOOK__;
 
     if (hook === undefined) {
       // However, if there is no DevTools extension, we'll need to set up the global hook ourselves.
       // Note that in this case it's important that renderer code runs *after* this method call.
       // Otherwise, the renderer will think that there is no global hook, and won't do the injection.
-      var nextID = 0;
+      let nextID = 0;
       globalObject.__REACT_DEVTOOLS_GLOBAL_HOOK__ = hook = {
         renderers: new Map(),
         supportsFiber: true,
@@ -439,11 +404,10 @@ function injectIntoGlobalHook(globalObject) {
       };
     } // Here, we just want to get a reference to scheduleRefresh.
 
-
-    var oldInject = hook.inject;
+    const oldInject = hook.inject;
 
     hook.inject = function (injected) {
-      var id = oldInject.apply(this, arguments);
+      const id = oldInject.apply(this, arguments);
 
       if (typeof injected.scheduleRefresh === 'function' && typeof injected.setRefreshHandler === 'function') {
         // This version supports React Refresh.
@@ -455,7 +419,6 @@ function injectIntoGlobalHook(globalObject) {
     // This is useful if ReactDOM has already been initialized.
     // https://github.com/facebook/react/issues/17626
 
-
     hook.renderers.forEach(function (injected, id) {
       if (typeof injected.scheduleRefresh === 'function' && typeof injected.setRefreshHandler === 'function') {
         // This version supports React Refresh.
@@ -463,9 +426,8 @@ function injectIntoGlobalHook(globalObject) {
       }
     }); // We also want to track currently mounted roots.
 
-    var oldOnCommitFiberRoot = hook.onCommitFiberRoot;
-
-    var oldOnScheduleFiberRoot = hook.onScheduleFiberRoot || function () { };
+    const oldOnCommitFiberRoot = hook.onCommitFiberRoot;
+    const oldOnScheduleFiberRoot = hook.onScheduleFiberRoot || function () { };
 
     hook.onScheduleFiberRoot = function (id, root, children) {
       if (!isPerformingRefresh) {
@@ -482,21 +444,21 @@ function injectIntoGlobalHook(globalObject) {
     };
 
     hook.onCommitFiberRoot = function (id, root, maybePriorityLevel, didError) {
-      var helpers = helpersByRendererID.get(id);
+      const helpers = helpersByRendererID.get(id);
 
       if (helpers === undefined) {
         return;
       }
 
       helpersByRoot.set(root, helpers);
-      var current = root.current;
-      var alternate = current.alternate; // We need to determine whether this root has just (un)mounted.
+      const current = root.current;
+      const alternate = current.alternate; // We need to determine whether this root has just (un)mounted.
       // This logic is copy-pasted from similar logic in the DevTools backend.
       // If this breaks with some refactoring, you'll want to update DevTools too.
 
       if (alternate !== null) {
-        var wasMounted = alternate.memoizedState != null && alternate.memoizedState.element != null;
-        var isMounted = current.memoizedState != null && current.memoizedState.element != null;
+        const wasMounted = alternate.memoizedState != null && alternate.memoizedState.element != null;
+        const isMounted = current.memoizedState != null && current.memoizedState.element != null;
 
         if (!wasMounted && isMounted) {
           // Mount a new root.
@@ -527,6 +489,7 @@ function injectIntoGlobalHook(globalObject) {
     };
   }
 }
+
 function hasUnrecoverableErrors() {
   // TODO: delete this after removing dependency in RN.
   return false;
@@ -540,7 +503,7 @@ function _getMountedRootCount() {
 // Signatures let us decide whether the Hook order has changed on refresh.
 //
 // This function is intended to be used as a transform target, e.g.:
-// var _s = createSignatureFunctionForTransform()
+// let _s = createSignatureFunctionForTransform()
 //
 // function Hello() {
 //   const [foo, setFoo] = useState(0);
@@ -565,9 +528,9 @@ function createSignatureFunctionForTransform() {
     // First, we'll know the signature itself. This happens outside the component.
     // Then, we'll know the references to custom Hooks. This happens inside the component.
     // After that, the returned function will be a fast path no-op.
-    var status = 'needsSignature';
-    var savedType;
-    var hasCustomHooks;
+    let status = 'needsSignature';
+    let savedType;
+    let hasCustomHooks;
     return function (type, key, forceReset, getCustomHooks) {
       switch (status) {
         case 'needsSignature':
@@ -595,6 +558,7 @@ function createSignatureFunctionForTransform() {
     };
   }
 }
+
 function isLikelyComponentType(type) {
   {
     switch (typeof type) {
@@ -607,13 +571,12 @@ function isLikelyComponentType(type) {
               return true;
             }
 
-            var ownNames = Object.getOwnPropertyNames(type.prototype);
+            const ownNames = Object.getOwnPropertyNames(type.prototype);
 
             if (ownNames.length > 1 || ownNames[0] !== 'constructor') {
               // This looks like a class.
               return false;
             } // eslint-disable-next-line no-proto
-
 
             if (type.prototype.__proto__ !== Object.prototype) {
               // It has a superclass.
@@ -623,8 +586,7 @@ function isLikelyComponentType(type) {
 
           } // For plain functions and arrows, use name as a heuristic.
 
-
-          var name = type.name || type.displayName;
+          const name = type.name || type.displayName;
           return typeof name === 'string' && /^[A-Z]/.test(name);
         }
 
