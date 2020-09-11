@@ -91,7 +91,7 @@ export async function start(appDir: string, port: number, isDev = false) {
                             if (mod.id === './app.js' || mod.id.startsWith('./pages/')) {
                                 const { staticProps } = await project.importModuleAsComponent(mod.id)
                                 if (staticProps) {
-                                    body += '\nexport const __staticProps = ' + JSON.stringify(staticProps) + ';\n'
+                                    body = 'export const __staticProps = ' + JSON.stringify(staticProps) + ';\n' + body
                                 }
                             }
                             if (project.isHMRable(mod.id)) {
