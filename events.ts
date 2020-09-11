@@ -28,7 +28,7 @@ export interface WrappedFunction extends Function {
 /**
  * See also https://nodejs.org/api/events.html
  */
-export default class EventEmitter {
+export class EventEmitter {
     public static defaultMaxListeners = 10;
     public static errorMonitor = Symbol("events.errorMonitor");
     private maxListeners: number | undefined;
@@ -346,4 +346,6 @@ export default class EventEmitter {
     }
 }
 
-export { EventEmitter };
+const events = new EventEmitter();
+events.setMaxListeners(1 << 10); // 1024
+export default events;

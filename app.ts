@@ -1,7 +1,7 @@
 import React, { ComponentType, createContext, useCallback, useEffect, useState } from 'https://esm.sh/react'
 import { hydrate } from 'https://esm.sh/react-dom'
 import { AppManifest, RouterURL } from './api.ts'
-import { EventEmitter } from './events.ts'
+import events from './events.ts'
 import route from './route.ts'
 import { RouterContext } from './router.ts'
 import util from './util.ts'
@@ -14,9 +14,6 @@ export const AppManifestContext = createContext<AppManifest>({
     pageModules: {},
 })
 AppManifestContext.displayName = 'AppManifestContext'
-
-export const events = new EventEmitter()
-events.setMaxListeners(1 << 10)
 
 function Main({
     manifest: initialManifest,

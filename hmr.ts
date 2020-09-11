@@ -4,12 +4,9 @@
  * @link https://github.com/pikapkg/esm-hmr
  */
 
-import { EventEmitter } from './events.ts'
+import events from './events.ts'
 import util from './util.ts'
 import runtime from './vendor/react-refresh/runtime.js'
-
-const { location, WebSocket } = window as any
-const { protocol, host } = location
 
 interface Callback {
     (...args: any[]): void
@@ -65,14 +62,12 @@ class Module {
     }
 }
 
-class HMR extends EventEmitter {
+class HMR {
     #modules: Map<string, Module>
     #messageQueue: any[]
     #socket: IWebSocket
 
     constructor() {
-        super()
-        this.setMaxListeners(1 << 10)
         this.#modules = new Map()
         this.#messageQueue = []
         this.#socket = new WebSocket((protocol === 'https:' ? 'wss' : 'ws') + '://' + host + '/_hmr', /*  'postjs-hmr' */)
@@ -84,11 +79,18 @@ class HMR extends EventEmitter {
             if (!rawData) {
                 return
             }
-            const { type, id, updateUrl } = JSON.parse(rawData)
-            if (type === 'update' && this.#modules.has(id)) {
+            const { type, id, updateUrl, hash } = JSON.parse(rawData)
+            if (type === 'add') {
+                events.emit('add-module', id, hash)
+                console.log(`[HMR] add module ${JSON.stringify({ id, hash })}`)
+            } else if (type === 'update' && this.#modules.has(id)) {
                 const mod = this.#modules.get(id)!
                 mod.applyUpdate(updateUrl)
-                console.log(`[HMR] update module '${mod.id}'`)
+                console.log(`[HMR] update module '${id}'`)
+            } else if (type === 'remove' && this.#modules.has(id)) {
+                this.#modules.delete(id)
+                events.emit('remove-module', id)
+                console.log(`[HMR] remove module '${id}'`)
             }
         })
         console.log('[HMR] listening for file changes...')
@@ -115,14 +117,16 @@ class HMR extends EventEmitter {
     }
 }
 
+const { location, WebSocket } = window as any
+const { protocol, host } = location
 const hmr = new HMR()
+
+export const createHotContext = (id: string) => hmr.createHotContext(id)
+export const performReactRefresh = util.debounce(runtime.performReactRefresh, 30)
+export const RefreshRuntime = runtime
 
 runtime.injectIntoGlobalHook(window)
 Object.assign(window, {
     $RefreshReg$: () => { },
     $RefreshSig$: () => (type: any) => type
 })
-
-export const createHotContext = (id: string) => hmr.createHotContext(id)
-export const performReactRefresh = util.debounce(runtime.performReactRefresh, 30)
-export const RefreshRuntime = runtime
