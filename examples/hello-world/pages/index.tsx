@@ -1,6 +1,5 @@
-import React from 'https://esm.sh/react'
+import React, { useState } from 'https://esm.sh/react'
 import Logo from '../components/logo.tsx'
-import { useCount } from '../shared/hooks.ts'
 import '../style/index.less'
 
 export async function getStaticProps() {
@@ -8,24 +7,24 @@ export async function getStaticProps() {
 }
 
 export default function Home({ name }: { name: string }) {
-    const { count, increase, decrease } = useCount(0)
+    const [count, setCount] = useState(0)
 
     return (
         <div className="wrapper">
-            <p><Logo height={45} /></p>
+            <p><Logo /></p>
             <p>Welcome to use <strong>{name}</strong>!</p>
             <p className="links">
                 <span>[</span>
-                    <a href="https://postjs.io/docs" target="_blank">Docs</a>
+                <a href="https://postjs.io/docs" target="_blank">Docs</a>
                 <span>|</span>
-                    <a href="https://github.com/postui/postjs" target="_blank">Github</a>
+                <a href="https://github.com/postui/postjs" target="_blank">Github</a>
                 <span>]</span>
             </p>
             <p className="counter">
                 <span>Counter:</span>
                 <strong>{count}</strong>
-                <button onClick={decrease}>-</button>
-                <button onClick={increase}>+</button>
+                <button onClick={() => setCount(n => n-1)}>-</button>
+                <button onClick={() => setCount(n => n+1)}>+</button>
             </p>
         </div>
     )
