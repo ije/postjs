@@ -1,7 +1,7 @@
 /**
  * TypeScript AST Transformer for react refresh.
- * @ref https://github.com/facebook/react/issues/16604#issuecomment-528663101
- * @ref https://github.com/facebook/react/blob/master/packages/react-refresh/src/ReactFreshBabelPlugin.js
+ * @link https://github.com/facebook/react/issues/16604#issuecomment-528663101
+ * @link https://github.com/facebook/react/blob/master/packages/react-refresh/src/ReactFreshBabelPlugin.js
  */
 
 // @deno-types="../vendor/typescript/lib/typescript.d.ts"

@@ -4,7 +4,7 @@ import ts from '../vendor/typescript/lib/typescript.js'
 /**
  * TypeScript AST Transformer that adds source file and line number to JSX elements.
  *
- * @ref https://github.com/dropbox/ts-transform-react-jsx-source
+ * @link https://github.com/dropbox/ts-transform-react-jsx-source
  */
 export default function transformReactJsxSource(sf: ts.SourceFile, node: ts.Node): ts.VisitResult<ts.Node> {
     if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {

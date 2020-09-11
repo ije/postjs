@@ -4,7 +4,7 @@ import ts from '../vendor/typescript/lib/typescript.js'
 /**
  * TS AST transformer to rewrite import path.
  *
- * @ref https://github.com/dropbox/ts-transform-import-path-rewrite
+ * @link https://github.com/dropbox/ts-transform-import-path-rewrite
  */
 export default function transformImportPathRewrite(sf: ts.SourceFile, node: ts.Node, rewriteImportPath: (importPath: string) => string): ts.VisitResult<ts.Node> {
     let importPath = ''
