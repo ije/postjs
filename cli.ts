@@ -159,7 +159,7 @@ function main() {
     const command = hasCommand ? args.shift() : 'dev'
     import(`./cli/${command}.ts`).then(({ default: cmd }) => {
         const appDir = path.resolve(args[0] || '.')
-        if (!existsSync(appDir)) {
+        if (command !== 'init' && !existsSync(appDir)) {
             log.error('No such app directory:', appDir)
             return
         }
