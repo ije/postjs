@@ -79,9 +79,7 @@ export async function start(appDir: string, port: number, isDev = false) {
                     if (mod) {
                         const etag = req.headers.get('If-None-Match')
                         if (etag && etag === mod.hash) {
-                            req.respond({
-                                status: 304
-                            })
+                            req.respond({ status: 304 })
                             continue
                         }
 
@@ -89,16 +87,15 @@ export async function start(appDir: string, port: number, isDev = false) {
                         if (reqSourceMap) {
                             body = mod.jsSourceMap
                         } else {
-                            if (project.isHMRable(mod.id)) {
-                                body = useHmr(mod)
-                            } else {
-                                body = mod.jsContent
-                            }
+                            body = mod.jsContent
                             if (mod.id === './app.js' || mod.id.startsWith('./pages/')) {
                                 const { staticProps } = await project.importModuleAsComponent(mod.id)
                                 if (staticProps) {
                                     body += '\nexport const __staticProps = ' + JSON.stringify(staticProps) + ';\n'
                                 }
+                            }
+                            if (project.isHMRable(mod.id)) {
+                                body = injectHmr(mod.id, body)
                             }
                         }
                         req.respond({
@@ -170,7 +167,7 @@ export async function start(appDir: string, port: number, isDev = false) {
     }
 }
 
-function useHmr({ id, jsContent }: { id: string, jsContent: string }) {
+function injectHmr(id: string, jsContent: string) {
     let hmrImportPath = path.relative(
         path.dirname(path.resolve('/', id)),
         '/-/postjs.io/hmr.js'
@@ -179,7 +176,7 @@ function useHmr({ id, jsContent }: { id: string, jsContent: string }) {
         hmrImportPath = './' + hmrImportPath
     }
 
-    const text: string[] = [
+    const text = [
         `import { createHotContext, RefreshRuntime, performReactRefresh } from ${JSON.stringify(hmrImportPath)}`,
         `import.meta.hot = createHotContext(${JSON.stringify(id)})`
     ]
@@ -204,9 +201,7 @@ function useHmr({ id, jsContent }: { id: string, jsContent: string }) {
             'import.meta.hot.accept(performReactRefresh)'
         )
     } else {
-        text.push(
-            'import.meta.hot.accept()'
-        )
+        text.push('import.meta.hot.accept()')
     }
     return text.join('\n')
 }

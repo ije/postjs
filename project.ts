@@ -12,8 +12,8 @@ import AnsiUp from './vendor/ansi-up/ansi-up.ts'
 import less from './vendor/less/dist/less.js'
 
 const reHttp = /^https?:\/\//i
-const reModuleExt = /\.(m?jsx?|tsx?)$/i
-const reStyleModuleExt = /\.(css|less|sass)$/i
+const reModuleExt = /\.(js|jsx|mjs|ts|tsx)$/i
+const reStyleModuleExt = /\.(css|less|sass|scss)$/i
 const reHashJs = /\.[0-9a-fx]{9}\.js$/i
 
 interface Config {
@@ -90,15 +90,9 @@ export default class Project {
     }
 
     get apiPaths() {
-        return Array.from(this.#modules.keys()).filter(p => p.startsWith('./api/')).map(p => p.slice(1).replace(reModuleExt, ''))
-    }
-
-    get isDev() {
-        return this.mode === 'development'
-    }
-
-    isHMRable(moduleId: string) {
-        return moduleId === './app.js' || moduleId.startsWith('./pages/') || moduleId.startsWith('./components/') || reStyleModuleExt.test(moduleId)
+        return Array.from(this.#modules.keys())
+            .filter(p => p.startsWith('./api/'))
+            .map(p => p.slice(1).replace(reModuleExt, ''))
     }
 
     get manifest() {
@@ -122,9 +116,12 @@ export default class Project {
         return manifest
     }
 
-    async build() {
-        await this.ready
-        Deno.exit(0)
+    get isDev() {
+        return this.mode === 'development'
+    }
+
+    isHMRable(moduleId: string) {
+        return moduleId === './app.js' || moduleId.startsWith('./pages/') || moduleId.startsWith('./components/') || reStyleModuleExt.test(moduleId)
     }
 
     getModule(id: string): Module | null {
@@ -210,32 +207,19 @@ export default class Project {
         return [code, html]
     }
 
-    async getPageStaticProps(location: Location) {
-        const { baseUrl, defaultLocale } = this.config
-        const url = route(
-            baseUrl,
-            Array.from(this.#pageModules.keys()),
-            {
-                location,
-                defaultLocale,
-                fallback: '/404'
-            }
-        )
-        if (this.#pageModules.has(url.pagePath)) {
-            const { staticProps } = await this.importModuleAsComponent(this.#pageModules.get(url.pagePath)!.moduleId)
-            if (staticProps) {
-                return staticProps
-            }
-        }
-        return null
+    async build() {
+        await this.ready
+        Deno.exit(0)
     }
 
-    async importModuleAsComponent(name: string, ...args: any[]) {
-        if (this.#modules.has(name)) {
-            const { default: Component, getStaticProps } = await import(this.#modules.get(name)!.jsFile)
-            const fn = [Component.getStaticProps, getStaticProps].filter(util.isFunction)[0]
-            const data = fn ? await fn(...args) : null
-            return { Component, staticProps: util.isObject(data) ? data : null }
+    async importModuleAsComponent(moduleId: string, ...args: any[]) {
+        if (this.#modules.has(moduleId)) {
+            const { default: Component, getStaticProps } = await import(this.#modules.get(moduleId)!.jsFile)
+            if (util.isLikelyReactComponent(Component)) {
+                const fn = [Component.getStaticProps, getStaticProps].filter(util.isFunction)[0]
+                const data = fn ? await fn(...args) : null
+                return { Component, staticProps: util.isPlainObject(data) ? data : null }
+            }
         }
         return {}
     }
@@ -319,11 +303,11 @@ export default class Project {
 
         const innerModules: Record<string, string> = {
             './main.js': [
-                `import 'https://postjs.io/hmr.ts'`,
+                this.isDev && `import 'https://postjs.io/hmr.ts'`,
                 `import 'https://postjs.io/vendor/tslib/tslib.js'`,
                 `import { bootstrap } from 'https://postjs.io/app.ts'`,
                 `bootstrap(${JSON.stringify(this.manifest)})`
-            ].join('\n'),
+            ].filter(Boolean).join('\n'),
             './renderer.js': `export * from 'https://postjs.io/renderer.ts'`
         }
         for (const path in innerModules) {
@@ -431,6 +415,9 @@ export default class Project {
             return this.#modules.get(id)!
         }
 
+        const name = path.basename(sourceFile.split('?')[0]).replace(reModuleExt, '')
+        const saveDir = path.join(rootDir, '.postjs', this.mode, path.dirname(isRemote ? this._renameRemotePath(sourceFile) : sourceFile))
+        const metaFile = path.join(saveDir, `${name}.meta.json`)
         const mod: Module = {
             id,
             isRemote,
@@ -443,20 +430,20 @@ export default class Project {
             jsSourceMap: '',
             hash: '',
         }
-        const name = path.basename(sourceFile.split('?')[0]).replace(reModuleExt, '')
-        const saveDir = path.join(rootDir, '.postjs', this.mode, path.dirname(mod.isRemote ? this._renameRemotePath(sourceFile) : sourceFile))
-        const metaFile = path.join(saveDir, `${name}.meta.json`)
 
         if (existsSync(metaFile)) {
             const { sourceHash, hash, deps } = JSON.parse(await Deno.readTextFile(metaFile))
-            if (util.isNEString(sourceHash) && util.isNEString(hash) && util.isArray(deps)) {
-                mod.sourceHash = sourceHash
-                mod.hash = hash
-                mod.deps = deps
-                mod.jsFile = path.join(saveDir, name + (mod.isRemote ? '' : '.' + hash.slice(0, 9))) + '.js'
-                mod.jsContent = await Deno.readTextFile(mod.jsFile)
+            const jsFile = path.join(saveDir, name + (mod.isRemote ? '' : '.' + hash.slice(0, 9))) + '.js'
+            if (util.isNEString(sourceHash) && util.isNEString(hash) && util.isArray(deps) && existsSync(jsFile)) {
                 try {
-                    mod.jsSourceMap = await Deno.readTextFile(mod.jsFile + '.map')
+                    mod.jsContent = await Deno.readTextFile(jsFile)
+                    if (existsSync(jsFile + '.map')) {
+                        mod.jsSourceMap = await Deno.readTextFile(jsFile + '.map')
+                    }
+                    mod.jsFile = jsFile
+                    mod.hash = hash
+                    mod.deps = deps
+                    mod.sourceHash = sourceHash
                 } catch (e) { }
             }
         }
@@ -481,7 +468,7 @@ export default class Project {
                     break
                 }
             }
-            if ((sourceFile === 'https://esm.sh/react' || sourceFile === 'https://esm.sh/react-dom') && this.isDev) {
+            if (this.isDev && (sourceFile === 'https://esm.sh/react' || sourceFile === 'https://esm.sh/react-dom')) {
                 url += '?env=development'
             }
             if (mod.sourceHash === '') {
