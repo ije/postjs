@@ -89,25 +89,29 @@ function main() {
                 const port = parseInt(match[2])
                 listenAndServe({ port }, async (req: ServerRequest) => {
                     const url = new URL('http://localhost' + req.url)
-                    const filepath = path.join(Deno.cwd(), url.pathname)
-                    try {
-                        if (/^\/vendor\/react(\-dom)?$/.test(url.pathname)) {
-                            const vendorName = path.basename(url.pathname)
-                            const env = url.searchParams.get('env') === 'development' ? 'development' : 'production'
-                            req.respond({
-                                status: 200,
-                                headers: new Headers({
-                                    'Content-Type': 'application/javascript',
-                                    'X-TypeScript-Types': `/vendor/${vendorName}/types/index.d.ts`
-                                }),
-                                body: [
-                                    `export * from '/${vendorName}/${vendorName}.${env}.js';`,
-                                    `export {default} from '/${vendorName}/${vendorName}.${env}.js';`
-                                ].join('\n')
-                            })
-                            return
-                        }
 
+                    if (/^\/react(\-dom)?$/.test(url.pathname)) {
+                        const vendorName = path.basename(url.pathname)
+                        const env = url.searchParams.get('env') === 'development' ? 'development' : 'production'
+                        req.respond({
+                            status: 200,
+                            headers: new Headers({
+                                'Content-Type': 'application/javascript',
+                                'X-TypeScript-Types': `/${vendorName}/types/index.d.ts`
+                            }),
+                            body: [
+                                `export * from '/${vendorName}/${vendorName}.${env}.js';`,
+                                `export { default } from '/${vendorName}/${vendorName}.${env}.js';`
+                            ].join('\n')
+                        })
+                        return
+                    }
+
+                    try {
+                        let filepath = path.join(Deno.cwd(), url.pathname)
+                        if (/^\/react(\-dom)?\//.test(url.pathname)) {
+                            filepath = path.join(Deno.cwd(), 'vendor', url.pathname)
+                        }
                         const info = await Deno.lstat(filepath)
                         if (info.isDirectory) {
                             const r = Deno.readDir(filepath)
