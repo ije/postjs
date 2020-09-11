@@ -303,8 +303,8 @@ export default class Project {
 
         const innerModules: Record<string, string> = {
             './main.js': [
-                this.isDev && `import 'https://postjs.io/hmr.ts'`,
                 `import 'https://postjs.io/vendor/tslib/tslib.js'`,
+                this.isDev && `import 'https://postjs.io/hmr.ts'`,
                 `import { bootstrap } from 'https://postjs.io/app.ts'`,
                 `bootstrap(${JSON.stringify(this.manifest)})`
             ].filter(Boolean).join('\n'),
@@ -571,8 +571,8 @@ export default class Project {
                     rewriteImportPath: (path: string) => this._rewriteImportPath(mod, path)
                 }
                 const { diagnostics, outputText, sourceMapText } = compile(mod.sourceFile, sourceContent, compileOptions)
-                if (diagnostics && diagnostics.length) {
-                    throw new Error(`compile ${sourceFile}: ${JSON.stringify(diagnostics)}`)
+                if (diagnostics && diagnostics.length > 0) {
+                    throw new Error(`compile ${sourceFile}: ${diagnostics.map(d => d.messageText).join(' ')}`)
                 }
                 mod.jsContent = outputText.replace(/ from ("|')tslib("|');?/g, ' from ' + JSON.stringify(this._relativePath(
                     path.dirname(path.resolve('/', mod.isRemote ? this._renameRemotePath(mod.sourceFile) : mod.sourceFile)),
@@ -774,8 +774,8 @@ export default class Project {
                     this.importModuleAsComponent('./app.js'),
                     this.importModuleAsComponent(pm.moduleId, url)
                 ])
-                if (util.isFunction(Page.Component)) {
-                    const html = renderPage(url, util.isFunction(App.Component) ? App : undefined, Page)
+                if (Page.Component) {
+                    const html = renderPage(url, App.Component ? App : undefined, Page)
                     const head = renderHead(mod.deps.filter(({ path }) => reStyleModuleExt.test(path)).map(({ path }) => path))
                     ret.code = 200
                     ret.head = head

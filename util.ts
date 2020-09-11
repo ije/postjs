@@ -24,7 +24,7 @@ export default {
         return Array.isArray(a) && a.length > 0
     },
     isPlainObject(a: any): a is Record<string, any> {
-        return typeof a === 'object' && a !== null && !this.isArray(a)
+        return typeof a === 'object' && a !== null && !this.isArray(a) && Object.getPrototypeOf(a) == Object.prototype
     },
     isFunction(a: any): a is Function {
         return typeof a === 'function'
@@ -50,6 +50,7 @@ export default {
             switch (typeof type) {
                 case 'function': {
                     // First, deal with classes.
+
                     if (type.prototype != null) {
                         if (type.prototype.isReactComponent) {
                             // React class.
@@ -61,10 +62,10 @@ export default {
                             return false
                         }
                         // eslint-disable-next-line no-proto
-                        if (type.prototype.__proto__ !== Object.prototype) {
-                            // It has a superclass.
-                            return false
-                        }
+                        // if (type.prototype.__proto__ !== Object.prototype) {
+                        //     // It has a superclass.
+                        //     return false
+                        // }
                         // Pass through.
                         // This looks like a regular function with empty prototype.
                     }
