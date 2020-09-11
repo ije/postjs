@@ -21,7 +21,6 @@ interface IWebSocket {
 
 class Module {
     #id: string
-    #hmr: HMR
     #isLocked: boolean = false
     #isAccepted: boolean = false
     #acceptCallbacks: Callback[] = []
@@ -30,9 +29,8 @@ class Module {
         return this.#id
     }
 
-    constructor(id: string, hmr: HMR) {
+    constructor(id: string) {
         this.#id = id
-        this.#hmr = hmr
     }
 
     lock(): void {
@@ -44,7 +42,7 @@ class Module {
             return
         }
         if (!this.#isAccepted) {
-            this.#hmr.sendMessage({ id: this.id, type: 'hotAccept' })
+            sendMessage({ id: this.id, type: 'hotAccept' })
             this.#isAccepted = true
         }
         if (callback) {
@@ -64,18 +62,11 @@ class Module {
 
 class HMR {
     #modules: Map<string, Module>
-    #messageQueue: any[]
-    #socket: IWebSocket
 
     constructor() {
         this.#modules = new Map()
-        this.#messageQueue = []
-        this.#socket = new WebSocket((protocol === 'https:' ? 'wss' : 'ws') + '://' + host + '/_hmr', /*  'postjs-hmr' */)
-        this.#socket.addEventListener('open', () => {
-            this.#messageQueue.forEach(msg => this.#socket.send(JSON.stringify(msg)))
-            this.#messageQueue = []
-        })
-        this.#socket.addEventListener('message', ({ data: rawData }: { data?: string }) => {
+
+        socket.addEventListener('message', ({ data: rawData }: { data?: string }) => {
             if (!rawData) {
                 return
             }
@@ -103,30 +94,37 @@ class HMR {
             return mod
         }
 
-        const mod = new Module(id, this)
+        const mod = new Module(id)
         this.#modules.set(id, mod)
         return mod
-    }
-
-    sendMessage(msg: any) {
-        if (this.#socket.readyState !== this.#socket.OPEN) {
-            this.#messageQueue.push(msg)
-        } else {
-            this.#socket.send(JSON.stringify(msg))
-        }
     }
 }
 
 const { location, WebSocket } = window as any
 const { protocol, host } = location
+const messageQueue: any[] = []
+const socket: IWebSocket = new WebSocket((protocol === 'https:' ? 'wss' : 'ws') + '://' + host + '/_hmr', /*  'postjs-hmr' */)
 const hmr = new HMR()
 
-export const createHotContext = (id: string) => hmr.createHotContext(id)
-export const performReactRefresh = util.debounce(runtime.performReactRefresh, 30)
-export const RefreshRuntime = runtime
+socket.addEventListener('open', () => {
+    messageQueue.forEach(msg => socket.send(JSON.stringify(msg)))
+    messageQueue.splice(0, messageQueue.length)
+})
+
+function sendMessage(msg: any) {
+    if (socket.readyState !== socket.OPEN) {
+        messageQueue.push(msg)
+    } else {
+        socket.send(JSON.stringify(msg))
+    }
+}
 
 runtime.injectIntoGlobalHook(window)
 Object.assign(window, {
     $RefreshReg$: () => { },
     $RefreshSig$: () => (type: any) => type
 })
+
+export const createHotContext = (id: string) => hmr.createHotContext(id)
+export const performReactRefresh = util.debounce(runtime.performReactRefresh, 30)
+export const RefreshRuntime = runtime
