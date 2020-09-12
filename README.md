@@ -11,7 +11,7 @@ A radical new Front-End Framework in [deno](https://deno.land), inspired by [nex
 - API Routes
 - Built-in CSS Support
 
-🚧This project is work in progress.
+🚧 This project is work in progress.
 
 ## Documentation
 Please visit https://alephjs.org/docs to view the documentation.
