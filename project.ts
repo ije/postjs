@@ -23,6 +23,7 @@ interface Config {
     readonly baseUrl: string
     readonly defaultLocale: string
     readonly cacheDeps: boolean
+    readonly target: string
     readonly importMap: {
         imports: Record<string, string>
     }
@@ -68,6 +69,7 @@ export default class Project {
             cacheDeps: true,
             baseUrl: '/',
             defaultLocale: 'en',
+            target: 'ES2015',
             importMap: {
                 imports: {}
             }
@@ -244,6 +246,7 @@ export default class Project {
                 ouputDir,
                 baseUrl,
                 cacheDeps,
+                target,
                 lang
             } = JSON.parse(await Deno.readTextFile(configFile))
             if (util.isNEString(srcDir)) {
@@ -257,6 +260,9 @@ export default class Project {
             }
             if (util.isNEString(lang)) {
                 Object.assign(this.config, { defaultLocale: lang })
+            }
+            if (/^es(20\d{2}|next)$/i.test(target)) {
+                Object.assign(this.config, { target })
             }
             if (typeof cacheDeps === 'boolean') {
                 Object.assign(this.config, { cacheDeps })

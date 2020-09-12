@@ -6,6 +6,7 @@ import transformReactRefresh from './transform-react-refresh.ts'
 import { CreatePlainTransformer, CreateTransformer } from './transformer.ts'
 
 export interface CompileOptions {
+    target?: 'ES2015' | 'ES2016' | 'ES2017' | 'ES2018' | 'ES2019' | 'ES2020' | 'ESNext'
     mode?: 'development' | 'production'
     rewriteImportPath?: (importPath: string) => string
     reactRefresh?: boolean
@@ -20,7 +21,8 @@ export function createSourceFile(fileName: string, source: string) {
     )
 }
 
-export function compile(fileName: string, source: string, { mode, rewriteImportPath, reactRefresh }: CompileOptions) {
+export function compile(fileName: string, source: string, { target: targetName = 'ES2015', mode, rewriteImportPath, reactRefresh }: CompileOptions) {
+    const target = ['esnext', 'es2015', 'es2016', 'es2017', 'es2018', 'es2019', 'es2020'].indexOf(targetName.toLowerCase())
     const transformers: ts.CustomTransformers = {
         before: [],
         after: []
@@ -39,8 +41,8 @@ export function compile(fileName: string, source: string, { mode, rewriteImportP
         fileName,
         reportDiagnostics: true,
         compilerOptions: {
-            target: ts.ScriptTarget.ES2015,
-            module: ts.ModuleKind.ES2015,
+            target: target < 0 ? ts.ScriptTarget.ES2015 : (target ? target + 1 : 99),
+            module: ts.ModuleKind.ES2020,
             allowJs: true,
             jsx: ts.JsxEmit.React,
             experimentalDecorators: true,

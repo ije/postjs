@@ -1,13 +1,20 @@
 
-# PostJS
-A radical new Front-End Framework in [deno](https://deno.land).
+# AlephJS
+A radical new Front-End Framework in [deno](https://deno.land), inspired by [next.js](https://nextjs.org) and [snowpack](https://www.snowpack.dev).
 
-[WIP]
+- Zero Config
+- Typescript with Deno
+- ES Module Ready
+- HMR with Fast Refresh
+- SSR and SSG
+- File-system Routing
+- API Routes
+- Built-in CSS Support
 
-<!--
-### Documentation
-Please visit https://postjs.io/docs to view the documentation.
+🚧This project is work in progress.
 
-### Contributing
+## Documentation
+Please visit https://alephjs.org/docs to view the documentation.
+
+## Contributing
 Please read the [contributing.md](CONTRIBUTING.md).
--->
