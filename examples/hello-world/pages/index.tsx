@@ -3,7 +3,7 @@ import Logo from '../components/logo.tsx'
 import '../style/index.less'
 
 export async function getStaticProps() {
-    return { name: 'postjs' }
+    return { name: 'AlephJS' }
 }
 
 export default function Home({ name }: { name: string }) {
@@ -15,7 +15,7 @@ export default function Home({ name }: { name: string }) {
             <p>Welcome to use <strong>{name}</strong>!</p>
             <p className="links">
                 <span>[</span>
-                <a href="https://postjs.io/docs" target="_blank">Docs</a>
+                <a href="https://alephjs.org/docs" target="_blank">Docs</a>
                 <span>|</span>
                 <a href="https://github.com/postui/postjs" target="_blank">Github</a>
                 <span>]</span>

@@ -9,11 +9,11 @@ const commands = ['init', 'fetch', 'dev', 'start', 'build']
 const helpMessage = `postjs v${version}
 The radical new Front-End Framework with deno.
 
-Docs: https://postjs.io/docs
+Docs: https://alephjs.org/docs
 Bugs: https://github.com/postui/postjs/issues
 
 Usage:
-    deno -A run https://postjs.io/cli.ts <command> [...options]
+    deno -A run https://alephjs.org/cli.ts <command> [...options]
 
 Commands:
     ${commands.join(', ')}
@@ -79,12 +79,12 @@ function main() {
         }
     }
 
-    // proxy postjs.io
+    // proxy alephjs.org
     if (existsSync('./import_map.json')) {
         const { imports } = JSON.parse(Deno.readTextFileSync('./import_map.json'))
         Object.assign(globalThis, { POSTJS_IMPORT_MAP: { imports } })
-        if (imports['https://postjs.io/']) {
-            const match = String(imports['https://postjs.io/']).match(/^http:\/\/(localhost|127.0.0.1):(\d+)\/$/)
+        if (imports['https://alephjs.org/']) {
+            const match = String(imports['https://alephjs.org/']).match(/^http:\/\/(localhost|127.0.0.1):(\d+)\/$/)
             if (match) {
                 const port = parseInt(match[2])
                 listenAndServe({ port }, async (req: ServerRequest) => {
@@ -154,7 +154,7 @@ function main() {
                         })
                     }
                 })
-                log.info(`Start postjs.io proxy server on http://localhost:${port}`)
+                log.info(`Start alephjs.org proxy server on http://localhost:${port}`)
             }
         }
     }

@@ -4,7 +4,7 @@ import util from '../util.ts'
 export const helpMessage = `Initiate a new postjs app.
 
 Usage:
-    deno -A run https://postjs.io/cli.ts init <dir> [...options]
+    deno -A run https://alephjs.org/cli.ts init <dir> [...options]
 
 <dir> represents the directory of the postjs app,
 if the <dir> is empty, the current directory will be used.

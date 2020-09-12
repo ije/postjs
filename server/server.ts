@@ -170,7 +170,7 @@ export async function start(appDir: string, port: number, isDev = false) {
 function injectHmr(id: string, jsContent: string) {
     let hmrImportPath = path.relative(
         path.dirname(path.resolve('/', id)),
-        '/-/postjs.io/hmr.js'
+        '/-/alephjs.org/hmr.js'
     )
     if (!hmrImportPath.startsWith('.') && !hmrImportPath.startsWith('/')) {
         hmrImportPath = './' + hmrImportPath
