@@ -1,0 +1,27 @@
+{
+    "name": "postjs",
+    "private": true,
+    "workspaces": [
+        "packages/*"
+    ],
+    "scripts": {
+        "lerna": "lerna",
+        "build": "lerna run build",
+        "watch": "lerna run --parallel watch",
+        "post": "node ./packages/postjs-cli/dist/cli/post.js"
+    },
+    "devDependencies": {
+        "@typescript-eslint/eslint-plugin": "^4.0.1",
+        "@typescript-eslint/parser": "^4.0.1",
+        "eslint": "^7.8.1",
+        "eslint-plugin-react": "^7.20.6",
+        "lerna": "^3.22.1",
+        "react": "^16.13.1",
+        "react-dom": "^16.13.1",
+        "styled-components": "^5.2.0",
+        "typescript": "^4.0.2"
+    },
+    "engines": {
+        "node": ">=10.13"
+    }
+}

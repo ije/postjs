@@ -1,6 +1,0 @@
-{
-    "imports": {
-        "https://esm.sh/": "http://localhost:9000/",
-        "https://alephjs.org/": "http://localhost:9000/"
-    }
-}

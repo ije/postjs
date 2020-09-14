@@ -7,7 +7,7 @@ export default function Home() {
             <Head>
                 <title>Welcome to use postjs!</title>
             </Head>
-            <p>Welcome to use <strong>postjs</strong>! <Link style={{ paddingLeft: 15 }} to="/about">&rarr;&nbsp; About</Link></p>
+            <p>Welcome to use <strong>postjs</strong>! <Link style={{ paddingLeft: 15 }} to="/about">&rarr;&nbsp; void</Link></p>
         </div>
     )
 }
