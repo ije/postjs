@@ -1,4 +1,7 @@
 .DS_Store
 Thumbs.db
 .postjs/
+node_modules/
 out/
+dist/
+typings/
