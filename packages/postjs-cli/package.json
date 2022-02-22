@@ -1,6 +1,6 @@
 {
     "name": "@postjs/cli",
-    "version": "0.0.16",
+    "version": "0.0.17",
     "description": "The Post-Front-End Framework",
     "repository": "https://github.com/postui/postjs",
     "bugs": "https://github.com/postui/postjs/issues",
@@ -29,7 +29,7 @@
         "@babel/preset-react": "7.10.4",
         "@babel/preset-typescript": "7.10.4",
         "@babel/runtime": "7.11.2",
-        "@postjs/core": "0.0.16",
+        "@postjs/core": "^0.0.17",
         "@types/autoprefixer": "9.7.2",
         "arg": "4.1.3",
         "autoprefixer": "9.8.6",

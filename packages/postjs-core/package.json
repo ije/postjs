@@ -1,6 +1,6 @@
 {
     "name": "@postjs/core",
-    "version": "0.0.16",
+    "version": "0.0.17",
     "description": "The Post-Front-End Framework",
     "repository": "https://github.com/postui/postjs",
     "bugs": "https://github.com/postui/postjs/issues",
