@@ -11,6 +11,8 @@ You will need [Node.js](https://nodejs.org/) 10+
 # clone the code and install dependencies
 $ git clone https://github.com/ije/postjs
 $ cd postjs
+
+export PATH="$HOME/.node/node-16.20.2/bin:$PATH"
 $ yarn
 
 # build and watch for code changes
